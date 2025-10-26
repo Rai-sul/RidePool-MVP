@@ -1,0 +1,31 @@
+# FILE: .github/workflows/gemini-dispatch.yml
+#
+# This workflow listens for comments on issues and pull requests.
+# When it sees a command (e.g., "@gemini-cli /review"),
+# it dispatches a new, separate workflow to handle it.
+
+name: Gemini Dispatch
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  # This is required to dispatch other workflows
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch Gemini Command
+        uses: google-github-actions/run-gemini-cli@v1
+        with:
+          # This tells the action to run in "dispatch" mode
+          dispatch_mode: true
+          # We pass the GitHub token so the action can identify itself
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # This is the secret key you already created
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
