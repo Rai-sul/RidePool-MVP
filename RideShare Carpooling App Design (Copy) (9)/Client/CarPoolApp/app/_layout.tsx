@@ -15,7 +15,10 @@ function AppLayout() {
 
   const showBottomNav =
     pathname !== '/' &&
-    pathname !== '/profile-setup';
+    pathname !== '/profile-setup' &&
+    pathname !== '/chat' &&
+    pathname !== '/support-chat' &&
+    pathname !== '/driver-chat';
 
         return (
             <View style={{ flex: 1 }}>
@@ -45,6 +48,9 @@ function AppLayout() {
                 <Stack.Screen name="searching" options={{ headerShown: false }} />
                 <Stack.Screen name="trip-progress" options={{ headerShown: true, headerTitle: 'Trip Progress' }} />
                 <Stack.Screen name="payment-summary" options={{ headerShown: true, headerTitle: 'Payment Summary' }} />
+                <Stack.Screen name="chat" options={{ headerShown: false }} />
+                <Stack.Screen name="support-chat" options={{ headerShown: false }} />
+                <Stack.Screen name="driver-chat" options={{ headerShown: false }} />
               </Stack>
               {showBottomNav && <BottomNav isFemale={userProfile?.gender === 'female'} />}
             </View>

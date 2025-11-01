@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView } from 'react-native-web';
-import { ArrowLeft, CreditCard, Plus, Check, Trash2, DollarSign } from './Icons';
+import { ArrowLeft, CreditCard, Plus, Check, Trash2, Taka } from './Icons';
 import { Button } from './ui/button';
 
 type PaymentMethodsProps = {
@@ -8,7 +8,7 @@ type PaymentMethodsProps = {
 };
 
 const initialPaymentMethods = [
-  { id: '1', type: 'Cash', icon: DollarSign, primary: true },
+  { id: '1', type: 'Cash', icon: Taka, primary: true },
   { id: '2', type: 'Credit Card', last4: '4242', icon: CreditCard, primary: false },
   { id: '3', type: 'Debit Card', last4: '8888', icon: CreditCard, primary: false },
 ];

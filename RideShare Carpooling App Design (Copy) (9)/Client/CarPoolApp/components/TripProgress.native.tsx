@@ -10,9 +10,10 @@ import type { UserProfile } from '../contexts/GlobalContext';
 type TripProgressProps = {
   userProfile: UserProfile | null;
   onComplete?: () => void;
+  onChatDriver?: () => void;
 };
 
-export default function TripProgress({ userProfile, onComplete }: TripProgressProps) {
+export default function TripProgress({ userProfile, onComplete, onChatDriver }: TripProgressProps) {
   const [progress, setProgress] = useState(15);
   const [tripStatus, setTripStatus] = useState<'waiting' | 'on-the-way' | 'arrived' | 'in-progress' | 'completed'>('waiting');
   
@@ -132,7 +133,10 @@ export default function TripProgress({ userProfile, onComplete }: TripProgressPr
               <TouchableOpacity className={`w-12 h-12 rounded-full ${accentBg} items-center justify-center`}>
                 <Phone className="w-5 h-5 text-white" />
               </TouchableOpacity>
-              <TouchableOpacity className="w-12 h-12 rounded-full bg-gray-100 items-center justify-center">
+              <TouchableOpacity 
+                className="w-12 h-12 rounded-full bg-gray-100 items-center justify-center"
+                onPress={onChatDriver}
+              >
                 <MessageCircle className="w-5 h-5 text-gray-600" />
               </TouchableOpacity>
             </View>

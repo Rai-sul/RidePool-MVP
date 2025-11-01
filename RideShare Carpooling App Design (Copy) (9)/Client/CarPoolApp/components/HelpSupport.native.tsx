@@ -5,6 +5,7 @@ import { Button } from './ui/button';
 
 type HelpSupportProps = {
   onBack: () => void;
+  onChatPress?: () => void;
 };
 
 const helpTopics = [
@@ -14,7 +15,7 @@ const helpTopics = [
   { icon: FileText, title: 'Safety', items: ['Report safety issue', 'Emergency help', 'Privacy settings'] },
 ];
 
-export default function HelpSupport({ onBack }: HelpSupportProps) {
+export default function HelpSupport({ onBack, onChatPress }: HelpSupportProps) {
   return (
     <ScrollView className="h-full w-full bg-gray-50 flex-1" contentContainerStyle={{ paddingBottom: 64 }}>
       {/* Header */}
@@ -24,7 +25,10 @@ export default function HelpSupport({ onBack }: HelpSupportProps) {
       <View className="p-6 space-y-6">
         {/* Quick Actions */}
         <View className="flex-row justify-around gap-3">
-          <TouchableOpacity className="bg-white rounded-2xl p-4 items-center active:scale-95 flex-1">
+          <TouchableOpacity 
+            className="bg-white rounded-2xl p-4 items-center active:scale-95 flex-1"
+            onPress={onChatPress}
+          >
             <View className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
               <MessageCircle className="w-6 h-6 text-blue-600" />
             </View>

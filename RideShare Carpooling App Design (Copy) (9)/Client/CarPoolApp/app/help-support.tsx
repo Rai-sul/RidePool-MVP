@@ -8,5 +8,9 @@ export default function HelpSupportScreen() {
     router.back();
   };
 
-  return <HelpSupport onBack={handleBack} />;
+  const handleChatPress = () => {
+    router.push('/support-chat');
+  };
+
+  return <HelpSupport onBack={handleBack} onChatPress={handleChatPress} />;
 }

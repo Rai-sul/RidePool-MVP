@@ -7,9 +7,18 @@ export default function TripProgressScreen() {
   const { userProfile } = useGlobalContext();
   
   const handleComplete = () => {
-    // Navigate to payment summary
     router.push('/payment-summary');
   };
+
+  const handleChatDriver = () => {
+    router.push({
+      pathname: '/driver-chat',
+      params: {
+        driverId: 'DRV001',
+        driverName: 'Ahmed Khan'
+      }
+    });
+  };
   
-  return <TripProgress userProfile={userProfile} onComplete={handleComplete} />;
+  return <TripProgress userProfile={userProfile} onComplete={handleComplete} onChatDriver={handleChatDriver} />;
 }

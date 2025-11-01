@@ -9,9 +9,10 @@ import type { Pool } from '../contexts/GlobalContext';
 type DriverMatchedProps = {
   pool: Pool | null;
   onStartRide: () => void;
+  onChatDriver?: () => void;
 };
 
-export default function DriverMatched({ pool, onStartRide }: DriverMatchedProps) {
+export default function DriverMatched({ pool, onStartRide, onChatDriver }: DriverMatchedProps) {
   if (!pool) return null;
 
   // Simulate ride starting after a few seconds
@@ -74,7 +75,12 @@ export default function DriverMatched({ pool, onStartRide }: DriverMatchedProps)
               <Button size="icon" variant="outline" className="rounded-full w-12 h-12">
                 <Phone size={20} color="#000" />
               </Button>
-              <Button size="icon" variant="outline" className="rounded-full w-12 h-12">
+              <Button 
+                size="icon" 
+                variant="outline" 
+                className="rounded-full w-12 h-12"
+                onPress={onChatDriver}
+              >
                 <MessageSquare size={20} color="#000" />
               </Button>
             </View>

@@ -6,6 +6,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import type { UserProfile } from '../contexts/GlobalContext';
 import LinearGradient from './LinearGradient';
+import { useRouter } from 'expo-router';
 
 type FriendsScreenProps = {
   userProfile: UserProfile | null;
@@ -35,6 +36,7 @@ export default function FriendsScreen({ userProfile }: FriendsScreenProps) {
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [friendId, setFriendId] = useState('');
   const [addSuccess, setAddSuccess] = useState(false);
+  const router = useRouter();
   
   const isFemale = userProfile?.gender === 'female';
   const accentColor = isFemale ? 'rose' : 'gray';
@@ -55,6 +57,16 @@ export default function FriendsScreen({ userProfile }: FriendsScreenProps) {
         setFriendId('');
       }, 2000);
     }
+  };
+
+  const handleChatPress = (friend: Friend) => {
+    router.push({
+      pathname: '/chat',
+      params: {
+        friendId: friend.id,
+        friendName: friend.name,
+      }
+    });
   };
 
   return (
@@ -139,10 +151,7 @@ export default function FriendsScreen({ userProfile }: FriendsScreenProps) {
 
                 {/* Chat Button */}
                 <TouchableOpacity
-                  onPress={() => {
-                    // TODO: Navigate to chat screen
-                    console.log('Chat with', friend.name);
-                  }}
+                  onPress={() => handleChatPress(friend)}
                   activeOpacity={0.7}
                 >
                   <MessageCircle className="w-5 h-5 text-gray-600" />

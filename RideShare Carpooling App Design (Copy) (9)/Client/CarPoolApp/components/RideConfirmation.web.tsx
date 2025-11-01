@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native-web';
-import { MapPin, Clock, Users, Navigation, ChevronRight, ChevronLeft, Car, DollarSign } from './Icons';
+import { MapPin, Clock, Users, Navigation, ChevronRight, ChevronLeft, Car, Taka } from './Icons';
 import { Button } from './ui/button';
 import { motion } from '@motionone/react';
 import type { Destination, UserProfile, Pool } from '../App';
@@ -407,7 +407,7 @@ export default function RideConfirmation({ destination, userProfile, rideType, o
           {/* Cost & Time */}
           <View className="flex flex-row items-center gap-4 py-3 px-4 bg-gray-50 rounded-xl">
             <View className="flex flex-row items-center gap-2">
-              <DollarSign className="w-5 h-5 text-green-600" />
+              <Taka className="w-5 h-5 text-green-600" />
               <Text>185 taka</Text>
             </View>
             <View className="w-px h-6 bg-gray-300"></View>
@@ -559,7 +559,7 @@ export default function RideConfirmation({ destination, userProfile, rideType, o
                           <Text className="text-sm text-gray-600">{pool.seatsLeft} seats left</Text>
                         </View>
                         <View className="flex flex-row items-center gap-2">
-                          <DollarSign className="w-4 h-4 text-green-600" />
+                          <Taka className="w-4 h-4 text-green-600" />
                           <Text className="text-sm text-green-600">Save {pool.savings} taka</Text>
                         </View>
                         <View className="flex flex-row items-center gap-2">

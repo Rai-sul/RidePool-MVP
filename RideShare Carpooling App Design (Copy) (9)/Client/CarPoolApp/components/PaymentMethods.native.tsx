@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
-import { ArrowLeft, CreditCard, Plus, Check, Trash2, DollarSign, Smartphone, X } from './Icons';
+import { View, Text, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { ArrowLeft, CreditCard, Plus, Check, Trash2, Taka, Smartphone, X } from './Icons';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 
@@ -10,7 +10,7 @@ type PaymentMethodsProps = {
 };
 
 const initialPaymentMethods = [
-  { id: '1', type: 'Cash', icon: DollarSign, primary: true },
+  { id: '1', type: 'Cash', icon: Taka, primary: true },
   { id: '2', type: 'Credit Card', last4: '4242', icon: CreditCard, primary: false },
   { id: '3', type: 'Debit Card', last4: '8888', icon: CreditCard, primary: false },
 ];
@@ -83,11 +83,20 @@ export default function PaymentMethods({ onBack, userProfile }: PaymentMethodsPr
   };
 
   return (
-    <ScrollView className="h-full w-full bg-gray-50 flex-1 pb-20">
-
-
-      {/* Content */}
-      <View className="p-6 space-y-4">
+    <View className="flex-1 bg-gray-50">
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        className="flex-1"
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        <ScrollView 
+          className="flex-1" 
+          contentContainerStyle={{ paddingBottom: isAddingNew ? 200 : 120 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+        {/* Content */}
+        <View className="p-6 space-y-4">
         {/* Payment Methods List */}
         <View className="rounded-2xl p-5 space-y-3">
           {paymentMethods.map((method) => {
@@ -305,6 +314,8 @@ export default function PaymentMethods({ onBack, userProfile }: PaymentMethodsPr
           </View>
         )}
       </View>
-    </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }

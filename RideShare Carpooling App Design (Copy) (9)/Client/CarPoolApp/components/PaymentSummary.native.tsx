@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, ScrollView } from 'react-native';
-import { Receipt, CreditCard, DollarSign } from './Icons';
+import { Receipt, CreditCard, Taka } from './Icons';
 import { Button } from './ui/button';
 import { Separator } from './ui/separator';
 import type { Destination, UserProfile } from '../contexts/GlobalContext';
@@ -47,7 +47,7 @@ export default function PaymentSummary({ destination, userProfile, onDone }: Pay
           {/* Fare Breakdown */}
           <View className="space-y-4">
             <View className="flex flex-row items-center gap-2">
-              <DollarSign className="w-5 h-5" />
+              <Taka className="w-5 h-5" />
               <Text>Fare Breakdown</Text>
             </View>
 

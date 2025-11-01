@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, Clock, Users, Navigation, ChevronRight, ChevronLeft, Car, DollarSign } from './Icons';
+import { MapPin, Clock, Users, Navigation, ChevronRight, ChevronLeft, Car, Taka } from './Icons';
 import { Button } from './ui/button';
 import type { Destination, UserProfile, Pool } from '../contexts/GlobalContext';
 import LinearGradient from './LinearGradient';
@@ -440,7 +440,7 @@ export default function RideConfirmation({ destination, userProfile, rideType, o
           {/* Cost & Time */}
           <View className="flex flex-row items-center justify-center gap-4 py-3 px-4 bg-gray-50 rounded-xl mx-1 mb-4">
             <View className="flex flex-row items-center gap-2">
-              <DollarSign className="w-5 h-5 text-green-600" />
+              <Taka className="w-5 h-5 text-green-600" />
               <Text className="font-semibold">185 taka</Text>
             </View>
             <View className="w-px h-6 bg-gray-300"></View>
@@ -609,7 +609,7 @@ export default function RideConfirmation({ destination, userProfile, rideType, o
                           <Text className="text-sm text-gray-700">{pool.seatsLeft} seats</Text>
                         </View>
                         <View className="flex flex-row items-center gap-1.5">
-                          <DollarSign className="w-4 h-4 text-green-600" />
+                          <Taka className="w-4 h-4 text-green-600" />
                           <Text className="text-sm text-green-600 font-medium">Save ৳{pool.savings}</Text>
                         </View>
                         <View className="flex flex-row items-center gap-1.5">

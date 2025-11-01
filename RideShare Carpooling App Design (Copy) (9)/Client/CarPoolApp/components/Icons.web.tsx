@@ -80,6 +80,11 @@ export const SlidersHorizontal = createIcon(LucideIcons.SlidersHorizontal);
 export const MoreVertical = createIcon(LucideIcons.MoreVertical);
 export const MoreHorizontal = createIcon(LucideIcons.MoreHorizontal);
 export const DollarSign = createIcon(LucideIcons.DollarSign);
+
+// Custom Taka icon (৳)
+export const Taka = ({ className, ...props }: { className?: string; [key: string]: any }) => (
+  <span className={className} {...props}>৳</span>
+);
 export const Smartphone = createIcon(LucideIcons.Smartphone);
 export const Building = createIcon(LucideIcons.Building);
 export const MessageCircle = createIcon(LucideIcons.MessageCircle);
@@ -89,3 +94,8 @@ export const Volume2 = createIcon(LucideIcons.Volume2);
 export const Vibrate = createIcon(LucideIcons.Vibrate);
 export const Moon = createIcon(LucideIcons.Moon);
 export const Wifi = createIcon(LucideIcons.Wifi);
+export const Send = createIcon(LucideIcons.Send);
+export const Smile = createIcon(LucideIcons.Smile);
+export const Paperclip = createIcon(LucideIcons.Paperclip);
+export const Video = createIcon(LucideIcons.Video);
+export const Bot = createIcon(LucideIcons.Bot);

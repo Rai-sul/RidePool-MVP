@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal } from 'react-native-web';
-import { Search, UserPlus, X, Check } from './Icons';
+import { Search, UserPlus, X, Check, MessageCircle } from './Icons';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import type { UserProfile } from '../App';
+import { useRouter } from 'expo-router';
 
 type FriendsScreenProps = {
   userProfile: UserProfile | null;
@@ -35,6 +36,7 @@ export default function FriendsScreen({ userProfile }: FriendsScreenProps) {
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [friendId, setFriendId] = useState('');
   const [addSuccess, setAddSuccess] = useState(false);
+  const router = useRouter();
   
   const isFemale = userProfile?.gender === 'female';
   const accentColor = isFemale ? 'rose' : 'gray';
@@ -55,6 +57,16 @@ export default function FriendsScreen({ userProfile }: FriendsScreenProps) {
         setFriendId('');
       }, 2000);
     }
+  };
+
+  const handleChatPress = (friend: Friend) => {
+    router.push({
+      pathname: '/chat',
+      params: {
+        friendId: friend.id,
+        friendName: friend.name,
+      }
+    });
   };
 
   return (
@@ -134,12 +146,13 @@ export default function FriendsScreen({ userProfile }: FriendsScreenProps) {
                   <Text className="text-sm text-gray-500">ID: {friend.id}</Text>
                 </View>
 
-                {/* Status */}
-                <View>
-                  <Text className={`text-xs ${friend.isOnline ? 'text-green-600' : 'text-gray-400'}`}>
-                    {friend.lastSeen}
-                  </Text>
-                </View>
+                {/* Chat Button */}
+                <TouchableOpacity
+                  onPress={() => handleChatPress(friend)}
+                  activeOpacity={0.7}
+                >
+                  <MessageCircle className="w-5 h-5 text-gray-600" />
+                </TouchableOpacity>
               </View>
             ))}
           </View>

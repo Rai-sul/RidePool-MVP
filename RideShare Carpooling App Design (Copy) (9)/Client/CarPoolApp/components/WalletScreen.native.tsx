@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Wallet, CreditCard, Plus, ChevronRight, Gift, History, DollarSign } from './Icons';
+import { Wallet, CreditCard, Plus, ChevronRight, Gift, History, Taka } from './Icons';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Separator } from './ui/separator';
@@ -14,7 +14,7 @@ type WalletScreenProps = {
 };
 
 const paymentMethods = [
-  { id: '1', type: 'Cash', icon: DollarSign, primary: true },
+  { id: '1', type: 'Cash', icon: Taka, primary: true },
   { id: '2', type: 'Credit Card', last4: '4242', icon: CreditCard },
   { id: '3', type: 'Debit Card', last4: '8888', icon: CreditCard },
 ];
