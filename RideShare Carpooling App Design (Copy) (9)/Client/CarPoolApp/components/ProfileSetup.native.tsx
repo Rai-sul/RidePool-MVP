@@ -13,10 +13,11 @@ export default function ProfileSetup({ onComplete }: ProfileSetupProps) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [gender, setGender] = useState<'male' | 'female'>('male');
 
   const handleSubmit = () => {
-    if (firstName && lastName && email) {
+    if (firstName && lastName && email && phone) {
       onComplete({ firstName, lastName, email, gender });
     }
   };
@@ -58,6 +59,17 @@ export default function ProfileSetup({ onComplete }: ProfileSetupProps) {
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
+                className="h-12"
+              />
+            </View>
+
+            <View className="gap-2">
+              <Label>Phone Number</Label>
+              <Input
+                placeholder="+880 1XXX-XXXXXX"
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
                 className="h-12"
               />
             </View>

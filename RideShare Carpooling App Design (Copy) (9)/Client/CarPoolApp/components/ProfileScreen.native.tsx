@@ -1,9 +1,10 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { User, MapPin, Settings, Shield, HelpCircle, ChevronRight, Heart, Star, Bell, Globe } from './Icons';
+import { User, MapPin, Settings, Shield, HelpCircle, ChevronRight, Heart, Star, Bell, Globe, LogOut } from './Icons';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Separator } from './ui/separator';
+import { Button } from './ui/button';
 import type { UserProfile } from '../contexts/GlobalContext';
 import { useRouter } from 'expo-router'; // Import useRouter
 import LinearGradient from './LinearGradient';
@@ -50,9 +51,24 @@ export default function ProfileScreen({ userProfile }: ProfileScreenProps) { // 
   const emailColor = isFemale ? 'text-pink-100' : 'text-blue-100';
 
   const router = useRouter(); // Initialize useRouter
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleMenuItemClick = (route: string) => {
     router.push(`/${route}`);
+  };
+
+  const handleLogout = () => {
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = () => {
+    setShowLogoutModal(false);
+    // Navigate to welcome/landing screen
+    router.replace('/');
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutModal(false);
   };
 
   return (
@@ -148,6 +164,17 @@ export default function ProfileScreen({ userProfile }: ProfileScreenProps) { // 
           </View>
         )}
 
+        {/* Logout Button */}
+        <TouchableOpacity
+          onPress={handleLogout}
+          className="bg-white rounded-2xl overflow-hidden mx-0 mb-4"
+        >
+          <View className="flex flex-row items-center justify-center p-4 gap-3">
+            <LogOut className="w-5 h-5 text-red-600" />
+            <Text className="text-red-600 font-semibold">Log Out</Text>
+          </View>
+        </TouchableOpacity>
+
         {/* App Info */}
         <View className="items-center py-4 space-y-1">
           <Text className="text-sm text-gray-500">RideShare v2.4.0</Text>
@@ -155,6 +182,50 @@ export default function ProfileScreen({ userProfile }: ProfileScreenProps) { // 
         </View>
       </View>
     </ScrollView>
+
+    {/* Logout Confirmation Modal */}
+    <Modal
+      visible={showLogoutModal}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={cancelLogout}
+    >
+      <View className="flex-1 bg-black/50 items-center justify-center p-6">
+        <View className="bg-white rounded-3xl p-6 w-full max-w-sm">
+          <View className="items-center mb-4">
+            <View className={`w-16 h-16 rounded-full items-center justify-center mb-3 ${
+              isFemale ? 'bg-pink-100' : 'bg-blue-100'
+            }`}>
+              <LogOut className={`w-8 h-8 ${isFemale ? 'text-pink-600' : 'text-blue-600'}`} />
+            </View>
+            <Text className="text-xl font-semibold text-gray-900 mb-2">Log Out?</Text>
+            <Text className="text-center text-gray-600">
+              Are you sure you want to log out of your account?
+            </Text>
+          </View>
+          
+          <View className="gap-3 mt-2">
+            <Button
+              onPress={confirmLogout}
+              className="w-full h-12 bg-red-600"
+            >
+              <Text className="text-white font-semibold">Yes, Log Out</Text>
+            </Button>
+            <Button
+              onPress={cancelLogout}
+              variant="outline"
+              className={`w-full h-12 ${
+                isFemale ? 'border-pink-600' : 'border-blue-600'
+              }`}
+            >
+              <Text className={isFemale ? 'text-pink-600 font-semibold' : 'text-blue-600 font-semibold'}>
+                Cancel
+              </Text>
+            </Button>
+          </View>
+        </View>
+      </View>
+    </Modal>
     </SafeAreaView>
   );
 }
