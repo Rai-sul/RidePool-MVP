@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package dispatch;
+
+import "trip.proto";
+
+message Dispatch {
+  string id = 1;
+  string trip_id = 2;
+  string driver_id = 3;
+  enum DispatchStatus {
+    PENDING = 0;
+    ACCEPTED = 1;
+    REJECTED = 2;
+    COMPLETED = 3;
+    CANCELLED = 4;
+  }
+  DispatchStatus status = 4;
+}
+
+message FindDriverRequest {
+  trip.Trip trip = 1;
+}
+
+message FindDriverResponse {
+  Dispatch dispatch = 1;
+}
+
+service DispatchService {
+  rpc FindDriver (FindDriverRequest) returns (FindDriverResponse);
+}

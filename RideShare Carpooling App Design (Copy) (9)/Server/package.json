@@ -1,0 +1,38 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "npx tsc && copyfiles -u 2 src/proto/* dist/proto",
+    "proto:gen": "grpc_tools_node_protoc --js_out=import_style=commonjs,binary:./src/proto --grpc_out=grpc_js:./src/proto --plugin=protoc-gen-ts=./node_modules/.bin/protoc-gen-ts --ts_out=grpc_js:./src/proto --proto_path=./proto ./proto/*.proto && grpc_tools_node_protoc --plugin=protoc-gen-grpc=./node_modules/grpc-tools/bin/grpc_node_plugin --grpc_out=grpc_js:./src/proto --proto_path=./proto ./proto/*.proto",
+    "start": "npm run build && concurrently \"node dist/index.js\" \"node dist/services/profile-service/server.js\" \"node dist/services/auth-service/server.js\" \"node dist/services/trip-service/server.js\" \"node dist/services/dispatch-service/server.js\" \"node dist/services/pricing-service/server.js\" \"node dist/services/payment-service/server.js\" \"node dist/services/maps-service/server.js\"",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/express": "^5.0.4",
+    "@types/express-http-proxy": "^1.6.7",
+    "@types/jsonwebtoken": "^9.0.10",
+    "concurrently": "^9.2.1",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-http-proxy": "^2.1.2",
+    "h3-js": "^4.3.0",
+    "jsonwebtoken": "^9.0.2",
+    "sslcommerz-lts": "^1.2.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@grpc/grpc-js": "^1.14.0",
+    "@types/google-protobuf": "^3.15.12",
+    "@types/uuid": "^11.0.0",
+    "copyfiles": "^2.4.1",
+    "grpc_tools_node_protoc_ts": "^5.3.3",
+    "grpc-tools": "^1.13.0"
+  }
+}

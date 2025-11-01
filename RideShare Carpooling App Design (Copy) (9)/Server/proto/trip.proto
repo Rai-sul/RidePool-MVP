@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package trip;
+
+message Location {
+  double lat = 1;
+  double lng = 2;
+  string address = 3;
+}
+
+enum VehicleType {
+  VEHICLE_TYPE_CAR = 0;
+  VEHICLE_TYPE_CNG = 1;
+}
+
+enum TripStatus {
+  TRIP_STATUS_PENDING = 0;
+  TRIP_STATUS_ACCEPTED = 1;
+  TRIP_STATUS_IN_PROGRESS = 2;
+  TRIP_STATUS_COMPLETED = 3;
+  TRIP_STATUS_CANCELLED = 4;
+  TRIP_STATUS_POOLED = 5;
+}
+
+enum PoolStatus {
+  POOL_STATUS_OPEN = 0;
+  POOL_STATUS_MATCHED = 1;
+  POOL_STATUS_IN_PROGRESS = 2;
+  POOL_STATUS_COMPLETED = 3;
+  POOL_STATUS_CANCELLED = 4;
+}
+
+message Trip {
+  string id = 1;
+  string user_id = 2;
+  optional string driver_id = 3;
+  Location origin = 4;
+  Location destination = 5;
+  TripStatus status = 6;
+  double fare = 7;
+  optional string pool_id = 8;
+  repeated string passengers = 9;
+  optional VehicleType vehicle_type = 10;
+  optional int32 max_passengers = 11;
+  int64 created_at = 12;
+}
+
+message RidePool {
+  string id = 1;
+  repeated Trip trips = 2;
+  int32 current_passengers = 3;
+  int32 max_passengers = 4;
+  VehicleType vehicle_type = 5;
+  Location origin = 6;
+  Location destination = 7;
+  PoolStatus status = 8;
+  int64 created_at = 9;
+  optional string driver_id = 10;
+}
+
+message CreateTripRequest {
+  Trip trip = 1;
+}
+
+message GetTripRequest {
+  string id = 1;
+}
+
+message GetPoolRequest {
+  string id = 1;
+}
+
+message JoinPoolRequest {
+  string pool_id = 1;
+  string user_id = 2;
+}
+
+message LeavePoolRequest {
+  string pool_id = 1;
+  string user_id = 2;
+}
+
+message GetOpenPoolsRequest {
+  optional VehicleType vehicle_type = 1;
+}
+
+message AddFriendToPoolRequest {
+  string pool_id = 1;
+  string friend_unique_id = 2;
+  string requesting_user_id = 3;
+}
+
+message TripResponse {
+  Trip trip = 1;
+}
+
+message PoolResponse {
+  RidePool pool = 1;
+}
+
+message OpenPoolsResponse {
+  repeated RidePool pools = 1;
+}
+
+service TripService {
+  rpc CreateTrip (CreateTripRequest) returns (TripResponse);
+  rpc GetTrip (GetTripRequest) returns (TripResponse);
+  rpc GetPool (GetPoolRequest) returns (PoolResponse);
+  rpc JoinPool (JoinPoolRequest) returns (PoolResponse);
+  rpc LeavePool (LeavePoolRequest) returns (PoolResponse);
+  rpc GetOpenPools (GetOpenPoolsRequest) returns (OpenPoolsResponse);
+  rpc AddFriendToPool (AddFriendToPoolRequest) returns (PoolResponse);
+}
