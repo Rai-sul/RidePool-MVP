@@ -1,38 +1,38 @@
-# 🚗 RideShare Carpooling App
+#  RideShare Carpooling App
 
-![CI/CD Pipeline](https://github.com/Ahsaniat/YOUR_REPO/actions/workflows/ci.yml/badge.svg)
-![CodeQL](https://github.com/Ahsaniat/YOUR_REPO/actions/workflows/codeql.yml/badge.svg)
+![CI/CD Pipeline](https://github.com/Ahsaniat/Carpool-dev/actions/workflows/ci.yml/badge.svg)
+![CodeQL](https://github.com/Ahsaniat/Carpool-dev/actions/workflows/codeql.yml/badge.svg)
 
 A comprehensive carpooling and rideshare application built with React Native (Expo) and Node.js microservices architecture.
 
-## 📱 Features
+## Features
 
 ### For Passengers
-- 🔍 Smart ride matching with customizable preferences
-- 👥 Gender-based ride filtering
-- 🚗 Vehicle type selection (Car/CNG)
-- 👭 "Priyo Sathi" (Friend) system for trusted carpooling
-- 💳 Multiple payment methods (Mobile Banking, Credit/Debit Cards)
-- ⭐ Rating and review system
-- 🛡️ Safety features (Emergency contacts, SOS alerts)
-- 📍 Saved places for quick booking
-- 🔔 Real-time notifications
+-  Smart ride matching with customizable preferences
+-  Gender-based ride filtering
+-  Vehicle type selection (Car/CNG)
+-  "Priyo Sathi" (Friend) system for trusted carpooling
+-  Multiple payment methods (Mobile Banking, Credit/Debit Cards)
+-  Rating and review system
+-  Safety features (Emergency contacts, SOS alerts)
+-  Saved places for quick booking
+-  Real-time notifications
 
 ### For Drivers
-- 📊 Trip management and history
-- 💰 Earnings tracking
-- 🗺️ Route optimization
-- 👥 Passenger management
-- ⭐ Driver ratings
+-  Trip management and history
+-  Earnings tracking
+-  Route optimization
+-  Passenger management
+-  Driver ratings
 
 ### General
-- 🌍 Real-time GPS tracking
-- 💬 In-app messaging (coming soon)
-- 🎨 Gender-based theming (Pink/Blue)
-- 🌐 Multilingual support
-- 📊 Trip analytics
+-  Real-time GPS tracking
+-  In-app messaging (coming soon)
+-  Gender-based theming (Pink/Blue)
+-  Multilingual support
+-  Trip analytics
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 .
@@ -58,7 +58,7 @@ A comprehensive carpooling and rideshare application built with React Native (Ex
     └── workflows/           # CI/CD pipelines
 ```
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - Node.js 18+ and npm
@@ -119,7 +119,7 @@ npm run build
 npm run proto:gen
 ```
 
-## 🧪 Development
+## Development
 
 ### Project Structure
 
@@ -187,7 +187,7 @@ cd Client/CarPoolApp
 eas build --platform ios --profile production
 ```
 
-## 🛡️ Security
+## Security
 
 - CodeQL security analysis enabled
 - Dependabot automated updates
@@ -195,7 +195,7 @@ eas build --platform ios --profile production
 - gRPC secure communication
 - Input validation and sanitization
 
-## 📝 Recent Updates
+## Recent Updates
 
 See [FIXED_ERRORS.md](FIXED_ERRORS.md) for detailed changelog of all fixes and improvements.
 
@@ -209,7 +209,7 @@ See [FIXED_ERRORS.md](FIXED_ERRORS.md) for detailed changelog of all fixes and i
 - ✅ Enhanced UI polish across all screens
 - ✅ Fixed button visibility and icon positioning
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/amazing-feature`
@@ -217,20 +217,24 @@ See [FIXED_ERRORS.md](FIXED_ERRORS.md) for detailed changelog of all fixes and i
 4. Push to branch: `git push origin feature/amazing-feature`
 5. Open a Pull Request
 
-## 📄 License
+## License
 
 This project is private and proprietary.
 
-## 👥 Team
+## Team
 
-- **Developer**: Ahsan
+- **Developer**: 
+    - Anik
+    - Raisul
+    - Ome
+    - Tahmid
 - **Repository**: Private
 
-## 📧 Contact
+## Contact
 
 For questions or support, please contact the repository owner.
 
-## 🔗 Resources
+## Resources
 
 - [Expo Documentation](https://docs.expo.dev/)
 - [React Native Documentation](https://reactnative.dev/)
@@ -240,4 +244,3 @@ For questions or support, please contact the repository owner.
 
 ---
 
-Made with ❤️ using React Native and Node.js
