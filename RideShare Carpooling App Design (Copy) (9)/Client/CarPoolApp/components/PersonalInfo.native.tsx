@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, ScrollView, Animated, Keyboard, Platform, TouchableOpacity } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { ArrowLeft, User, Mail, Phone, Calendar } from './Icons';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -18,10 +19,43 @@ export default function PersonalInfo({ userProfile, onBack }: PersonalInfoProps)
   const [email, setEmail] = useState(userProfile?.email || '');
   const [phone, setPhone] = useState(userProfile?.phone || '');
   const [dateOfBirth, setDateOfBirth] = useState(userProfile?.dateOfBirth || '');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  
+  const keyboardHeight = useRef(new Animated.Value(0)).current;
   
   const isFemale = userProfile?.gender === 'female';
   const primaryColor = isFemale ? 'bg-pink-500' : 'bg-blue-600';
   const primaryColorHover = isFemale ? 'hover:bg-pink-600' : 'hover:bg-blue-700';
+
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        Animated.timing(keyboardHeight, {
+          toValue: e.endCoordinates.height,
+          duration: Platform.OS === 'ios' ? 250 : 0,
+          useNativeDriver: false,
+        }).start();
+      }
+    );
+
+    const keyboardWillHide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        Animated.timing(keyboardHeight, {
+          toValue: 0,
+          duration: Platform.OS === 'ios' ? 250 : 0,
+          useNativeDriver: false,
+        }).start();
+      }
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
+    };
+  }, []);
 
   const handleEditToggle = () => {
     if (isEditing) {
@@ -46,10 +80,13 @@ export default function PersonalInfo({ userProfile, onBack }: PersonalInfoProps)
       {/* Removed custom header */}
 
       {/* Content */}
-      <View className="p-6 space-y-4">
+      <Animated.View 
+        className="p-6 space-y-4"
+        style={isEditing ? { marginBottom: keyboardHeight } : {}}
+      >
         <View className="bg-white rounded-2xl p-5 space-y-4">
           <View className="space-y-6">
-            <View className="flex flex-row items-center gap-3 p-4 px-2">
+            <View className="flex flex-row items-center gap-3 p-4 px-2 mb-4">
               <View className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
                 <User className="w-5 h-5 text-gray-600" />
               </View>
@@ -68,7 +105,7 @@ export default function PersonalInfo({ userProfile, onBack }: PersonalInfoProps)
               </View>
             </View>
 
-            <View className="flex flex-row items-center gap-3 p-4 px-2">
+            <View className="flex flex-row items-center gap-3 p-4 px-2 mb-4">
               <View className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
                 <User className="w-5 h-5 text-gray-600" />
               </View>
@@ -87,7 +124,7 @@ export default function PersonalInfo({ userProfile, onBack }: PersonalInfoProps)
               </View>
             </View>
 
-            <View className="flex flex-row items-center gap-3 p-4 px-2">
+            <View className="flex flex-row items-center gap-3 p-4 px-2 mb-4">
               <View className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
                 <Mail className="w-5 h-5 text-gray-600" />
               </View>
@@ -107,7 +144,7 @@ export default function PersonalInfo({ userProfile, onBack }: PersonalInfoProps)
               </View>
             </View>
 
-            <View className="flex flex-row items-center gap-3 p-4 px-2">
+            <View className="flex flex-row items-center gap-3 p-4 px-2 mb-4">
               <View className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
                 <Phone className="w-5 h-5 text-gray-600" />
               </View>
@@ -127,19 +164,39 @@ export default function PersonalInfo({ userProfile, onBack }: PersonalInfoProps)
               </View>
             </View>
 
-            <View className="flex flex-row items-center gap-3 p-4 px-2">
+            <View className="flex flex-row items-center gap-3 p-4 px-2 mb-4">
               <View className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
                 <Calendar className="w-5 h-5 text-gray-600" />
               </View>
               <View className="flex-1">
                 <Text className="text-xs text-gray-500 mb-1">Date of Birth</Text>
                 {isEditing ? (
-                  <Input
-                    placeholder="Date of Birth"
-                    value={dateOfBirth}
-                    onChangeText={setDateOfBirth}
-                    className="mt-1"
-                  />
+                  <>
+                    <TouchableOpacity
+                      onPress={() => setShowDatePicker(true)}
+                      className="border border-gray-300 rounded-lg p-3 mt-1"
+                    >
+                      <Text className={dateOfBirth ? "text-gray-900" : "text-gray-400"}>
+                        {dateOfBirth || 'Select Date'}
+                      </Text>
+                    </TouchableOpacity>
+                    {showDatePicker && (
+                      <DateTimePicker
+                        value={selectedDate}
+                        mode="date"
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        onChange={(event, date) => {
+                          setShowDatePicker(Platform.OS === 'ios');
+                          if (date) {
+                            setSelectedDate(date);
+                            const formattedDate = date.toLocaleDateString('en-GB');
+                            setDateOfBirth(formattedDate);
+                          }
+                        }}
+                        maximumDate={new Date()}
+                      />
+                    )}
+                  </>
                 ) : (
                   <Text className="font-medium text-base">{dateOfBirth || 'Not set'}</Text>
                 )}
@@ -162,7 +219,7 @@ export default function PersonalInfo({ userProfile, onBack }: PersonalInfoProps)
             <Text className="text-white font-medium">Edit Personal Info</Text>
           </Button>
         )}
-      </View>
+      </Animated.View>
     </ScrollView>
   );
 }

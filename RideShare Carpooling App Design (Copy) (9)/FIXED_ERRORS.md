@@ -303,3 +303,67 @@ path
     *   Maintained proper spacing and alignment in friend card layout
 
 ---
+
+### 25. Chat System Implementation
+*   **Problem:** The user requested chat functionality for three different contexts:
+    1. Friend chat (already working)
+    2. Help & Support chat (AI-powered)
+    3. Driver chat (during active rides)
+    
+    All should use the same layout as the working friend chat, with no double headers and no bottom navbar.
+    
+*   **Remedy:** Implemented unified chat system across the app:
+    *   **Reused Working Friend Chat Implementation:**
+        *   Copied exact implementation from `ChatScreen.native.tsx` and `ChatScreen.web.tsx` to `SupportChatScreen` and `DriverChatScreen` components
+        *   Maintained identical UI structure, keyboard handling, and message layout
+        *   Preserved custom keyboard avoidance solution using `Animated.Value` and `Keyboard` listeners (not React Native's KeyboardAvoidingView API due to known bugs)
+    
+    *   **Support Chat (AI-Powered):**
+        *   Created `SupportChatScreen.native.tsx` and `SupportChatScreen.web.tsx`
+        *   Changed initial message to "Hello! Welcome to RideShare Support. How can I assist you today?"
+        *   Set recipient name to "Support Assistant"
+        *   Added route `app/support-chat.tsx`
+        *   Connected chat button in `HelpSupport` component via `onChatPress` prop
+    
+    *   **Driver Chat:**
+        *   Created `DriverChatScreen.native.tsx` and `DriverChatScreen.web.tsx`
+        *   Changed initial message to include driver name dynamically
+        *   Accepts props: `driverId`, `driverName`, `driverAvatar`
+        *   Added route `app/driver-chat.tsx` with params support
+        *   Connected chat button in `TripProgress` component via `onChatDriver` prop
+        *   Updated `DriverMatched` component to include chat button with `onChatDriver` prop
+    
+    *   **Layout Configuration:**
+        *   Added both `support-chat` and `driver-chat` to `app/_layout.tsx`:
+            *   Set `headerShown: false` to prevent double headers
+            *   Excluded from `showBottomNav` logic to hide bottom navbar
+        *   This matches the configuration used for the working friend chat
+    
+    *   **Icons:**
+        *   Added `Bot` icon export to both `Icons.web.tsx` and `Icons.native.tsx` for support chat avatar
+    
+    *   **Key Implementation Detail - Custom Keyboard Handling:**
+        *   Did NOT use React Native's `KeyboardAvoidingView` component (has known bugs with certain RN versions)
+        *   Instead used manual keyboard handling with `Animated.Value`:
+            ```typescript
+            const keyboardHeight = useRef(new Animated.Value(0)).current;
+            
+            useEffect(() => {
+              const keyboardWillShow = Keyboard.addListener(
+                Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+                (e) => {
+                  Animated.timing(keyboardHeight, {
+                    toValue: e.endCoordinates.height,
+                    duration: Platform.OS === 'ios' ? 250 : 0,
+                    useNativeDriver: false,
+                  }).start();
+                }
+              );
+              // ... cleanup
+            }, []);
+            ```
+        *   Applied animated margin to input area: `style={{ marginBottom: keyboardHeight }}`
+        *   This approach provides smooth keyboard animations on iOS and instant adjustment on Android
+        *   Works reliably across different React Native versions and device configurations
+
+---

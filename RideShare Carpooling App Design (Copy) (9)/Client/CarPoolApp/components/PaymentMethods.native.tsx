@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Animated, Keyboard, Platform } from 'react-native';
 import { ArrowLeft, CreditCard, Plus, Check, Trash2, Taka, Smartphone, X } from './Icons';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -31,10 +31,41 @@ export default function PaymentMethods({ onBack, userProfile }: PaymentMethodsPr
   const [mobileProvider, setMobileProvider] = useState('bKash');
   const [accountNumber, setAccountNumber] = useState('');
   
+  const keyboardHeight = useRef(new Animated.Value(0)).current;
+  
   const isFemale = userProfile?.gender === 'female';
   const primaryColor = isFemale ? 'bg-pink-500' : 'bg-blue-600';
   const primaryColorText = isFemale ? 'text-pink-600' : 'text-blue-600';
   const primaryColorLight = isFemale ? 'bg-pink-100' : 'bg-blue-100';
+
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        Animated.timing(keyboardHeight, {
+          toValue: e.endCoordinates.height,
+          duration: Platform.OS === 'ios' ? 250 : 0,
+          useNativeDriver: false,
+        }).start();
+      }
+    );
+
+    const keyboardWillHide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        Animated.timing(keyboardHeight, {
+          toValue: 0,
+          duration: Platform.OS === 'ios' ? 250 : 0,
+          useNativeDriver: false,
+        }).start();
+      }
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
+    };
+  }, []);
 
   const handleSetPrimary = (id: string) => {
     setPrimaryId(id);
@@ -84,17 +115,12 @@ export default function PaymentMethods({ onBack, userProfile }: PaymentMethodsPr
 
   return (
     <View className="flex-1 bg-gray-50">
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        className="flex-1"
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      <ScrollView 
+        className="flex-1" 
+        contentContainerStyle={{ paddingBottom: 120 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView 
-          className="flex-1" 
-          contentContainerStyle={{ paddingBottom: isAddingNew ? 200 : 120 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
         {/* Content */}
         <View className="p-6 space-y-4">
         {/* Payment Methods List */}
@@ -167,7 +193,10 @@ export default function PaymentMethods({ onBack, userProfile }: PaymentMethodsPr
         
         {/* Add Payment Form */}
         {isAddingNew && (
-          <View className="bg-white rounded-2xl p-5 space-y-4">
+          <Animated.View 
+            className="bg-white rounded-2xl p-5 space-y-4"
+            style={{ marginBottom: keyboardHeight }}
+          >
             {/* Tabs */}
             <View className="flex-row gap-3 mb-4">
               <TouchableOpacity
@@ -206,7 +235,7 @@ export default function PaymentMethods({ onBack, userProfile }: PaymentMethodsPr
             {/* Card Form */}
             {activeTab === 'card' && (
               <View className="space-y-4">
-                <View>
+                <View className="mb-4">
                   <Text className="text-xs text-gray-500 mb-2">Card Number</Text>
                   <Input
                     value={cardNumber}
@@ -218,7 +247,7 @@ export default function PaymentMethods({ onBack, userProfile }: PaymentMethodsPr
                   />
                 </View>
                 
-                <View>
+                <View className="mb-4">
                   <Text className="text-xs text-gray-500 mb-2">Cardholder Name</Text>
                   <Input
                     value={cardHolder}
@@ -228,7 +257,7 @@ export default function PaymentMethods({ onBack, userProfile }: PaymentMethodsPr
                   />
                 </View>
                 
-                <View className="flex-row gap-3">
+                <View className="flex-row gap-3 mb-4">
                   <View className="flex-1">
                     <Text className="text-xs text-gray-500 mb-2">Expiry Date</Text>
                     <Input
@@ -259,7 +288,7 @@ export default function PaymentMethods({ onBack, userProfile }: PaymentMethodsPr
             {/* Mobile Banking Form */}
             {activeTab === 'mobile' && (
               <View className="space-y-4">
-                <View>
+                <View className="mb-4">
                   <Text className="text-xs text-gray-500 mb-2">Provider</Text>
                   <View className="flex-row gap-2">
                     {['bKash', 'Nagad', 'Rocket'].map((provider) => (
@@ -282,7 +311,7 @@ export default function PaymentMethods({ onBack, userProfile }: PaymentMethodsPr
                   </View>
                 </View>
                 
-                <View>
+                <View className="mb-4">
                   <Text className="text-xs text-gray-500 mb-2">Account Number</Text>
                   <Input
                     value={accountNumber}
@@ -311,11 +340,10 @@ export default function PaymentMethods({ onBack, userProfile }: PaymentMethodsPr
                 </View>
               </Button>
             </View>
-          </View>
+          </Animated.View>
         )}
       </View>
         </ScrollView>
-      </KeyboardAvoidingView>
     </View>
   );
 }

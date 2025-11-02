@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Animated, Keyboard, Platform } from 'react-native';
 import { ArrowLeft, Home, Briefcase, Heart, MapPin, Plus, X, Check } from './Icons';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -37,10 +37,41 @@ export default function SavedPlaces({ onBack, userProfile }: SavedPlacesProps) {
   const [editAddress, setEditAddress] = useState('');
   const [isAddingNew, setIsAddingNew] = useState(false);
   
+  const keyboardHeight = useRef(new Animated.Value(0)).current;
+  
   const isFemale = userProfile?.gender === 'female';
   const primaryColor = isFemale ? 'bg-pink-500' : 'bg-blue-600';
   const primaryColorLight = isFemale ? 'bg-pink-100' : 'bg-blue-100';
   const primaryColorText = isFemale ? 'text-pink-600' : 'text-blue-600';
+
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        Animated.timing(keyboardHeight, {
+          toValue: e.endCoordinates.height,
+          duration: Platform.OS === 'ios' ? 250 : 0,
+          useNativeDriver: false,
+        }).start();
+      }
+    );
+
+    const keyboardWillHide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        Animated.timing(keyboardHeight, {
+          toValue: 0,
+          duration: Platform.OS === 'ios' ? 250 : 0,
+          useNativeDriver: false,
+        }).start();
+      }
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
+    };
+  }, []);
 
   const handleEditClick = (place: typeof savedPlaces[0]) => {
     setIsAddingNew(false);
@@ -98,9 +129,10 @@ export default function SavedPlaces({ onBack, userProfile }: SavedPlacesProps) {
             const isEditing = editingId === place.id;
             
             return (
-              <View
+              <Animated.View
                 key={place.id}
                 className="p-4 mx-2 my-2 border-b last:border-b-0 rounded-lg"
+                style={isEditing ? { marginBottom: keyboardHeight } : {}}
               >
                 {isEditing ? (
                   <View className="space-y-4">
@@ -112,7 +144,7 @@ export default function SavedPlaces({ onBack, userProfile }: SavedPlacesProps) {
                     </View>
                     
                     <View className="space-y-3">
-                      <View>
+                      <View className="mb-4">
                         <Text className="text-xs text-gray-500 mb-2">Label</Text>
                         <Input
                           value={editLabel}
@@ -122,7 +154,7 @@ export default function SavedPlaces({ onBack, userProfile }: SavedPlacesProps) {
                         />
                       </View>
                       
-                      <View>
+                      <View className="mb-4">
                         <Text className="text-xs text-gray-500 mb-2">Address</Text>
                         <Input
                           value={editAddress}
@@ -162,7 +194,7 @@ export default function SavedPlaces({ onBack, userProfile }: SavedPlacesProps) {
                     </Button>
                   </View>
                 )}
-              </View>
+              </Animated.View>
             );
           })}
         </View>
@@ -182,7 +214,10 @@ export default function SavedPlaces({ onBack, userProfile }: SavedPlacesProps) {
         
         {/* Add New Place Form */}
         {isAddingNew && (
-          <View className="bg-white rounded-2xl p-5 my-4 mx-2">
+          <Animated.View 
+            className="bg-white rounded-2xl p-5 my-4 mx-2"
+            style={{ marginBottom: keyboardHeight }}
+          >
             <View className="space-y-4">
               <View className="flex flex-row items-center gap-3 mb-3">
                 <View className={`w-10 h-10 ${primaryColorLight} rounded-full flex items-center justify-center flex-shrink-0`}>
@@ -192,7 +227,7 @@ export default function SavedPlaces({ onBack, userProfile }: SavedPlacesProps) {
               </View>
               
               <View className="space-y-3">
-                <View>
+                <View className="mb-4">
                   <Text className="text-xs text-gray-500 mb-2">Label</Text>
                   <Input
                     value={editLabel}
@@ -202,7 +237,7 @@ export default function SavedPlaces({ onBack, userProfile }: SavedPlacesProps) {
                   />
                 </View>
                 
-                <View>
+                <View className="mb-4">
                   <Text className="text-xs text-gray-500 mb-2">Address</Text>
                   <Input
                     value={editAddress}
@@ -228,7 +263,7 @@ export default function SavedPlaces({ onBack, userProfile }: SavedPlacesProps) {
                 </Button>
               </View>
             </View>
-          </View>
+          </Animated.View>
         )}
       </View>
     </ScrollView>
