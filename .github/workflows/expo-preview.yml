@@ -52,7 +52,7 @@ jobs:
           # eas build --platform ios --profile preview --non-interactive
 
       - name: Comment PR with QR Code
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         if: always()
         with:
           script: |
