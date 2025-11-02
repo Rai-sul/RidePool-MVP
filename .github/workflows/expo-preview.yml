@@ -2,7 +2,7 @@ name: Expo Preview Build
 
 on:
   pull_request:
-    branches: [ main, develop ]
+    branches: [ master, develop ]
     paths:
       - 'Client/CarPoolApp/**'
 
@@ -41,7 +41,7 @@ jobs:
 
       - name: Create EAS Preview
         run: |
-          echo "📱 To enable Expo Preview Builds:"
+          echo "====To enable Expo Preview Builds:===="
           echo "1. Create an Expo account: https://expo.dev"
           echo "2. Run: eas build:configure"
           echo "3. Generate EXPO_TOKEN: eas whoami && eas build:configure"
