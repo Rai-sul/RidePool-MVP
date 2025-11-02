@@ -74,8 +74,8 @@ A comprehensive carpooling and rideshare application built with React Native (Ex
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/Ahsaniat/YOUR_REPO.git
-cd "RideShare Carpooling App Design (Copy) (9)"
+git clone https://github.com/Ahsaniat/Carpool-dev.git
+cd RideShareDev
 ```
 
 2. **Install Client dependencies**
@@ -98,7 +98,7 @@ cd Client/CarPoolApp
 
 # Start development server
 npm start
-
+npx expo start --clear
 # Run on specific platform
 npm run android    # Android
 npm run ios        # iOS (macOS only)
@@ -212,9 +212,9 @@ See [FIXED_ERRORS.md](FIXED_ERRORS.md) for detailed changelog of all fixes and i
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit changes: `git commit -m 'Add amazing feature'`
-4. Push to branch: `git push origin feature/amazing-feature`
+2. Create a feature branch: `git checkout -b feature/dev-feature`
+3. Commit changes: `git commit -m 'Add dev feature'`
+4. Push to branch: `git push origin feature/dev-feature`
 5. Open a Pull Request
 
 ## License
@@ -223,7 +223,7 @@ This project is private and proprietary.
 
 ## Team
 
-- **Developer**: 
+- **Developer(s)**: 
     - Anik
     - Raisul
     - Ome
@@ -243,4 +243,5 @@ For questions or support, please contact the repository owner.
 - [NativeWind](https://www.nativewind.dev/)
 
 ---
+
 

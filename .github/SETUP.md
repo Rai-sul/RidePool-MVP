@@ -1,6 +1,6 @@
 # CI/CD Setup Guide
 
-## 🎯 Overview
+## Overview
 This repository includes a complete CI/CD pipeline with:
 - ✅ Automated builds for Client & Server
 - ✅ Code quality & security checks
@@ -9,11 +9,11 @@ This repository includes a complete CI/CD pipeline with:
 - 🔄 Expo preview builds (needs configuration)
 - 🔄 Deployment automation (needs configuration)
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Enable GitHub Actions
 Actions should be enabled by default. Verify at:
-`https://github.com/YOUR_USERNAME/YOUR_REPO/actions`
+`https://github.com/Ahsaniat/Carpool-dev/actions`
 
 ### 2. Configure Branch Protection (GitHub Pro)
 Go to: `Settings` → `Branches` → `Add rule` for `main`:
@@ -49,7 +49,7 @@ eas whoami
 
 Add to GitHub Secrets: `Settings` → `Secrets and variables` → `Actions` → `New repository secret`:
 - Name: `EXPO_TOKEN`
-- Value: `[your-expo-token]`
+- Value: `[expo-token-from-web]`
 
 Then uncomment the EAS build commands in:
 - `.github/workflows/ci.yml` (line 97)
@@ -78,7 +78,7 @@ Go to: `Settings` → `Environments` → `New environment`:
   - ✅ Wait timer: 5 minutes
   - ✅ Deployment branches: `main` only
 
-## 📊 Workflow Overview
+## Workflow Overview
 
 ### Main CI/CD Pipeline (`ci.yml`)
 **Triggers:** Push to `main`/`develop`, Pull Requests
@@ -105,7 +105,7 @@ Automated security vulnerability scanning.
 
 Automated dependency updates with grouped PRs.
 
-## 🔒 Required Secrets
+## Required Secrets
 
 ### For Expo Builds:
 - `EXPO_TOKEN`: Expo access token
@@ -121,7 +121,7 @@ Automated dependency updates with grouped PRs.
 - `DOCKER_PASSWORD`
 - `DOCKER_REGISTRY`
 
-## 🎨 Badges (Optional)
+## Badges (Optional)
 Add to your README.md:
 
 ```markdown
@@ -129,14 +129,14 @@ Add to your README.md:
 ![CodeQL](https://github.com/YOUR_USERNAME/YOUR_REPO/actions/workflows/codeql.yml/badge.svg)
 ```
 
-## 📝 Workflow Files
+## Workflow Files
 
 - `.github/workflows/ci.yml` - Main CI/CD pipeline
 - `.github/workflows/expo-preview.yml` - PR preview builds
 - `.github/workflows/codeql.yml` - Security analysis
 - `.github/dependabot.yml` - Dependency updates
 
-## 🛠️ Local Testing
+## Local Testing
 Test workflows locally with [act](https://github.com/nektos/act):
 ```bash
 # Install act
@@ -147,13 +147,13 @@ act push
 act pull_request
 ```
 
-## 📚 Resources
+## Resources
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
 - [Expo EAS Build](https://docs.expo.dev/build/introduction/)
 - [CodeQL Documentation](https://codeql.github.com/docs/)
 - [Dependabot Documentation](https://docs.github.com/en/code-security/dependabot)
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Build Failures
 - Check workflow logs in Actions tab
@@ -170,7 +170,7 @@ act pull_request
 - Check SSH key permissions (600)
 - Ensure deployment directory exists
 
-## 🎉 Next Steps
+## Future Steps
 
 1. Push this configuration to GitHub
 2. Check Actions tab for first workflow run
@@ -179,4 +179,4 @@ act pull_request
 5. Configure deployment target
 6. Add status badges to README
 
-Enjoy your automated CI/CD pipeline! 🚀
+
