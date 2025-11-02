@@ -14,7 +14,7 @@ jobs:
     
     defaults:
       run:
-        working-directory: Client/CarPoolApp
+        working-directory: RideShareDev/Client/CarPoolApp
     
     steps:
       - name: Checkout code
@@ -25,7 +25,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: Client/CarPoolApp/package-lock.json
+          cache-dependency-path: RideShareDev/Client/CarPoolApp/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -43,7 +43,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: client-web-build
-          path: Client/CarPoolApp/dist/
+          path: RideShareDev/Client/CarPoolApp/dist/
           retention-days: 7
 
   # Server Build & Test
@@ -64,7 +64,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: Server/package-lock.json
+          cache-dependency-path: RideShareDev/Server/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -172,3 +172,4 @@ jobs:
   #        echo "- Deploy to Docker/Kubernetes"
   #        echo "- Deploy to your VPS"
         
+
