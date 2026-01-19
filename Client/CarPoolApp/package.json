@@ -40,7 +40,7 @@
     "expo-system-ui": "~6.0.8",
     "expo-web-browser": "~15.0.8",
     "h3-js": "^4.3.0",
-    "lucide-react": "^0.548.0",
+    "lucide-react": "^0.562.0",
     "lucide-react-native": "^0.548.0",
     "nativewind": "^4.2.1",
     "react": "19.1.0",
