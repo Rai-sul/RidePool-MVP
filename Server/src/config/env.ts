@@ -5,6 +5,7 @@ dotenv.config();
 export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT || '3000', 10),
+  mvpMode: process.env.MVP_MODE === 'true' || process.env.SKIP_REDIS === 'true',
   supabase: {
     url: process.env.SUPABASE_URL || '',
     anonKey: process.env.SUPABASE_ANON_KEY || '',
@@ -18,5 +19,12 @@ export const config = {
     resolutionDestination: parseInt(process.env.H3_RESOLUTION_DESTINATION || '7', 10),
     resolutionDriver: parseInt(process.env.H3_RESOLUTION_DRIVER || '8', 10),
     searchRadius: parseInt(process.env.H3_SEARCH_RADIUS || '2', 10),
+  },
+  cache: {
+    memoryMaxSize: parseInt(process.env.MEMORY_CACHE_MAX_SIZE || '1000', 10),
+    memoryTTL: parseInt(process.env.MEMORY_CACHE_TTL || '300', 10),
+    redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+    redisKeyPrefix: process.env.REDIS_KEY_PREFIX || 'ridepool:',
+    redisDefaultTTL: parseInt(process.env.REDIS_DEFAULT_TTL || '300', 10),
   },
 };

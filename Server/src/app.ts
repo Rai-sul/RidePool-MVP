@@ -10,8 +10,9 @@ import { configureSecurityHeaders } from './middleware/securityHeaders';
 import { apiLimiter, authLimiter, searchLimiter, paymentLimiter, sosLimiter } from './middleware/rateLimiter';
 import { inputSanitizer, stripNullBytes } from './middleware/inputSanitizer';
 import { logger } from './utils/logger';
-import { cacheService } from './services/cache.service';
+import { unifiedCacheService } from './services/unifiedCache.service';
 import { gracefulShutdownService } from './services/gracefulShutdown.service';
+import { config } from './config/env';
 
 dotenv.config();
 
@@ -68,15 +69,20 @@ app.use(errorHandler);
 
 async function startServer() {
   try {
-    await cacheService.connect();
-    logger.info('Redis cache connected');
+    await unifiedCacheService.connect();
+    if (config.mvpMode) {
+      logger.info('Running in MVP mode (in-memory cache, synchronous processing)');
+    } else {
+      logger.info('Redis cache connected');
+    }
   } catch (error) {
-    logger.warn('Redis cache unavailable, running without cache:', error);
+    logger.warn('Cache unavailable, running without cache:', error);
   }
 
   const server = app.listen(PORT, () => {
     logger.info(`Server running on port ${PORT}`);
     logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    logger.info(`MVP Mode: ${config.mvpMode ? 'enabled' : 'disabled'}`);
     console.log(`Server is running on http://localhost:${PORT}`);
   });
 
