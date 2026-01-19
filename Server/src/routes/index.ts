@@ -1,0 +1,48 @@
+import { Router } from 'express';
+import authRoutes from './auth.routes';
+import userRoutes from './user.routes';
+import poolRoutes from './pool.routes';
+import rideRoutes from './ride.routes';
+import paymentRoutes from './payment.routes';
+import driverRoutes from './driver.routes';
+import safetyRoutes from './safety.routes';
+import priyoSathiRoutes from './priyoSathi.routes';
+import ratingRoutes from './rating.routes';
+import rideSharingRoutes from './rideSharing.routes';
+import messagingRoutes from './messaging.routes';
+import promoRoutes from './promo.routes';
+import walletRoutes from './wallet.routes';
+import savedPlacesRoutes from './savedPlaces.routes';
+import emergencyContactsRoutes from './emergencyContacts.routes';
+import analyticsRoutes from './analytics.routes';
+import heatmapRoutes from './heatmap.routes';
+import shiftRoutes from './shift.routes';
+import offlineRoutes from './offline.routes';
+import navigationRoutes from './navigation.routes';
+import i18nRoutes from './i18n.routes';
+
+const router = Router();
+
+router.use('/auth', authRoutes);
+router.use('/users', userRoutes);
+router.use('/pools', poolRoutes);
+router.use('/rides', rideRoutes);
+router.use('/payments', paymentRoutes);
+router.use('/driver', driverRoutes);
+router.use('/safety', safetyRoutes);
+router.use('/priyo-sathi', priyoSathiRoutes);
+router.use('/ratings', ratingRoutes);
+router.use('/sharing', rideSharingRoutes);
+router.use('/messages', messagingRoutes);
+router.use('/promos', promoRoutes);
+router.use('/wallet', walletRoutes);
+router.use('/saved-places', savedPlacesRoutes);
+router.use('/emergency-contacts', emergencyContactsRoutes);
+router.use('/analytics', analyticsRoutes);
+router.use('/heatmap', heatmapRoutes);
+router.use('/shifts', shiftRoutes);
+router.use('/offline', offlineRoutes);
+router.use('/navigation', navigationRoutes);
+router.use('/i18n', i18nRoutes);
+
+export default router;
