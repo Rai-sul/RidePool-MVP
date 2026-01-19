@@ -71,7 +71,7 @@ RideShareDev/
 └── logs/                  # Agent logs
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -206,7 +206,7 @@ docker-compose up -d
 docker-compose -f docker-compose.yml up -d --scale app=3
 ```
 
-## 📊 Monitoring
+##  Monitoring
 
 The project includes Prometheus and Loki integration for observability.
 
@@ -217,7 +217,7 @@ GET /health/live    # Liveness probe
 GET /health/detailed # Full health status
 ```
 
-## 📖 Documentation
+##  Documentation
 
 | Document | Description |
 |----------|-------------|
@@ -228,7 +228,7 @@ GET /health/detailed # Full health status
 | [`__docs__/security/`](__docs__/security/) | Security reports |
 | [`__docs__/operations/`](__docs__/operations/) | Runbooks & DR |
 
-## 🤝 Contributing
+##  Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feat/amazing-feature`)
@@ -249,7 +249,7 @@ We use [Conventional Commits](https://www.conventionalcommits.org/):
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - [Supabase](https://supabase.com/) - Backend as a Service
 - [Expo](https://expo.dev/) - React Native framework
