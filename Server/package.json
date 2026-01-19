@@ -25,7 +25,7 @@
     "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
-    "express": "^5.1.0",
+    "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "express-validator": "^7.3.1",
     "h3-js": "^4.3.0",
@@ -40,7 +40,7 @@
   "devDependencies": {
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.5",
+    "@types/express": "^5.0.6",
     "@types/express-validator": "^2.20.33",
     "@types/morgan": "^1.9.10",
     "@types/node": "^24.10.1",
