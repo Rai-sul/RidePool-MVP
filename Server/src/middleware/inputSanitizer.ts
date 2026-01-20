@@ -158,26 +158,36 @@ export const sanitizeOutput = <T>(data: T): T => {
 };
 
 export const stripNullBytes = (req: Request, res: Response, next: NextFunction) => {
-  const stripNulls = (obj: any): any => {
-    if (typeof obj === 'string') {
-      return obj.replace(/\0/g, '');
-    }
-    if (Array.isArray(obj)) {
-      return obj.map(stripNulls);
-    }
-    if (obj !== null && typeof obj === 'object') {
-      const cleaned: any = {};
-      for (const [key, value] of Object.entries(obj)) {
-        cleaned[key.replace(/\0/g, '')] = stripNulls(value);
+  const stripNullsInPlace = (obj: any): void => {
+    if (obj === null || typeof obj !== 'object') return;
+    
+    for (const key of Object.keys(obj)) {
+      const value = obj[key];
+      if (typeof value === 'string') {
+        obj[key] = value.replace(/\0/g, '');
+      } else if (Array.isArray(value)) {
+        for (let i = 0; i < value.length; i++) {
+          if (typeof value[i] === 'string') {
+            value[i] = value[i].replace(/\0/g, '');
+          } else if (typeof value[i] === 'object') {
+            stripNullsInPlace(value[i]);
+          }
+        }
+      } else if (typeof value === 'object') {
+        stripNullsInPlace(value);
       }
-      return cleaned;
+      
+      const cleanKey = key.replace(/\0/g, '');
+      if (cleanKey !== key) {
+        obj[cleanKey] = obj[key];
+        delete obj[key];
+      }
     }
-    return obj;
   };
 
-  if (req.body) req.body = stripNulls(req.body);
-  if (req.query) req.query = stripNulls(req.query);
-  if (req.params) req.params = stripNulls(req.params);
+  if (req.body) stripNullsInPlace(req.body);
+  if (req.query) stripNullsInPlace(req.query as Record<string, any>);
+  if (req.params) stripNullsInPlace(req.params);
 
   next();
 };

@@ -43,5 +43,10 @@ coverage/
 *.orig.*
 web-build/
 
+# Firebase credentials (never commit)
+google-services.json
+*firebase-adminsdk*.json
+GoogleService-Info.plist
+
 # Supabase
 .supabase/
