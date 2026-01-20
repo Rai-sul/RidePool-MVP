@@ -42,7 +42,7 @@ export const authService = {
   },
 
   async verifyEmail(token: string): Promise<ApiResponse> {
-    return apiClient.post(API_ENDPOINTS.AUTH.VERIFY_EMAIL, { token });
+    return apiClient.get(`${API_ENDPOINTS.AUTH.VERIFY_EMAIL}?token=${token}`);
   },
 
   async resetPassword(email: string): Promise<ApiResponse> {
@@ -55,6 +55,10 @@ export const authService = {
   }): Promise<ApiResponse> {
     return apiClient.post(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, data);
   },
+
+  async getCurrentUser(): Promise<ApiResponse<User>> {
+    return apiClient.get(API_ENDPOINTS.AUTH.ME);
+  },
 };
 
 export const userService = {
@@ -66,22 +70,38 @@ export const userService = {
     return apiClient.put(API_ENDPOINTS.USER.UPDATE_PROFILE, data);
   },
 
-  async updatePreferences(data: UserPreferences): Promise<ApiResponse> {
-    return apiClient.put(API_ENDPOINTS.USER.UPDATE_PREFERENCES, data);
+  async setGenderPreference(preference: string): Promise<ApiResponse> {
+    return apiClient.put(API_ENDPOINTS.USER.UPDATE_GENDER_PREFERENCE, { preference });
   },
 
-  async updateLocation(location: Location): Promise<ApiResponse> {
-    return apiClient.post(API_ENDPOINTS.USER.UPDATE_LOCATION, location);
+  async registerDeviceToken(token: string): Promise<ApiResponse> {
+    return apiClient.post(API_ENDPOINTS.USER.DEVICE_TOKEN, { token });
   },
 
-  async getRideHistory(params?: {
+  async unregisterDeviceToken(): Promise<ApiResponse> {
+    return apiClient.delete(API_ENDPOINTS.USER.DEVICE_TOKEN);
+  },
+
+  async getNotifications(params?: {
     page?: number;
     limit?: number;
   }): Promise<ApiResponse> {
-    return apiClient.get(API_ENDPOINTS.USER.GET_RIDE_HISTORY, params);
+    return apiClient.get(API_ENDPOINTS.USER.NOTIFICATIONS, params);
   },
 
-  async getStats(): Promise<ApiResponse> {
-    return apiClient.get(API_ENDPOINTS.USER.GET_STATS);
+  async markNotificationRead(notificationId: string): Promise<ApiResponse> {
+    return apiClient.post(API_ENDPOINTS.USER.NOTIFICATION_READ(notificationId));
+  },
+
+  async markAllNotificationsRead(): Promise<ApiResponse> {
+    return apiClient.post(API_ENDPOINTS.USER.NOTIFICATIONS_READ_ALL);
+  },
+
+  async getNotificationPreferences(): Promise<ApiResponse> {
+    return apiClient.get(API_ENDPOINTS.USER.NOTIFICATION_PREFERENCES);
+  },
+
+  async updateNotificationPreferences(data: any): Promise<ApiResponse> {
+    return apiClient.put(API_ENDPOINTS.USER.NOTIFICATION_PREFERENCES, data);
   },
 };

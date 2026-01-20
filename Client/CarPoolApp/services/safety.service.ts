@@ -12,7 +12,7 @@ export const safetyService = {
   },
 
   async getEmergencyContacts(): Promise<ApiResponse<EmergencyContact[]>> {
-    return apiClient.get(API_ENDPOINTS.SAFETY.GET_EMERGENCY_CONTACTS);
+    return apiClient.get(API_ENDPOINTS.SAFETY.EMERGENCY_CONTACTS);
   },
 
   async addEmergencyContact(data: {
@@ -20,7 +20,7 @@ export const safetyService = {
     phone: string;
     relationship?: string;
   }): Promise<ApiResponse<EmergencyContact>> {
-    return apiClient.post(API_ENDPOINTS.SAFETY.ADD_EMERGENCY_CONTACT, data);
+    return apiClient.post(API_ENDPOINTS.SAFETY.EMERGENCY_CONTACTS, data);
   },
 
   async shareTrip(data: {
@@ -28,5 +28,12 @@ export const safetyService = {
     contact_ids: string[];
   }): Promise<ApiResponse> {
     return apiClient.post(API_ENDPOINTS.SAFETY.SHARE_TRIP, data);
+  },
+
+  async triggerSOS(data: {
+    location: { latitude: number; longitude: number };
+    ride_id?: string;
+  }): Promise<ApiResponse> {
+    return apiClient.post(API_ENDPOINTS.SAFETY.SOS, data);
   },
 };

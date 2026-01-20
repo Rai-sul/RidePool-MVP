@@ -16,7 +16,7 @@ export const messagingService = {
     page?: number;
     limit?: number;
   }): Promise<ApiResponse<PaginatedResponse<Conversation>>> {
-    return apiClient.get(API_ENDPOINTS.MESSAGING.GET_CONVERSATIONS, params);
+    return apiClient.get(API_ENDPOINTS.MESSAGING.CONVERSATIONS, params);
   },
 
   async getMessages(

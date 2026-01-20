@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "CarPoolApp",
-    "slug": "CarPoolApp",
+    "slug": "ridepool",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -10,9 +10,11 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "jsEngine": "hermes"
+      "jsEngine": "hermes",
+      "bundleIdentifier": "com.ridepool.carpoolapp"
     },
     "android": {
+      "package": "com.ridepool.carpoolapp",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -45,6 +47,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "32279d0b-7627-4369-828f-384c9f22e66c"
+      }
+    },
+    "owner": "raisuls-organization"
   }
 }
