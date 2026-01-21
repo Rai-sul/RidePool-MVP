@@ -97,7 +97,7 @@ cp .env.example .env
 
 # Edit .env with your configuration
 EXPO_PUBLIC_API_URL=http://your-server-ip:5000/api
-EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN=your_mapbox_token
+EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
 ```
 
 ### 3. Run the App
@@ -329,13 +329,11 @@ npm start
 ## Map Integration (Ready for Implementation)
 
 The app is ready for map integration with:
-- OpenStreetMap (free, no API key needed)
-- Mapbox (token in .env)
+- Google Maps (API key in .env)
 
 ### Recommended packages:
 ```bash
 npm install react-native-maps
-npm install @mapbox/react-native-mapbox-gl
 ```
 
 ## WebSocket Support (Ready for Implementation)
@@ -354,7 +352,7 @@ socket.on('ride-update', (data) => {
 
 ## Next Steps
 
-1. **Map Integration**: Implement map views with OpenStreetMap/Mapbox
+1. **Map Integration**: Implement map views with Google Maps
 2. **WebSocket**: Add real-time ride tracking and messaging
 3. **Push Notifications**: Implement expo-notifications
 4. **Offline Support**: Add offline-first architecture

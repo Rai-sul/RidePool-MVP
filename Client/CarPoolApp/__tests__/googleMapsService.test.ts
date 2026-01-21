@@ -1,9 +1,9 @@
-import { searchLocation, getRoute, reverseGeocode } from '../services/mapboxService';
+import { searchLocation, getRoute, reverseGeocode } from '../services/googleMapsService';
 
 // Mock fetch globally
 global.fetch = jest.fn();
 
-describe('mapboxService', () => {
+describe('googleMapsService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -11,13 +11,15 @@ describe('mapboxService', () => {
   describe('searchLocation', () => {
     it('should search for locations', async () => {
       const mockResponse = {
-        features: [
+        status: 'OK',
+        results: [
           {
-            id: '1',
-            text: 'San Francisco',
-            place_name: 'San Francisco, CA, USA',
-            center: [-122.4194, 37.7749],
-            properties: { address: '123 Main St' },
+            place_id: '1',
+            name: 'San Francisco',
+            formatted_address: 'San Francisco, CA, USA',
+            geometry: {
+              location: { lat: 37.7749, lng: -122.4194 },
+            },
           },
         ],
       };
@@ -47,16 +49,16 @@ describe('mapboxService', () => {
   describe('getRoute', () => {
     it('should get route between two points', async () => {
       const mockResponse = {
+        status: 'OK',
         routes: [
           {
-            duration: 1200,
-            distance: 5000,
-            geometry: {
-              coordinates: [
-                [-122.4194, 37.7749],
-                [-122.4094, 37.7849],
-              ],
-            },
+            legs: [
+              {
+                duration: { value: 1200, text: '20 mins' },
+                distance: { value: 5000, text: '5 km' },
+              },
+            ],
+            overview_polyline: { points: '_p~iF~ps|U_ulLnnqC_mqNvxq`@' },
           },
         ],
       };
@@ -80,9 +82,10 @@ describe('mapboxService', () => {
   describe('reverseGeocode', () => {
     it('should reverse geocode coordinates', async () => {
       const mockResponse = {
-        features: [
+        status: 'OK',
+        results: [
           {
-            place_name: 'San Francisco, CA, USA',
+            formatted_address: 'San Francisco, CA, USA',
           },
         ],
       };
@@ -99,7 +102,8 @@ describe('mapboxService', () => {
 
     it('should return default message for unknown location', async () => {
       const mockResponse = {
-        features: [],
+        status: 'OK',
+        results: [],
       };
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({

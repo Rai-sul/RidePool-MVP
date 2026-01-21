@@ -150,7 +150,7 @@ export class GoogleMapsService {
         0
       );
 
-      // Decode polyline (simplified - you might want to use a library like @mapbox/polyline)
+      // Decode polyline using custom implementation
       const coordinates = this.decodePolyline(route.overview_polyline.points);
 
       // Extract steps if available
@@ -210,7 +210,6 @@ export class GoogleMapsService {
 
   /**
    * Decode Google Maps polyline string to coordinates
-   * Simplified implementation - for production, consider using @mapbox/polyline
    *
    * @param encoded - Encoded polyline string
    * @returns Array of coordinate objects
