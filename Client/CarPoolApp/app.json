@@ -11,7 +11,13 @@
     "ios": {
       "supportsTablet": true,
       "jsEngine": "hermes",
-      "bundleIdentifier": "com.ridepool.carpoolapp"
+      "bundleIdentifier": "com.ridepool.carpoolapp",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Allow CarPoolApp to use your location to find nearby rides and drivers.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow CarPoolApp to use your location to track your ride progress.",
+        "NSLocationAlwaysUsageDescription": "Allow CarPoolApp to use your location in the background for ride tracking.",
+        "UIBackgroundModes": ["location", "fetch", "remote-notification"]
+      }
     },
     "android": {
       "package": "com.ridepool.carpoolapp",
@@ -26,7 +32,14 @@
       "jsEngine": "hermes",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
       ]
     },
     "web": {
@@ -45,7 +58,17 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
+          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location.",
+          "locationAlwaysPermission": "Allow $(PRODUCT_NAME) to use your location in the background for ride tracking.",
+          "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location to find nearby rides."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#4285F4",
+          "defaultChannel": "default",
+          "enableBackgroundRemoteNotifications": true
         }
       ],
       [
