@@ -3,7 +3,7 @@ import { Stack, usePathname } from 'expo-router';
 import { View, Text, TouchableOpacity } from 'react-native';
 import BottomNav from '../components/BottomNav';
 import { GlobalProvider, useGlobalContext } from '../contexts/GlobalContext';
-import { AuthProvider } from '../contexts/AuthContext';
+import { AuthProvider, useAuthContext } from '../contexts/AuthContext';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { StatusBar } from 'expo-status-bar';
@@ -13,9 +13,12 @@ import { ArrowLeft } from '../components/Icons';
 function AppLayout() {
   const pathname = usePathname();
   const { userProfile } = useGlobalContext();
+  const { isAuthenticated } = useAuthContext();
 
   const showBottomNav =
+    isAuthenticated &&
     pathname !== '/' &&
+    pathname !== '/login' &&
     pathname !== '/profile-setup' &&
     pathname !== '/chat' &&
     pathname !== '/support-chat' &&

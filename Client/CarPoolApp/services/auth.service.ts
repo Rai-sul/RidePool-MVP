@@ -1,5 +1,5 @@
 import { apiClient } from '../utils/apiClient';
-import { API_ENDPOINTS } from '../config/api.config';
+import { API_ENDPOINTS, API_CONFIG } from '../config/api.config';
 import { ApiResponse, User, UserPreferences, Location } from '../types';
 
 export const authService = {
@@ -7,24 +7,49 @@ export const authService = {
     email: string;
     password: string;
     phone?: string;
+    first_name: string;
+    last_name: string;
     full_name?: string;
+    gender: 'MALE' | 'FEMALE' | 'OTHER';
+    gender_preference?: 'ANY' | 'FEMALE_ONLY';
   }): Promise<ApiResponse<{ user: User; token: string }>> {
-    const response = await apiClient.post(API_ENDPOINTS.AUTH.REGISTER, data);
-    if (response.data?.token) {
-      await apiClient.setToken(response.data.token);
+    console.log('[Auth] Registering user:', data.email);
+    console.log('[Auth] API URL:', API_CONFIG.BASE_URL + API_ENDPOINTS.AUTH.REGISTER);
+    try {
+      const response = await apiClient.post(API_ENDPOINTS.AUTH.REGISTER, data);
+      console.log('[Auth] Registration response:', response.success ? 'SUCCESS' : 'FAILED');
+      const token = response.data?.session?.access_token || response.data?.token;
+      if (token) {
+        await apiClient.setToken(token);
+        console.log('[Auth] Token stored successfully');
+      }
+      return response;
+    } catch (error: any) {
+      console.error('[Auth] Registration error:', error.message);
+      throw error;
     }
-    return response;
   },
 
   async login(data: {
     email: string;
     password: string;
   }): Promise<ApiResponse<{ user: User; token: string }>> {
-    const response = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, data);
-    if (response.data?.token) {
-      await apiClient.setToken(response.data.token);
+    console.log('[Auth] Logging in user:', data.email);
+    console.log('[Auth] API URL:', API_CONFIG.BASE_URL + API_ENDPOINTS.AUTH.LOGIN);
+    try {
+      const response = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, data);
+      console.log('[Auth] Login response:', response.success ? 'SUCCESS' : 'FAILED');
+      // Server returns session.access_token, store it as auth token
+      const token = response.data?.session?.access_token || response.data?.token;
+      if (token) {
+        await apiClient.setToken(token);
+        console.log('[Auth] Token stored successfully');
+      }
+      return response;
+    } catch (error: any) {
+      console.error('[Auth] Login error:', error.message);
+      throw error;
     }
-    return response;
   },
 
   async logout(): Promise<ApiResponse> {

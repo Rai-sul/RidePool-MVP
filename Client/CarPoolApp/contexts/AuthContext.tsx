@@ -74,7 +74,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
       throw new Error(response.message || 'Login failed');
     } catch (err: any) {
-      const errorMessage = err.message || 'Login failed';
+      // Ensure errorMessage is always a string for React rendering
+      let errorMessage = 'Login failed';
+      if (typeof err === 'string') {
+        errorMessage = err;
+      } else if (typeof err.message === 'string') {
+        errorMessage = err.message;
+      } else if (err.message?.message) {
+        errorMessage = err.message.message;
+      }
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
@@ -86,19 +94,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     email: string;
     password: string;
     phone?: string;
+    first_name: string;
+    last_name: string;
     full_name?: string;
+    gender: 'MALE' | 'FEMALE' | 'OTHER';
+    gender_preference?: 'ANY' | 'FEMALE_ONLY';
   }) => {
     try {
       setLoading(true);
       setError(null);
+      console.log('[AuthContext] register() called with:', data.email);
       const response = await authService.register(data);
+      console.log('[AuthContext] register response:', response.success ? 'SUCCESS' : 'FAILED');
       if (response.success && response.data) {
         setUser(response.data.user);
+        console.log('[AuthContext] User set:', response.data.user?.id);
         return { success: true };
       }
       throw new Error(response.message || 'Registration failed');
     } catch (err: any) {
-      const errorMessage = err.message || 'Registration failed';
+      let errorMessage = 'Registration failed';
+      if (typeof err === 'string') {
+        errorMessage = err;
+      } else if (typeof err.message === 'string') {
+        errorMessage = err.message;
+      } else if (err.message?.message) {
+        errorMessage = err.message.message;
+      }
+      console.error('[AuthContext] register error:', errorMessage);
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {

@@ -23,6 +23,7 @@ class ApiClient {
     this.timeout = API_CONFIG.TIMEOUT;
     this.retryAttempts = API_CONFIG.RETRY_ATTEMPTS;
     this.retryDelay = API_CONFIG.RETRY_DELAY;
+    console.log('[ApiClient] Initialized with baseURL:', this.baseURL);
   }
 
   private async getAuthToken(): Promise<string | null> {
@@ -65,17 +66,21 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
+    const fullUrl = `${this.baseURL}${endpoint}`;
+    console.log(`[ApiClient] ${options.method || 'GET'} ${fullUrl}`);
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      const response = await fetch(fullUrl, {
         ...options,
         headers,
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
+      console.log(`[ApiClient] Response status: ${response.status}`);
 
       if (!response.ok) {
         if (response.status === 401) {
@@ -83,23 +88,54 @@ class ApiClient {
         }
 
         const errorData = await response.json().catch(() => ({}));
+        console.error(`[ApiClient] Error response:`, errorData);
+        
+        // Extract error message from various response formats
+        let errorMessage = 'Request failed';
+        if (typeof errorData.error === 'string') {
+          errorMessage = errorData.error;
+        } else if (errorData.error?.message) {
+          errorMessage = errorData.error.message;
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+        
+        // Include validation details if present
+        if (errorData.error?.details?.errors) {
+          const validationErrors = errorData.error.details.errors
+            .map((e: { field: string; message: string }) => `${e.field}: ${e.message}`)
+            .join('; ');
+          errorMessage = `${errorMessage}: ${validationErrors}`;
+        }
+        
         throw new ApiError(
           response.status,
-          errorData.message || errorData.error || 'Request failed',
+          errorMessage,
           errorData
         );
       }
 
       const data = await response.json();
+      console.log(`[ApiClient] Success:`, data.success ? 'true' : 'false');
       return data;
     } catch (error: any) {
       clearTimeout(timeoutId);
+      console.error(`[ApiClient] Request failed:`, error.message || error);
 
       if (error.name === 'AbortError') {
+        console.error('[ApiClient] Request timed out');
         throw new ApiError(408, 'Request timeout');
       }
 
+      if (error instanceof TypeError) {
+        console.error(`[ApiClient] Network error - TypeError:`, error.message);
+        console.error('[ApiClient] Full URL was:', fullUrl);
+        console.error('[ApiClient] Make sure server is running at', this.baseURL);
+        throw new ApiError(0, `Network request failed: ${error.message}`);
+      }
+
       if (retryCount < this.retryAttempts && this.shouldRetry(error)) {
+        console.log(`[ApiClient] Retrying... attempt ${retryCount + 1}`);
         await this.delay(this.retryDelay * (retryCount + 1));
         return this.request<T>(endpoint, options, retryCount + 1);
       }

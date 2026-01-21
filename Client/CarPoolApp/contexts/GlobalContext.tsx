@@ -1,10 +1,14 @@
-import { createContext, useState, useContext } from 'react';
+import { createContext, useState, useContext, useEffect } from 'react';
+import { useAuthContext } from './AuthContext';
 
 export type UserProfile = {
   firstName: string;
   lastName: string;
   email: string;
   gender: 'male' | 'female';
+  full_name?: string;
+  phone?: string;
+  id?: string;
 };
 
 export type Pool = {
@@ -58,6 +62,35 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
   const [selectedPool, setSelectedPool] = useState<Pool | null>(null);
   const [selectedRideType, setSelectedRideType] = useState<'female-only' | 'regular' | null>(null);
+
+  // Sync with AuthContext
+  const { user: authUser } = useAuthContext();
+  
+  useEffect(() => {
+    if (authUser) {
+      // Parse full_name into firstName and lastName
+      let firstName = '';
+      let lastName = '';
+      
+      if (authUser.full_name) {
+        const nameParts = authUser.full_name.trim().split(' ');
+        firstName = nameParts[0] || '';
+        lastName = nameParts.slice(1).join(' ') || '';
+      }
+      
+      setUserProfile({
+        firstName,
+        lastName,
+        email: authUser.email,
+        gender: authUser.gender?.toLowerCase() as 'male' | 'female' || 'male',
+        full_name: authUser.full_name,
+        phone: authUser.phone,
+        id: authUser.id,
+      });
+    } else {
+      setUserProfile(null);
+    }
+  }, [authUser]);
 
   return (
     <GlobalContext.Provider value={{

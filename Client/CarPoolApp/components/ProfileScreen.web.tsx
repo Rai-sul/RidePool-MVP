@@ -1,10 +1,11 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native-web';
-import { User, MapPin, Settings, Shield, HelpCircle, ChevronRight, Heart, Star, Bell, Globe } from './Icons';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Modal } from 'react-native-web';
+import { User, MapPin, Settings, Shield, HelpCircle, ChevronRight, Heart, Star, Bell, Globe, LogOut } from './Icons';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Separator } from './ui/separator';
 import type { UserProfile } from '../contexts/GlobalContext';
 import { useRouter } from 'expo-router'; // Import useRouter
+import { useAuthContext } from '../contexts/AuthContext';
 
 type ProfileScreenProps = {
   userProfile: UserProfile | null;
@@ -48,9 +49,25 @@ export default function ProfileScreen({ userProfile }: ProfileScreenProps) { // 
   const emailColor = isFemale ? 'text-pink-100' : 'text-blue-100';
 
   const router = useRouter(); // Initialize useRouter
+  const { logout } = useAuthContext();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleMenuItemClick = (route: string) => {
     router.push(`/${route}`);
+  };
+
+  const handleLogout = () => {
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = async () => {
+    setShowLogoutModal(false);
+    await logout();
+    router.replace('/');
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutModal(false);
   };
 
   return (
@@ -140,12 +157,60 @@ export default function ProfileScreen({ userProfile }: ProfileScreenProps) { // 
           </View>
         )}
 
+        {/* Logout Button */}
+        <TouchableOpacity
+          onPress={handleLogout}
+          className="bg-white rounded-2xl p-4 flex flex-row items-center gap-3 border-2 border-red-100"
+        >
+          <View className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center">
+            <LogOut className="w-5 h-5 text-red-600" />
+          </View>
+          <Text className="text-red-600 font-semibold">Log Out</Text>
+        </TouchableOpacity>
+
         {/* App Info */}
         <View className="items-center py-4 space-y-1">
           <Text className="text-sm text-gray-500">RideShare v2.4.0</Text>
           <Text className="text-xs text-gray-500">© 2025 RideShare. All rights reserved.</Text>
         </View>
       </View>
+
+      {/* Logout Confirmation Modal */}
+      <Modal
+        visible={showLogoutModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelLogout}
+      >
+        <View className="flex-1 justify-center items-center bg-black/50">
+          <View className="bg-white rounded-3xl p-6 mx-4 max-w-sm w-full">
+            <View className="items-center mb-4">
+              <View className={`w-16 h-16 ${isFemale ? 'bg-pink-100' : 'bg-blue-100'} rounded-full flex items-center justify-center mb-3`}>
+                <LogOut className={`w-8 h-8 ${isFemale ? 'text-pink-600' : 'text-blue-600'}`} />
+              </View>
+              <Text className="text-xl font-semibold text-gray-900 mb-2">Log Out?</Text>
+              <Text className="text-center text-gray-600">
+                Are you sure you want to log out of your account?
+              </Text>
+            </View>
+
+            <View className="space-y-2">
+              <TouchableOpacity
+                onPress={confirmLogout}
+                className={`${isFemale ? 'bg-pink-600' : 'bg-blue-600'} rounded-xl py-3 px-4`}
+              >
+                <Text className="text-white font-semibold text-center">Yes, Log Out</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={cancelLogout}
+                className="bg-gray-200 rounded-xl py-3 px-4"
+              >
+                <Text className="text-gray-700 font-semibold text-center">Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }

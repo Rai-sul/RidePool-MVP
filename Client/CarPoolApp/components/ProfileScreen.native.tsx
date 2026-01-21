@@ -8,6 +8,7 @@ import { Button } from './ui/button';
 import type { UserProfile } from '../contexts/GlobalContext';
 import { useRouter } from 'expo-router'; // Import useRouter
 import LinearGradient from './LinearGradient';
+import { useAuthContext } from '../contexts/AuthContext';
 
 type ProfileScreenProps = {
   userProfile: UserProfile | null;
@@ -51,6 +52,7 @@ export default function ProfileScreen({ userProfile }: ProfileScreenProps) { // 
   const emailColor = isFemale ? 'text-pink-100' : 'text-blue-100';
 
   const router = useRouter(); // Initialize useRouter
+  const { logout } = useAuthContext();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleMenuItemClick = (route: string) => {
@@ -61,8 +63,9 @@ export default function ProfileScreen({ userProfile }: ProfileScreenProps) { // 
     setShowLogoutModal(true);
   };
 
-  const confirmLogout = () => {
+  const confirmLogout = async () => {
     setShowLogoutModal(false);
+    await logout();
     // Navigate to welcome/landing screen
     router.replace('/');
   };

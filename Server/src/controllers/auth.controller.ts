@@ -20,10 +20,12 @@ const registerSchema = z.object({
     .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
     .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
     .regex(/[0-9]/, 'Password must contain at least one number'),
-  phone: z.string().regex(/^\+?[1-9]\d{9,14}$/, 'Invalid phone number format'),
-  full_name: z.string().min(2, 'Full name must be at least 2 characters').max(100),
+  phone: z.string().regex(/^\+?[1-9]\d{9,14}$/, 'Invalid phone number format').optional(),
+  first_name: z.string().min(1, 'First name is required').max(50),
+  last_name: z.string().min(1, 'Last name is required').max(50),
+  full_name: z.string().min(2, 'Full name must be at least 2 characters').max(100).optional(),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
-  gender_preference: z.enum(['FEMALE_ONLY', 'ANY']).optional(),
+  gender_preference: z.enum(['FEMALE_ONLY', 'ANY']).optional().default('ANY'),
 });
 
 const loginSchema = z.object({
@@ -62,8 +64,10 @@ class AuthController {
         return validationErrorResponse(res, 'Validation failed', { errors });
       }
 
-      const { email, password, phone, full_name, gender, gender_preference } =
+      const { email, password, phone, first_name, last_name, full_name, gender, gender_preference } =
         validationResult.data;
+
+      const computedFullName = full_name || `${first_name} ${last_name}`;
 
       if (gender === 'FEMALE' && !gender_preference) {
         return validationErrorResponse(
@@ -72,22 +76,23 @@ class AuthController {
         );
       }
 
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
         email,
         password,
-        options: {
-          data: {
-            full_name,
-            phone,
-            gender,
-          },
+        email_confirm: true,
+        user_metadata: {
+          full_name: computedFullName,
+          first_name: first_name,
+          last_name: last_name,
+          phone: phone || null,
+          gender: gender,
         },
       });
 
       if (authError) {
         logger.error('Auth signup error:', authError);
 
-        if (authError.message.includes('already registered')) {
+        if (authError.message.includes('already registered') || authError.message.includes('already been registered')) {
           return conflictResponse(res, 'User with this email already exists');
         }
 
@@ -105,9 +110,10 @@ class AuthController {
 
       const { error: profileError } = await supabaseAdmin.from('users').insert({
         id: authData.user.id,
-        phone,
+        full_name: computedFullName,
+        phone: phone || null,
         phone_verified: false,
-        gender,
+        gender: gender,
         gender_preference: gender_preference || 'ANY',
         is_driver: false,
         average_rating: null,
@@ -136,6 +142,11 @@ class AuthController {
         logger.warn('Wallet creation warning:', walletError);
       }
 
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
       logger.info(`User registered: ${authData.user.id}`);
 
       return createdResponse(
@@ -144,20 +155,20 @@ class AuthController {
           user: {
             id: authData.user.id,
             email: authData.user.email,
-            phone,
-            full_name,
-            gender,
+            phone: phone || null,
+            full_name: full_name || null,
+            gender: gender || null,
             gender_preference: gender_preference || 'ANY',
           },
-          session: authData.session
+          session: signInData?.session
             ? {
-                access_token: authData.session.access_token,
-                refresh_token: authData.session.refresh_token,
-                expires_at: authData.session.expires_at,
+                access_token: signInData.session.access_token,
+                refresh_token: signInData.session.refresh_token,
+                expires_at: signInData.session.expires_at,
               }
             : null,
         },
-        'Registration successful. Please verify your email.'
+        'Registration successful'
       );
     } catch (error) {
       next(error);

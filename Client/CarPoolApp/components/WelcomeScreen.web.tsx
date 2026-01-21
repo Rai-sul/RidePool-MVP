@@ -6,9 +6,13 @@ import { Button } from './ui/button';
 
 type WelcomeScreenProps = {
   onSignUp: () => void;
+  onLogin?: () => void;
+  onGoogleLogin?: () => void;
+  onAppleLogin?: () => void;
+  onFacebookLogin?: () => void;
 };
 
-export default function WelcomeScreen({ onSignUp }: WelcomeScreenProps) {
+export default function WelcomeScreen({ onSignUp, onLogin, onGoogleLogin, onAppleLogin, onFacebookLogin }: WelcomeScreenProps) {
   return (
     <LinearGradient
       colors={['#9333ea', '#a855f7', '#8b5cf6']}
@@ -37,6 +41,7 @@ export default function WelcomeScreen({ onSignUp }: WelcomeScreenProps) {
         
         <Button 
           variant="outline"
+          onPress={onLogin}
           className="w-full h-14 bg-transparent border-2 border-white"
         >
           <Text className="text-white font-semibold">Log In</Text>
@@ -54,6 +59,7 @@ export default function WelcomeScreen({ onSignUp }: WelcomeScreenProps) {
         <View className="gap-3">
           <Button 
             variant="outline"
+            onPress={onGoogleLogin}
             className="w-full h-12 bg-white/10 border border-white/30"
           >
             <Text className="text-white">Continue with Google</Text>
@@ -61,6 +67,7 @@ export default function WelcomeScreen({ onSignUp }: WelcomeScreenProps) {
           
           <Button 
             variant="outline"
+            onPress={onAppleLogin}
             className="w-full h-12 bg-white/10 border border-white/30"
           >
             <Text className="text-white">Continue with Apple</Text>
@@ -68,6 +75,7 @@ export default function WelcomeScreen({ onSignUp }: WelcomeScreenProps) {
           
           <Button 
             variant="outline"
+            onPress={onFacebookLogin}
             className="w-full h-12 bg-white/10 border border-white/30"
           >
             <Text className="text-white">Continue with Facebook</Text>
@@ -75,6 +83,7 @@ export default function WelcomeScreen({ onSignUp }: WelcomeScreenProps) {
 
           <Button 
             variant="ghost"
+            onPress={onSignUp}
             className="w-full h-12"
           >
             <Text className="text-white">Sign up with phone number</Text>
