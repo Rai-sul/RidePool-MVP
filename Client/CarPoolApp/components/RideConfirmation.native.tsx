@@ -3,11 +3,12 @@ import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MapPin, Clock, Users, Navigation, ChevronRight, ChevronLeft, Car, Taka } from './Icons';
 import { Button } from './ui/button';
-import type { Destination, UserProfile, Pool } from '../contexts/GlobalContext';
+import type { Destination, UserProfile, Pool, Location } from '../contexts/GlobalContext';
 import LinearGradient from './LinearGradient';
-import { Svg, Path, Circle } from 'react-native-svg';
+import GoogleMapView from './GoogleMapView';
 
 type RideConfirmationProps = {
+  pickupLocation?: Location | null;
   destination: Destination | null;
   userProfile: UserProfile | null;
   rideType: 'female-only' | 'regular' | null;
@@ -107,7 +108,7 @@ const mockPools: Pool[] = [
 // Female driver names for filtering
 const femaleDrivers = ['Fatima', 'Aisha', 'Nadia'];
 
-export default function RideConfirmation({ destination, userProfile, rideType, onPoolSelect, onBack }: RideConfirmationProps) {
+export default function RideConfirmation({ pickupLocation, destination, userProfile, rideType, onPoolSelect, onBack }: RideConfirmationProps) {
   const [selectedPoolId, setSelectedPoolId] = useState<string | null>(null);
   const [activeRideType, setActiveRideType] = useState<'female-only' | 'regular'>(rideType || 'regular');
   const [selectedVehicleType, setSelectedVehicleType] = useState<'car' | 'cng' | null>(null);
@@ -210,155 +211,98 @@ export default function RideConfirmation({ destination, userProfile, rideType, o
 
   const currentStops = selectedPoolId ? poolStops[selectedPoolId] || [] : [];
 
+  // Use pickup location from props or default to Dhaka center
+  const pickupCoords = pickupLocation 
+    ? { latitude: pickupLocation.latitude, longitude: pickupLocation.longitude }
+    : { latitude: 23.8103, longitude: 90.4125 };
+  
+  // Use destination coordinates if available, otherwise use default
+  const dropoffCoords = destination?.latitude && destination?.longitude
+    ? { latitude: destination.latitude, longitude: destination.longitude }
+    : { latitude: 23.82, longitude: 90.43 };
+
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top']}>
       <View className="h-full w-full flex flex-col bg-white">
-        {/* Map Preview */}
-        <LinearGradient
-          colors={['#e0e0e0', '#f0f0f0', '#e0f2f7']} // Approximate colors for from-gray-200 via-gray-100 to-blue-50
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          className="h-1/3 relative overflow-hidden"
-        >
-        <TouchableOpacity
-          onPress={onBack}
-          className="absolute top-4 left-4 z-10 bg-white rounded-full w-10 h-10 flex items-center justify-center active:scale-95"
-          style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 5 }}
-        >
-          <ChevronLeft className="w-6 h-6 text-gray-700" />
-        </TouchableOpacity>
-
-        {/* Simulated route and stops */}
-        <View className="absolute inset-0 flex items-center justify-center">
-          <View className="relative w-full h-full">
-            {/* Show route path when pool is selected */}
-            {selectedPoolId && currentStops.length > 0 && (
-              <>
-                {/* Route line connecting all stops */}
-                <Svg className="absolute inset-0 w-full h-full">
-                  <Path
-                    d={`M ${currentStops[0].x} ${currentStops[0].y} ${currentStops
-                      .slice(1)
-                      .map(stop => `L ${stop.x} ${stop.y}`)
-                      .join(' ')}`}
-                    stroke="#3B82F6"
-                    strokeWidth="3"
-                    fill="none"
-                    strokeDasharray="8,4"
-                  />
-                </Svg>
-
-                {/* Driver car icon */}
-                <View
-                  className="absolute"
-                  style={{ left: currentStops[0].x, top: currentStops[0].y - 8 }}
-                >
-                  <View className="relative -translate-x-1/2 -translate-y-1/2">
-                    <View className="bg-blue-600 text-white p-2 rounded-full shadow-lg">
-                      <Navigation className="w-5 h-5 text-white" />
-                    </View>
-                    <View className="absolute -top-8 left-1/2 -translate-x-1/2">
-                      <View className="bg-white px-2 py-1 rounded shadow-md" style={{ minWidth: 70 }}>
-                        <Text className="text-xs" numberOfLines={1}>Driver here</Text>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-
-                {/* All stops with labels */}
-                {currentStops.map((stop, index) => (
-                  <View
-                    key={index}
-                    className="absolute"
-                    style={{ left: stop.x, top: stop.y }}
-                  >
-                    <View className="relative -translate-x-1/2 -translate-y-full">
-                      {stop.type === 'pickup' ? (
-                        <View className={`w-6 h-6 rounded-full flex items-center justify-center shadow-lg ${
-                          stop.rider === 'You' ? 'bg-blue-600' : 'bg-green-500'
-                        }`}>
-                          <View className="w-3 h-3 bg-white rounded-full"></View>
-                        </View>
-                      ) : (
-                        <MapPin className={`w-6 h-6 shadow-lg ${
-                          stop.rider === 'You' ? 'text-red-600 fill-red-600' : 'text-orange-500 fill-orange-500'
-                        }`} />
-                      )}
-                      
-                      {/* Stop label */}
-                      <View className="absolute top-full mt-1 left-1/2 -translate-x-1/2">
-                        <View 
-                          className={`px-2 py-1 rounded shadow-md ${
-                            stop.rider === 'You' 
-                              ? 'bg-blue-600' 
-                              : 'bg-white border border-gray-200'
-                          }`}
-                          style={{ minWidth: 60 }}
-                        >
-                          <Text 
-                            className={stop.rider === 'You' ? 'text-white' : 'text-gray-900'}
-                            numberOfLines={1}
-                          >
-                            {stop.rider}
-                          </Text>
-                          <Text 
-                            className={`text-xs ${stop.rider === 'You' ? 'text-blue-100' : 'text-gray-500'}`}
-                            numberOfLines={1}
-                          >
-                            {stop.type === 'pickup' ? 'Pickup' : 'Drop-off'}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-                ))}
-              </>
-            )}
-
-            {/* Default view when no pool selected */}
-            {!selectedPoolId && (
-              <>
-                <View className="absolute top-1/4 left-1/4 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                  <View className="w-3 h-3 bg-white rounded-full"></View>
-                </View>
-                <View className="absolute bottom-1/4 right-1/4">
-                  <MapPin className="w-8 h-8 text-red-600 fill-red-600" />
-                </View>
-                <Svg className="absolute inset-0 w-full h-full">
-                  <Path
-                    d="M 100 80 Q 200 120 280 200"
-                    stroke="#3B82F6"
-                    strokeWidth="3"
-                    fill="none"
-                    strokeDasharray="8,4"
-                  />
-                </Svg>
-              </>
-            )}
-          </View>
-        </View>
-
-        {/* Legend */}
-        {selectedPoolId && (
-          <View
-            className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-3"
-            style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 5 }}
+        {/* Google Map */}
+        <View style={{ height: '33%', position: 'relative' }}>
+          <GoogleMapView
+            center={pickupCoords}
+            zoom={12}
+            pickupLocation={pickupCoords}
+            dropoffLocation={dropoffCoords}
+            showDirections={true}
+            markers={
+              selectedPoolId && currentStops.length > 0
+                ? currentStops
+                    .filter(stop => stop.rider !== 'You')
+                    .map((stop, idx) => ({
+                      id: `stop-${idx}`,
+                      latitude: pickupCoords.latitude + (stop.y - 50) * 0.0015,
+                      longitude: pickupCoords.longitude + (stop.x - 50) * 0.0015,
+                      title: `${stop.rider} - ${stop.name}`,
+                      icon: stop.type === 'pickup' ? 'pickup' : 'dropoff',
+                    }))
+                : []
+            }
+          />
+          
+          {/* Back Button */}
+          <TouchableOpacity
+            onPress={onBack}
+            style={{
+              position: 'absolute',
+              top: 16,
+              left: 16,
+              zIndex: 10,
+              backgroundColor: 'white',
+              borderRadius: 20,
+              width: 40,
+              height: 40,
+              alignItems: 'center',
+              justifyContent: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.2,
+              shadowRadius: 4,
+              elevation: 5,
+            }}
           >
-            <View className="flex flex-row items-center gap-2 mb-1.5">
-              <View className="w-3 h-3 bg-blue-600 rounded-full"></View>
-              <Text className="text-xs text-gray-700">Your stops</Text>
+            <ChevronLeft className="w-6 h-6 text-gray-700" />
+          </TouchableOpacity>
+
+          {/* Legend */}
+          {selectedPoolId && (
+            <View
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                backgroundColor: 'white',
+                borderRadius: 8,
+                padding: 12,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.15,
+                shadowRadius: 4,
+                elevation: 5,
+              }}
+            >
+              <View className="flex flex-row items-center gap-2 mb-1.5">
+                <View className="w-3 h-3 bg-blue-600 rounded-full"></View>
+                <Text className="text-xs text-gray-700">Your stops</Text>
+              </View>
+              <View className="flex flex-row items-center gap-2 mb-1.5">
+                <View className="w-3 h-3 bg-green-500 rounded-full"></View>
+                <Text className="text-xs text-gray-700">Co-rider pickups</Text>
+              </View>
+              <View className="flex flex-row items-center gap-2">
+                <View className="w-3 h-3 bg-red-500 rounded-full"></View>
+                <Text className="text-xs text-gray-700">Drop-offs</Text>
+              </View>
             </View>
-            <View className="flex flex-row items-center gap-2 mb-1.5">
-              <View className="w-3 h-3 bg-green-500 rounded-full"></View>
-              <Text className="text-xs text-gray-700">Co-rider pickups</Text>
-            </View>
-            <View className="flex flex-row items-center gap-2">
-              <MapPin className="w-3 h-3 text-orange-500 fill-orange-500" />
-              <Text className="text-xs text-gray-700">Co-rider drops</Text>
-            </View>
-          </View>
-        )}
-      </LinearGradient>
+          )}
+        </View>
 
       {/* Bottom Sheet */}
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 140 }}>

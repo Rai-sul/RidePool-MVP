@@ -28,6 +28,15 @@ export type Pool = {
 export type Destination = {
   name: string;
   address: string;
+  latitude?: number;
+  longitude?: number;
+};
+
+export type Location = {
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
 };
 
 type GlobalContextType = {
@@ -35,6 +44,8 @@ type GlobalContextType = {
   setUserProfile: (profile: UserProfile | null) => void;
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  pickupLocation: Location | null;
+  setPickupLocation: (location: Location | null) => void;
   selectedDestination: Destination | null;
   setSelectedDestination: (destination: Destination | null) => void;
   selectedPool: Pool | null;
@@ -48,6 +59,8 @@ const GlobalContext = createContext<GlobalContextType>({
   setUserProfile: () => {},
   activeTab: 'home',
   setActiveTab: () => {},
+  pickupLocation: null,
+  setPickupLocation: () => {},
   selectedDestination: null,
   setSelectedDestination: () => {},
   selectedPool: null,
@@ -59,6 +72,7 @@ const GlobalContext = createContext<GlobalContextType>({
 export function GlobalProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [activeTab, setActiveTab] = useState('home');
+  const [pickupLocation, setPickupLocation] = useState<Location | null>(null);
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
   const [selectedPool, setSelectedPool] = useState<Pool | null>(null);
   const [selectedRideType, setSelectedRideType] = useState<'female-only' | 'regular' | null>(null);
@@ -98,6 +112,8 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
       setUserProfile,
       activeTab,
       setActiveTab,
+      pickupLocation,
+      setPickupLocation,
       selectedDestination,
       setSelectedDestination,
       selectedPool,

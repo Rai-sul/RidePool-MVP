@@ -305,6 +305,53 @@ export class EmergencyService {
 
     return !error;
   }
+
+  async shareTripWithContacts(userId: string, rideId: string, contactIds: string[]): Promise<number> {
+    // Get ride details
+    const { data: ride, error: rideError } = await supabaseAdmin
+      .from('rides')
+      .select('id, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, status')
+      .eq('id', rideId)
+      .eq('user_id', userId)
+      .single();
+
+    if (rideError || !ride) {
+      logger.error('[ShareTrip] Ride not found or not owned by user:', rideError);
+      throw new Error('Ride not found');
+    }
+
+    // Get valid emergency contacts
+    const { data: contacts, error: contactsError } = await supabaseAdmin
+      .from('emergency_contacts')
+      .select('id, name, phone')
+      .eq('user_id', userId)
+      .in('id', contactIds);
+
+    if (contactsError || !contacts || contacts.length === 0) {
+      logger.warn('[ShareTrip] No valid contacts found');
+      return 0;
+    }
+
+    const trackingUrl = `https://ridepool.app/track/${rideId}`;
+    
+    for (const contact of contacts) {
+      const message = `Hi ${contact.name}, I'm sharing my trip with you. Track my ride: ${trackingUrl}`;
+      
+      // Log the share action
+      await supabaseAdmin.from('trip_shares').insert({
+        ride_id: rideId,
+        user_id: userId,
+        contact_id: contact.id,
+        contact_phone: contact.phone,
+        message,
+        shared_at: new Date().toISOString(),
+      });
+
+      logger.info(`[ShareTrip] Trip ${rideId} shared with ${contact.name}`);
+    }
+
+    return contacts.length;
+  }
 }
 
 export const emergencyService = new EmergencyService();

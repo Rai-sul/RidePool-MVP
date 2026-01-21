@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native-web';
 import { MapPin, Clock, Users, Navigation, ChevronRight, ChevronLeft, Car, Taka } from './Icons';
 import { Button } from './ui/button';
-import { motion } from '@motionone/react';
-import type { Destination, UserProfile, Pool } from '../App';
+import GoogleMapView from './GoogleMapView';
+import type { Destination, UserProfile, Pool, Location } from '../contexts/GlobalContext';
 
 type RideConfirmationProps = {
+  pickupLocation?: Location | null;
   destination: Destination | null;
   userProfile: UserProfile | null;
   rideType: 'female-only' | 'regular' | null;
@@ -105,7 +106,7 @@ const mockPools: Pool[] = [
 // Female driver names for filtering
 const femaleDrivers = ['Fatima', 'Aisha', 'Nadia'];
 
-export default function RideConfirmation({ destination, userProfile, rideType, onPoolSelect, onBack }: RideConfirmationProps) {
+export default function RideConfirmation({ pickupLocation, destination, userProfile, rideType, onPoolSelect, onBack }: RideConfirmationProps) {
   const [selectedPoolId, setSelectedPoolId] = useState<string | null>(null);
   const [activeRideType, setActiveRideType] = useState<'female-only' | 'regular'>(rideType || 'regular');
   const [selectedVehicleType, setSelectedVehicleType] = useState<'car' | 'cng' | null>(null);
@@ -193,149 +194,74 @@ export default function RideConfirmation({ destination, userProfile, rideType, o
     }
   };
 
-  const currentStops = selectedPoolId ? poolStops[selectedPoolId] || [] : [];
+  // Use pickup location from props or default to Dhaka center
+  const pickupCoords = pickupLocation 
+    ? { latitude: pickupLocation.latitude, longitude: pickupLocation.longitude }
+    : { latitude: 23.8103, longitude: 90.4125 };
+  
+  // Use destination coordinates if available, otherwise use default
+  const dropoffCoords = destination?.latitude && destination?.longitude
+    ? { latitude: destination.latitude, longitude: destination.longitude }
+    : { latitude: 23.82, longitude: 90.43 };
 
   return (
     <View className="h-full w-full flex flex-col bg-white">
-      {/* Map Preview */}
-      <View className="h-1/3 bg-gradient-to-br from-gray-200 via-gray-100 to-blue-50 relative overflow-hidden">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute top-4 left-4 z-10 bg-white shadow-md rounded-full w-10 h-10 active:scale-95 transition-transform"
-          onClick={onBack}
+      {/* Google Map */}
+      <View style={{ height: '33%', position: 'relative' }}>
+        <GoogleMapView
+          center={pickupCoords}
+          zoom={12}
+          pickupLocation={pickupCoords}
+          dropoffLocation={dropoffCoords}
+          showDirections={true}
+          markers={
+            selectedPoolId && currentStops.length > 0
+              ? currentStops
+                  .filter(stop => stop.rider !== 'You')
+                  .map((stop, idx) => ({
+                    id: `stop-${idx}`,
+                    latitude: pickupCoords.latitude + (stop.y - 50) * 0.0015,
+                    longitude: pickupCoords.longitude + (stop.x - 50) * 0.0015,
+                    title: `${stop.rider} - ${stop.name}`,
+                    icon: stop.type === 'pickup' ? 'pickup' : 'dropoff',
+                  }))
+              : []
+          }
         >
-          <ChevronLeft className="w-5 h-5" />
-        </Button>
-
-        {/* Simulated route and stops */}
-        <View className="absolute inset-0 flex items-center justify-center">
-          <View className="relative w-full h-full">
-            {/* Show route path when pool is selected */}
-            {selectedPoolId && currentStops.length > 0 && (
-              <>
-                {/* Route line connecting all stops */}
-                <svg className="absolute inset-0 w-full h-full">
-                  <motion.path
-                    initial={{ pathLength: 0 }}
-                    animate={{ pathLength: 1 }}
-                    transition={{ duration: 1, ease: "easeInOut" }}
-                    d={`M ${currentStops[0].x}% ${currentStops[0].y}% ${currentStops
-                      .slice(1)
-                      .map(stop => `L ${stop.x}% ${stop.y}%`)
-                      .join(' ')}`}
-                    stroke="#3B82F6"
-                    strokeWidth="3"
-                    fill="none"
-                    strokeDasharray="8,4"
-                  />
-                </svg>
-
-                {/* Driver car icon */}
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="absolute"
-                  style={{ left: `${currentStops[0].x}%`, top: `${currentStops[0].y - 8}%` }}
-                >
-                  <View className="relative -translate-x-1/2 -translate-y-1/2">
-                    <View className="bg-blue-600 text-white p-2 rounded-full shadow-lg">
-                      <Navigation className="w-5 h-5 text-white" />
-                    </View>
-                    <View className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap">
-                      <View className="bg-white px-2 py-1 rounded shadow-md">
-                        <Text className="text-xs">Driver here</Text>
-                      </View>
-                    </View>
-                  </View>
-                </motion.div>
-
-                {/* All stops with labels */}
-                {currentStops.map((stop, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="absolute"
-                    style={{ left: `${stop.x}%`, top: `${stop.y}%` }}
-                  >
-                    <View className="relative -translate-x-1/2 -translate-y-full">
-                      {stop.type === 'pickup' ? (
-                        <View className={`w-6 h-6 rounded-full flex items-center justify-center shadow-lg ${
-                          stop.rider === 'You' ? 'bg-blue-600' : 'bg-green-500'
-                        }`}>
-                          <View className="w-3 h-3 bg-white rounded-full"></View>
-                        </View>
-                      ) : (
-                        <MapPin className={`w-6 h-6 shadow-lg ${
-                          stop.rider === 'You' ? 'text-red-600 fill-red-600' : 'text-orange-500 fill-orange-500'
-                        }`} />
-                      )}
-                      
-                      {/* Stop label */}
-                      <View className="absolute top-full mt-1 left-1/2 -translate-x-1/2 whitespace-nowrap">
-                        <View className={`px-2 py-1 rounded shadow-md ${
-                          stop.rider === 'You' 
-                            ? 'bg-blue-600' 
-                            : 'bg-white border border-gray-200'
-                        }`}>
-                          <Text className={stop.rider === 'You' ? 'text-white' : 'text-gray-900'}>{stop.rider}</Text>
-                          <Text className={`text-xs ${stop.rider === 'You' ? 'text-blue-100' : 'text-gray-500'}`}>
-                            {stop.type === 'pickup' ? 'Pickup' : 'Drop-off'}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                  </motion.div>
-                ))}
-              </>
-            )}
-
-            {/* Default view when no pool selected */}
-            {!selectedPoolId && (
-              <>
-                <View className="absolute top-1/4 left-1/4 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                  <View className="w-3 h-3 bg-white rounded-full"></View>
-                </View>
-                <View className="absolute bottom-1/4 right-1/4">
-                  <MapPin className="w-8 h-8 text-red-600 fill-red-600" />
-                </View>
-                <svg className="absolute inset-0 w-full h-full">
-                  <path
-                    d="M 100 80 Q 200 120 280 200"
-                    stroke="#3B82F6"
-                    strokeWidth="3"
-                    fill="none"
-                    strokeDasharray="8,4"
-                  />
-                </svg>
-              </>
-            )}
-          </View>
-        </View>
-
-        {/* Legend */}
-        {selectedPoolId && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 space-y-1"
+          {/* Back Button Overlay */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-4 left-4 z-10 bg-white shadow-md rounded-full w-10 h-10 active:scale-95 transition-transform"
+            onClick={onBack}
           >
-            <View className="flex flex-row items-center gap-2">
-              <View className="w-3 h-3 bg-blue-600 rounded-full"></View>
-              <Text className="text-xs">Your stops</Text>
+            <ChevronLeft className="w-5 h-5" />
+          </Button>
+
+          {/* Legend */}
+          {selectedPoolId && (
+            <View
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                backgroundColor: 'white',
+                borderRadius: 8,
+                padding: 8,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              }}
+            >
+              <View className="flex flex-row items-center gap-2 mb-1">
+                <View className="w-3 h-3 bg-green-500 rounded-full"></View>
+                <Text style={{ fontSize: 12 }}>Pickup</Text>
+              </View>
+              <View className="flex flex-row items-center gap-2">
+                <View className="w-3 h-3 bg-red-500 rounded-full"></View>
+                <Text style={{ fontSize: 12 }}>Destination</Text>
+              </View>
             </View>
-            <View className="flex flex-row items-center gap-2">
-              <View className="w-3 h-3 bg-green-500 rounded-full"></View>
-              <Text className="text-xs">Co-rider pickups</Text>
-            </View>
-            <View className="flex flex-row items-center gap-2">
-              <MapPin className="w-3 h-3 text-orange-500 fill-orange-500" />
-              <Text className="text-xs">Co-rider drops</Text>
-            </View>
-          </motion.div>
-        )}
+          )}
+        </GoogleMapView>
       </View>
 
       {/* Bottom Sheet */}
@@ -445,13 +371,13 @@ export default function RideConfirmation({ destination, userProfile, rideType, o
                   <Text className="text-xs text-gray-500">Max 3 passengers</Text>
                 </View>
                 {selectedVehicleType === 'car' && (
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
+                  <View
+                    
+                    
                     className="absolute top-3 right-3 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center"
                   >
                     <View className="w-2 h-2 bg-white rounded-full"></View>
-                  </motion.div>
+                  </View>
                 )}
               </TouchableOpacity>
 
@@ -491,13 +417,13 @@ export default function RideConfirmation({ destination, userProfile, rideType, o
                   <Text className="text-xs text-gray-500">Max 2 passengers</Text>
                 </View>
                 {selectedVehicleType === 'cng' && (
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
+                  <View
+                    
+                    
                     className="absolute top-3 right-3 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center"
                   >
                     <View className="w-2 h-2 bg-white rounded-full"></View>
-                  </motion.div>
+                  </View>
                 )}
               </TouchableOpacity>
             </View>
@@ -543,13 +469,13 @@ export default function RideConfirmation({ destination, userProfile, rideType, o
                           </View>
                         </View>
                         {selectedPoolId === pool.id && (
-                          <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
+                          <View
+                            
+                            
                             className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center"
                           >
                             <View className="w-2 h-2 bg-white rounded-full"></View>
-                          </motion.div>
+                          </View>
                         )}
                       </View>
 
@@ -573,9 +499,9 @@ export default function RideConfirmation({ destination, userProfile, rideType, o
                       </View>
 
                       {selectedPoolId === pool.id && poolStops[pool.id] && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
+                        <View
+                          
+                          
                           className="pt-3 border-t border-blue-200 space-y-2"
                         >
                           <Text className="text-sm text-blue-900">Route Stops:</Text>
@@ -597,7 +523,7 @@ export default function RideConfirmation({ destination, userProfile, rideType, o
                               </View>
                             ))}
                           </View>
-                        </motion.div>
+                        </View>
                       )}
                     </TouchableOpacity>
                   ))}
@@ -629,9 +555,9 @@ export default function RideConfirmation({ destination, userProfile, rideType, o
 
       {/* Fixed Confirm Button above bottom nav */}
       {selectedPoolId && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+        <View
+          
+          
           className="fixed bottom-16 left-0 right-0 px-5 pb-3 bg-white border-t border-gray-200"
         >
           <Button
@@ -640,7 +566,7 @@ export default function RideConfirmation({ destination, userProfile, rideType, o
           >
             Confirm RideShare Pool
           </Button>
-        </motion.div>
+        </View>
       )}
     </View>
   );

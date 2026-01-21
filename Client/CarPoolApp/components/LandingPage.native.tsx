@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import React, { useState, lazy, Suspense } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Dimensions, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import LinearGradient from './LinearGradient';
 import { MapPin, Tag, Users, Search, ArrowRight, Star, ChevronRight } from './Icons';
@@ -7,6 +7,9 @@ import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import DestinationSearch from './DestinationSearch';
 import type { UserProfile, Destination } from '../contexts/GlobalContext';
+
+// Lazy load map component to avoid issues on initial load
+const NativeMap = lazy(() => import('./NativeMap'));
 
 type LandingPageProps = {
   userProfile: UserProfile | null;
@@ -110,6 +113,26 @@ export default function LandingPage({ userProfile, onDestinationSelect, onProfil
           </View>
         </TouchableOpacity>
       </LinearGradient>
+
+      {/* Map Preview Section */}
+      <View style={mapStyles.mapContainer}>
+        <Suspense fallback={
+          <View style={mapStyles.mapPlaceholder}>
+            <Text style={mapStyles.loadingText}>Loading map...</Text>
+          </View>
+        }>
+          <NativeMap style={mapStyles.map} />
+        </Suspense>
+        <View style={mapStyles.mapOverlay}>
+          <TouchableOpacity 
+            onPress={() => setIsSearchOpen(true)}
+            style={mapStyles.mapSearchButton}
+          >
+            <Search style={{ width: 20, height: 20, color: '#6b7280' }} />
+            <Text style={mapStyles.mapSearchText}>Where to?</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
       {/* Scrollable Content */}
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
@@ -241,3 +264,56 @@ export default function LandingPage({ userProfile, onDestinationSelect, onProfil
     </SafeAreaView>
   );
 }
+
+const mapStyles = StyleSheet.create({
+  mapContainer: {
+    height: 200,
+    marginHorizontal: 16,
+    marginTop: -24,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  map: {
+    flex: 1,
+  },
+  mapPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#e5e7eb',
+  },
+  loadingText: {
+    color: '#6b7280',
+    fontSize: 14,
+  },
+  mapOverlay: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    right: 12,
+  },
+  mapSearchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  mapSearchText: {
+    marginLeft: 12,
+    fontSize: 16,
+    color: '#6b7280',
+  },
+});

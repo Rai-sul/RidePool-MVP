@@ -13,16 +13,18 @@ type DriverMatchedProps = {
 };
 
 export default function DriverMatched({ pool, onStartRide, onChatDriver }: DriverMatchedProps) {
-  if (!pool) return null;
-
   // Simulate ride starting after a few seconds
   useEffect(() => {
+    if (!pool) return;
+    
     const timeout = setTimeout(() => {
       onStartRide();
     }, 5000);
 
     return () => clearTimeout(timeout);
-  }, [onStartRide]);
+  }, [pool, onStartRide]);
+
+  if (!pool) return null;
 
   return (
     <View className="flex-1 bg-white">

@@ -5,6 +5,7 @@ import { MapPin, Phone, MessageCircle, User, Navigation, Clock, Star } from './I
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Progress } from './ui/progress';
+import GoogleMapView from './GoogleMapView';
 import type { UserProfile } from '../contexts/GlobalContext';
 
 type TripProgressProps = {
@@ -79,25 +80,54 @@ export default function TripProgress({ userProfile, onComplete, onChatDriver }: 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 100 }}>
-        {/* Map Placeholder */}
-        <View className="h-64 bg-gray-200 relative">
-          <View className="absolute inset-0 items-center justify-center">
-            <MapPin className="w-16 h-16 text-gray-400" />
-            <Text className="text-gray-500 mt-2">Live Map View</Text>
-          </View>
+        {/* Google Map */}
+        <View style={{ height: 256, position: 'relative' }}>
+          <GoogleMapView
+            center={{ latitude: 23.8103, longitude: 90.4125 }}
+            zoom={14}
+            pickupLocation={{ latitude: 23.8103, longitude: 90.4125 }}
+            dropoffLocation={{ latitude: 23.82, longitude: 90.43 }}
+            showDirections={true}
+            markers={[
+              { id: 'driver', latitude: 23.812, longitude: 90.418, title: 'Driver', icon: 'driver' },
+            ]}
+          />
           
           {/* Status Badge */}
-          <View className={`absolute top-4 left-4 ${accentBg} px-4 py-2 rounded-full`}>
-            <Text className="text-white font-semibold">{getStatusText()}</Text>
+          <View 
+            style={{
+              position: 'absolute',
+              top: 16,
+              left: 16,
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              borderRadius: 20,
+              backgroundColor: isFemale ? '#ec4899' : '#2563eb',
+            }}
+          >
+            <Text style={{ color: 'white', fontWeight: '600' }}>{getStatusText()}</Text>
           </View>
 
           {/* ETA Badge */}
           {tripStatus !== 'completed' && (
-            <View className="absolute top-4 right-4 bg-white px-4 py-2 rounded-full border-2 border-gray-200">
-              <View className="flex-row items-center gap-2">
-                <Clock className="w-4 h-4 text-gray-600" />
-                <Text className="font-semibold">{driver.eta}</Text>
-              </View>
+            <View 
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                backgroundColor: 'white',
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 20,
+                borderWidth: 2,
+                borderColor: '#e5e7eb',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <Clock style={{ width: 16, height: 16, color: '#4b5563' }} />
+              <Text style={{ fontWeight: '600' }}>{driver.eta}</Text>
             </View>
           )}
         </View>

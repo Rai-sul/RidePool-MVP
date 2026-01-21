@@ -13,7 +13,11 @@ interface AuthContextType {
     email: string;
     password: string;
     phone?: string;
+    first_name: string;
+    last_name: string;
     full_name?: string;
+    gender: 'MALE' | 'FEMALE' | 'OTHER';
+    gender_preference?: 'ANY' | 'FEMALE_ONLY';
   }) => Promise<{ success: boolean; error?: string }>;
   loginWithOAuth: (provider: OAuthProvider) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;

@@ -4,7 +4,7 @@ import { useGlobalContext } from '../contexts/GlobalContext';
 import { useRouter, router as staticRouter } from 'expo-router';
 
 export default function RideConfirmationScreen() {
-  const { userProfile, selectedDestination, selectedRideType, setSelectedPool } = useGlobalContext();
+  const { userProfile, pickupLocation, selectedDestination, selectedRideType, setSelectedPool } = useGlobalContext();
   const router = useRouter();
 
   const handlePoolSelect = (pool) => {
@@ -22,6 +22,7 @@ export default function RideConfirmationScreen() {
 
   return (
     <RideConfirmation
+      pickupLocation={pickupLocation}
       destination={selectedDestination}
       userProfile={userProfile}
       rideType={selectedRideType}

@@ -26,6 +26,11 @@ const AddEmergencyContactSchema = z.object({
   is_primary: z.boolean().optional(),
 });
 
+const ShareTripSchema = z.object({
+  ride_id: z.string().uuid(),
+  contact_ids: z.array(z.string().uuid()).min(1).max(5),
+});
+
 export class SOSController {
   async triggerSOS(req: AuthRequest, res: Response, next: NextFunction) {
     try {
@@ -251,6 +256,49 @@ export class SOSController {
       res.json({
         success: true,
         data: { incidents },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async shareTrip(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const parseResult = ShareTripSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Invalid request data',
+            details: parseResult.error.issues,
+          },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { ride_id, contact_ids } = parseResult.data;
+
+      // Share trip with emergency contacts
+      const sharedWithCount = await emergencyService.shareTripWithContacts(userId, ride_id, contact_ids);
+
+      res.json({
+        success: true,
+        data: {
+          ride_id,
+          contacts_notified: sharedWithCount,
+          message: `Trip shared with ${sharedWithCount} contact(s)`,
+        },
         timestamp: new Date().toISOString(),
       });
     } catch (error) {

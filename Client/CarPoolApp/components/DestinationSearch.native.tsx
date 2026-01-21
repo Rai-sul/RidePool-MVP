@@ -12,17 +12,17 @@ type DestinationSearchProps = {
 };
 
 const recentDestinations = [
-  { name: 'Gulshan Office Complex', address: 'Gulshan 2, Dhaka 1212' },
-  { name: 'Bashundhara City', address: 'Panthapath, Dhaka 1215' },
-  { name: 'Uttara Sector 7', address: 'Uttara, Dhaka 1230' },
+  { name: 'Gulshan Office Complex', address: 'Gulshan 2, Dhaka 1212', latitude: 23.7925, longitude: 90.4078 },
+  { name: 'Bashundhara City', address: 'Panthapath, Dhaka 1215', latitude: 23.7506, longitude: 90.3902 },
+  { name: 'Uttara Sector 7', address: 'Uttara, Dhaka 1230', latitude: 23.8759, longitude: 90.3795 },
 ];
 
 const popularDestinations = [
-  { name: 'Airport', address: 'Hazrat Shahjalal International Airport' },
-  { name: 'Dhanmondi Lake', address: 'Dhanmondi, Dhaka 1209' },
-  { name: 'Banani 11', address: 'Banani, Dhaka 1213' },
-  { name: 'Mirpur 10', address: 'Mirpur, Dhaka 1216' },
-  { name: 'Mohakhali DOHS', address: 'Mohakhali, Dhaka 1206' },
+  { name: 'Airport', address: 'Hazrat Shahjalal International Airport', latitude: 23.8513, longitude: 90.4089 },
+  { name: 'Dhanmondi Lake', address: 'Dhanmondi, Dhaka 1209', latitude: 23.7461, longitude: 90.3742 },
+  { name: 'Banani 11', address: 'Banani, Dhaka 1213', latitude: 23.7937, longitude: 90.4066 },
+  { name: 'Mirpur 10', address: 'Mirpur, Dhaka 1216', latitude: 23.8069, longitude: 90.3687 },
+  { name: 'Mohakhali DOHS', address: 'Mohakhali, Dhaka 1206', latitude: 23.7808, longitude: 90.4064 },
 ];
 
 export default function DestinationSearch({ isOpen, onClose, onSelectDestination }: DestinationSearchProps) {
