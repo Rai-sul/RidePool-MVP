@@ -1,7 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
+import Constants from 'expo-constants';
+import StaticMapView from './StaticMapView';
+
+const isExpoGo = Constants.appOwnership === 'expo';
+
+let NativeMapView: any = null;
+let NativeMarker: any = null;
+let NativePolyline: any = null;
+let PROVIDER_DEFAULT: any = null;
+
+if (!isExpoGo) {
+  try {
+    const RNMaps = require('react-native-maps');
+    NativeMapView = RNMaps.default;
+    NativeMarker = RNMaps.Marker;
+    NativePolyline = RNMaps.Polyline;
+    PROVIDER_DEFAULT = RNMaps.PROVIDER_DEFAULT;
+  } catch (e) {
+    console.log('react-native-maps not available');
+  }
+}
 
 interface MarkerData {
   id: string;
@@ -24,11 +44,11 @@ interface GoogleMapViewProps {
 }
 
 const markerColors: Record<string, string> = {
-  pickup: '#22C55E', // green
-  dropoff: '#EF4444', // red
-  driver: '#3B82F6', // blue
-  current: '#3B82F6', // blue
-  default: '#F59E0B', // yellow
+  pickup: '#22C55E',
+  dropoff: '#EF4444',
+  driver: '#3B82F6',
+  current: '#3B82F6',
+  default: '#F59E0B',
 };
 
 export default function GoogleMapView({
@@ -42,7 +62,7 @@ export default function GoogleMapView({
   children,
   showUserLocation = true,
 }: GoogleMapViewProps) {
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<any>(null);
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(
     center || null
   );
@@ -79,15 +99,12 @@ export default function GoogleMapView({
     })();
   }, [center]);
 
-  // Fetch route from Google Directions API
   useEffect(() => {
-    if (!showDirections || !pickupLocation || !dropoffLocation) {
-      return;
-    }
+    if (isExpoGo || !NativeMapView) return;
+    if (!showDirections || !pickupLocation || !dropoffLocation) return;
 
     const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
     if (!GOOGLE_MAPS_API_KEY) {
-      // Fallback to simple line
       setRouteCoords([pickupLocation, dropoffLocation]);
       return;
     }
@@ -98,12 +115,11 @@ export default function GoogleMapView({
           `https://maps.googleapis.com/maps/api/directions/json?origin=${pickupLocation.latitude},${pickupLocation.longitude}&destination=${dropoffLocation.latitude},${dropoffLocation.longitude}&key=${GOOGLE_MAPS_API_KEY}`
         );
         const data = await response.json();
-        
+
         if (data.routes && data.routes.length > 0) {
           const points = decodePolyline(data.routes[0].overview_polyline.points);
           setRouteCoords(points);
         } else {
-          // Fallback to simple line
           setRouteCoords([pickupLocation, dropoffLocation]);
         }
       } catch (error) {
@@ -115,18 +131,31 @@ export default function GoogleMapView({
     fetchRoute();
   }, [pickupLocation, dropoffLocation, showDirections]);
 
-  // Fit map to show all markers
   useEffect(() => {
+    if (isExpoGo || !NativeMapView) return;
     if (mapRef.current && pickupLocation && dropoffLocation) {
-      mapRef.current.fitToCoordinates(
-        [pickupLocation, dropoffLocation],
-        {
-          edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-          animated: true,
-        }
-      );
+      mapRef.current.fitToCoordinates([pickupLocation, dropoffLocation], {
+        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+        animated: true,
+      });
     }
   }, [pickupLocation, dropoffLocation]);
+
+  if (isExpoGo || !NativeMapView) {
+    return (
+      <StaticMapView
+        center={location || center || { latitude: 23.8103, longitude: 90.4125 }}
+        zoom={zoom}
+        markers={markers}
+        pickupLocation={pickupLocation}
+        dropoffLocation={dropoffLocation}
+        showDirections={showDirections}
+        style={style}
+      >
+        {children}
+      </StaticMapView>
+    );
+  }
 
   if (loading || !location) {
     return (
@@ -142,7 +171,7 @@ export default function GoogleMapView({
 
   return (
     <View style={[styles.container, style]}>
-      <MapView
+      <NativeMapView
         ref={mapRef}
         style={styles.map}
         provider={PROVIDER_DEFAULT}
@@ -156,49 +185,40 @@ export default function GoogleMapView({
         showsMyLocationButton
         showsCompass
       >
-        {/* Route polyline */}
         {routeCoords.length > 1 && (
-          <Polyline
-            coordinates={routeCoords}
-            strokeColor="#4285F4"
-            strokeWidth={5}
-          />
+          <NativePolyline coordinates={routeCoords} strokeColor="#4285F4" strokeWidth={5} />
         )}
 
-        {/* Pickup marker */}
         {pickupLocation && (
-          <Marker
+          <NativeMarker
             coordinate={pickupLocation}
             title="Pickup"
             pinColor={markerColors.pickup}
           />
         )}
 
-        {/* Dropoff marker */}
         {dropoffLocation && (
-          <Marker
+          <NativeMarker
             coordinate={dropoffLocation}
             title="Destination"
             pinColor={markerColors.dropoff}
           />
         )}
 
-        {/* Additional markers */}
         {markers.map((marker) => (
-          <Marker
+          <NativeMarker
             key={marker.id}
             coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
             title={marker.title}
             pinColor={markerColors[marker.icon || 'default']}
           />
         ))}
-      </MapView>
+      </NativeMapView>
       {children}
     </View>
   );
 }
 
-// Decode Google polyline
 function decodePolyline(encoded: string): Array<{ latitude: number; longitude: number }> {
   const points: Array<{ latitude: number; longitude: number }> = [];
   let index = 0;
