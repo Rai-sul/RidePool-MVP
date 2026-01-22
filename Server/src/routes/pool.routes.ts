@@ -9,6 +9,8 @@ router.get('/search', authenticate, validate(SearchPoolsSchema, 'query'), (req, 
 router.post('/', authenticate, validate(CreatePoolSchema), (req, res, next) => poolController.createPool(req, res, next));
 router.post('/create', authenticate, validate(CreatePoolSchema), (req, res, next) => poolController.createPool(req, res, next));
 router.get('/:poolId', authenticate, validate(PoolIdParamSchema, 'params'), (req, res, next) => poolController.getPool(req, res, next));
+router.get('/:poolId/route', authenticate, validate(PoolIdParamSchema, 'params'), (req, res, next) => poolController.getOptimizedRoute(req, res, next));
+router.get('/:poolId/fare', authenticate, validate(PoolIdParamSchema, 'params'), (req, res, next) => poolController.recalculateFare(req, res, next));
 router.post('/:poolId/join', authenticate, validate(PoolIdParamSchema, 'params'), validate(JoinPoolSchema), (req, res, next) => poolController.joinPool(req, res, next));
 router.post('/:poolId/leave', authenticate, validate(PoolIdParamSchema, 'params'), (req, res, next) => poolController.leavePool(req, res, next));
 router.post('/:poolId/cancel', authenticate, validate(PoolIdParamSchema, 'params'), (req, res, next) => poolController.cancelPool(req, res, next));

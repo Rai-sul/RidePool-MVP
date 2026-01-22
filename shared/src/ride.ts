@@ -120,3 +120,94 @@ export interface PoolSearchResult {
   currentPassengers: number;
   maxPassengers: number;
 }
+
+// ============================================
+// RIDE ESTIMATION TYPES
+// ============================================
+
+export interface RideEstimate {
+  distanceKm: number;
+  durationMinutes: number;
+  fareEstimates: {
+    solo: number;
+    with2Passengers: number;
+    with3Passengers: number;
+    with4Passengers: number;
+  };
+  estimatedFare: number;
+  estimatedSavings: number;
+  trafficLevel?: 'low' | 'moderate' | 'high';
+}
+
+export interface RideEstimateResponse {
+  estimate: RideEstimate;
+  route?: {
+    encoded: string;
+    coordinates: Array<{ lat: number; lng: number }>;
+  };
+  message: string;
+}
+
+// ============================================
+// POOL ROUTE OPTIMIZATION TYPES
+// ============================================
+
+export interface PoolRouteStop {
+  type: 'pickup' | 'dropoff';
+  userId: string;
+  address?: string;
+  location: Location;
+  order: number;
+  estimatedArrival: number;
+}
+
+export interface PoolRouteLeg {
+  from: Location;
+  to: Location;
+  distanceKm: number;
+  durationMinutes: number;
+  instruction: string;
+}
+
+export interface PoolRouteResponse {
+  poolId: string;
+  route: {
+    totalDistanceKm: number;
+    totalDurationMinutes: number;
+    farePerPerson: number;
+    coordinates: Array<{ lat: number; lng: number }>;
+    encoded: string;
+  };
+  stops: PoolRouteStop[];
+  legs: PoolRouteLeg[];
+}
+
+export interface PoolFareBreakdown {
+  baseFare: number;
+  distanceFare: number;
+  timeFare: number;
+  poolDiscount: number;
+  fullPoolBonus: number;
+  displayedFare: number;
+  actualCharge: number;
+  platformSurcharge: number;
+  savings: number;
+  farePerPerson: number;
+}
+
+export interface MemberFare {
+  userId: string;
+  fare: number;
+  distanceKm: number;
+  savings: number;
+}
+
+export interface PoolFareResponse {
+  poolId: string;
+  farePerPerson: number;
+  totalFare: number;
+  memberCount: number;
+  breakdown: PoolFareBreakdown;
+  memberFares: MemberFare[];
+  message: string;
+}

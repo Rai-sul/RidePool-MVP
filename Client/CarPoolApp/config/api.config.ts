@@ -27,6 +27,7 @@ export const API_ENDPOINTS = {
     NOTIFICATION_PREFERENCES: '/users/notifications/preferences',
   },
   RIDE: {
+    ESTIMATE: '/rides/estimate',
     REQUEST: '/rides/request',
     HISTORY: '/rides/history',
     CANCEL: (rideId: string) => `/rides/${rideId}/cancel`,
@@ -39,6 +40,8 @@ export const API_ENDPOINTS = {
     LEAVE: (poolId: string) => `/pools/${poolId}/leave`,
     CANCEL: (poolId: string) => `/pools/${poolId}/cancel`,
     SEARCH: '/pools/search',
+    ROUTE: (poolId: string) => `/pools/${poolId}/route`,
+    FARE: (poolId: string) => `/pools/${poolId}/fare`,
   },
   DRIVER: {
     GO_ONLINE: '/driver/go-online',

@@ -3,7 +3,8 @@ import { AuthRequest } from '../middleware/auth';
 import { supabase } from '../config/supabase';
 import { poolMatchingService } from '../services/poolMatching.service';
 import { geolocationService } from '../services/geolocation.service';
-import { CreateRideRequest, Ride, RideStatus } from '../types';
+import { rideEstimationService } from '../services/rideEstimation.service';
+import { CreateRideRequest, Ride, RideStatus, Location, VehicleType } from '../types';
 import { h3Utils } from '../utils/h3.utils';
 
 export class RideController {
@@ -134,6 +135,102 @@ export class RideController {
       }
 
       res.json({ message: 'Ride cancelled successfully' });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get ride estimate (ETA and fare) for pickup to destination
+   * Call this before confirming a ride to show the user estimated cost and time
+   */
+  async getRideEstimate(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, vehicle_type } = req.query;
+
+      if (!pickup_lat || !pickup_lng || !dropoff_lat || !dropoff_lng || !vehicle_type) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'MISSING_PARAMS', message: 'Missing required parameters: pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, vehicle_type' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const pickup: Location = {
+        latitude: parseFloat(pickup_lat as string),
+        longitude: parseFloat(pickup_lng as string),
+      };
+
+      const dropoff: Location = {
+        latitude: parseFloat(dropoff_lat as string),
+        longitude: parseFloat(dropoff_lng as string),
+      };
+
+      // Validate coordinates
+      const isPickupValid = await geolocationService.validateLocation(pickup);
+      const isDropoffValid = await geolocationService.validateLocation(dropoff);
+
+      if (!isPickupValid || !isDropoffValid) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_LOCATION', message: 'Invalid pickup or dropoff coordinates' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Get ride estimate with ETA and fare
+      const estimate = await rideEstimationService.getRideEstimate(
+        pickup,
+        dropoff,
+        vehicle_type as VehicleType,
+        2 // Default to 2 passengers for estimate
+      );
+
+      res.json({
+        success: true,
+        data: {
+          estimate: {
+            distanceKm: estimate.distanceKm,
+            durationMinutes: estimate.durationMinutes,
+            durationInTraffic: estimate.durationInTraffic,
+            eta: `${estimate.durationInTraffic} min`,
+            etaWithoutTraffic: `${estimate.durationMinutes} min`,
+            fareEstimates: estimate.fareEstimates,
+            estimatedFare: estimate.estimatedFare,
+            estimatedSavings: estimate.estimatedSavings,
+            trafficLevel: estimate.trafficLevel,
+          },
+          route: estimate.route ? {
+            encoded: estimate.route.encoded,
+            coordinates: estimate.route.coordinates,
+            summary: estimate.route.summary,
+            selectedReason: estimate.selectedRouteReason,
+          } : null,
+          alternativeRoutes: estimate.alternativeRoutes.map(alt => ({
+            description: alt.description,
+            distanceKm: alt.distanceKm,
+            durationInTraffic: alt.durationInTraffic,
+            timeDifference: alt.timeDifference,
+            trafficLevel: alt.trafficLevel,
+          })),
+          message: `${estimate.durationInTraffic} min via ${estimate.route?.summary || 'best route'} • ৳${estimate.estimatedFare}/person`,
+          trafficInfo: estimate.trafficLevel === 'low' 
+            ? '🟢 Light traffic' 
+            : estimate.trafficLevel === 'moderate' 
+              ? '🟡 Moderate traffic' 
+              : '🔴 Heavy traffic',
+        },
+        timestamp: new Date().toISOString(),
+      });
     } catch (error) {
       next(error);
     }

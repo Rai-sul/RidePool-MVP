@@ -73,6 +73,60 @@ export interface GetPoolResponse {
   lookup_remaining_seconds: number | null;
 }
 
+export interface PoolRouteStop {
+  type: 'pickup' | 'dropoff';
+  userId: string;
+  address?: string;
+  location: { latitude: number; longitude: number };
+  order: number;
+  estimatedArrival: number;
+}
+
+export interface PoolRouteResponse {
+  poolId: string;
+  route: {
+    totalDistanceKm: number;
+    totalDurationMinutes: number;
+    farePerPerson: number;
+    coordinates: Array<{ lat: number; lng: number }>;
+    encoded: string;
+  };
+  stops: PoolRouteStop[];
+  legs: Array<{
+    from: { latitude: number; longitude: number };
+    to: { latitude: number; longitude: number };
+    distanceKm: number;
+    durationMinutes: number;
+    instruction: string;
+  }>;
+}
+
+export interface PoolFareResponse {
+  poolId: string;
+  farePerPerson: number;
+  totalFare: number;
+  memberCount: number;
+  breakdown: {
+    baseFare: number;
+    distanceFare: number;
+    timeFare: number;
+    poolDiscount: number;
+    fullPoolBonus: number;
+    displayedFare: number;
+    actualCharge: number;
+    platformSurcharge: number;
+    savings: number;
+    farePerPerson: number;
+  };
+  memberFares: Array<{
+    userId: string;
+    fare: number;
+    distanceKm: number;
+    savings: number;
+  }>;
+  message: string;
+}
+
 export const poolService = {
   /**
    * Create a new pool as the first rider
@@ -114,5 +168,19 @@ export const poolService = {
    */
   async searchPools(params: SearchPoolsParams): Promise<ApiResponse<PoolSearchResult>> {
     return apiClient.get(API_ENDPOINTS.POOL.SEARCH, params);
+  },
+
+  /**
+   * Get optimized route for a pool with all member stops
+   */
+  async getOptimizedRoute(poolId: string): Promise<ApiResponse<PoolRouteResponse>> {
+    return apiClient.get(API_ENDPOINTS.POOL.ROUTE(poolId));
+  },
+
+  /**
+   * Get recalculated fare for a pool
+   */
+  async getPoolFare(poolId: string): Promise<ApiResponse<PoolFareResponse>> {
+    return apiClient.get(API_ENDPOINTS.POOL.FARE(poolId));
   },
 };

@@ -3,10 +3,11 @@ import { AuthRequest } from '../middleware/auth';
 import { supabaseAdmin } from '../config/supabase';
 import { poolMatchingService } from '../services/poolMatching.service';
 import { fareService } from '../services/fare.service';
+import { rideEstimationService, PoolMemberLocation } from '../services/rideEstimation.service';
 import { lookupTimeService } from '../services/lookupTime.service';
 import { penaltyService } from '../services/penalty.service';
 import { notificationService } from '../services/notification.service';
-import { CreatePoolRequest, Pool, PoolStatus, Ride, RideStatus } from '../types';
+import { CreatePoolRequest, Pool, PoolStatus, Ride, RideStatus, Location, VehicleType } from '../types';
 import { h3Utils } from '../utils/h3.utils';
 
 const LOOKUP_TIME_MS = parseInt(process.env.LOOKUP_TIME_MS || '180000', 10);
@@ -227,10 +228,67 @@ export class PoolController {
         throw joinError;
       }
 
-      const farePerPerson = fareService.applyPoolDiscount(
+      // Recalculate fare with new member
+      // Get all pool members to calculate accurate fare
+      const { data: poolWithMembers } = await supabaseAdmin
+        .from('pools')
+        .select(`
+          *,
+          pool_members(user_id, ride_id)
+        `)
+        .eq('id', poolId)
+        .single();
+
+      let farePerPerson = fareService.applyPoolDiscount(
         fareService.calculateBaseFare(ride.distance_km || 10, pool.vehicle_type),
         joinResult.current_passengers
       );
+
+      // If we have member rides, calculate more accurate fare
+      if (poolWithMembers?.pool_members?.length > 0) {
+        const rideIds = poolWithMembers.pool_members.map((m: any) => m.ride_id).filter(Boolean);
+        const { data: memberRides } = await supabaseAdmin
+          .from('rides')
+          .select('*')
+          .in('id', rideIds);
+
+        if (memberRides && memberRides.length > 0) {
+          const members: PoolMemberLocation[] = memberRides.map((r: any) => ({
+            userId: r.user_id,
+            pickup: { latitude: r.pickup_lat, longitude: r.pickup_lng },
+            dropoff: { latitude: r.dropoff_lat, longitude: r.dropoff_lng },
+            pickupAddress: r.pickup_address,
+            dropoffAddress: r.dropoff_address,
+          }));
+
+          const fareResult = await rideEstimationService.recalculatePoolFare(
+            members,
+            pool.vehicle_type as VehicleType
+          );
+          farePerPerson = fareResult.farePerPerson;
+
+          // Update pool with new fare
+          await supabaseAdmin
+            .from('pools')
+            .update({
+              fare_per_person: farePerPerson,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', poolId);
+
+          // Notify existing members about fare change
+          for (const member of poolWithMembers.pool_members) {
+            if (member.user_id !== userId) {
+              await notificationService.sendPushNotification(member.user_id, {
+                title: 'Fare Updated - New Rider Joined!',
+                message: `A new rider joined your pool. Your fare is now ৳${farePerPerson} per person.`,
+                type: 'POOL_MATCH',
+                metadata: { poolId, farePerPerson, newPassengers: joinResult.current_passengers },
+              });
+            }
+          }
+        }
+      }
 
       await notificationService.sendPoolFoundNotification(pool.creator_user_id, poolId);
 
@@ -364,6 +422,58 @@ export class PoolController {
         }
       }
 
+      // Recalculate fare for remaining members after someone leaves
+      const { data: poolWithMembers } = await supabaseAdmin
+        .from('pools')
+        .select(`
+          *,
+          pool_members(user_id, ride_id)
+        `)
+        .eq('id', poolId)
+        .single();
+
+      if (poolWithMembers?.pool_members?.length > 0) {
+        const rideIds = poolWithMembers.pool_members.map((m: any) => m.ride_id).filter(Boolean);
+        const { data: memberRides } = await supabaseAdmin
+          .from('rides')
+          .select('*')
+          .in('id', rideIds);
+
+        if (memberRides && memberRides.length > 0) {
+          const members: PoolMemberLocation[] = memberRides.map((r: any) => ({
+            userId: r.user_id,
+            pickup: { latitude: r.pickup_lat, longitude: r.pickup_lng },
+            dropoff: { latitude: r.dropoff_lat, longitude: r.dropoff_lng },
+            pickupAddress: r.pickup_address,
+            dropoffAddress: r.dropoff_address,
+          }));
+
+          const fareResult = await rideEstimationService.recalculatePoolFare(
+            members,
+            poolWithMembers.vehicle_type as VehicleType
+          );
+
+          // Update pool with new fare
+          await supabaseAdmin
+            .from('pools')
+            .update({
+              fare_per_person: fareResult.farePerPerson,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', poolId);
+
+          // Notify remaining members about fare change
+          for (const member of poolWithMembers.pool_members) {
+            await notificationService.sendPushNotification(member.user_id, {
+              title: 'Fare Updated - Rider Left',
+              message: `A rider left the pool. Your fare is now ৳${fareResult.farePerPerson} per person.`,
+              type: 'SYSTEM',
+              metadata: { poolId, farePerPerson: fareResult.farePerPerson, remainingPassengers: members.length },
+            });
+          }
+        }
+      }
+
       res.json({
         success: true,
         data: { message: 'Left pool successfully' },
@@ -457,6 +567,227 @@ export class PoolController {
       res.json({
         success: true,
         data: { message: 'Pool cancelled successfully' },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get optimized route for a pool
+   * Returns the best route considering all pool members' pickups and destinations
+   */
+  async getOptimizedRoute(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { poolId } = req.params;
+
+      // Get pool with members and their rides
+      const { data: pool, error: poolError } = await supabaseAdmin
+        .from('pools')
+        .select(`
+          *,
+          pool_members(user_id, ride_id)
+        `)
+        .eq('id', poolId)
+        .single();
+
+      if (poolError || !pool) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Get all rides for pool members
+      const rideIds = pool.pool_members?.map((m: any) => m.ride_id).filter(Boolean) || [];
+      
+      if (rideIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'NO_MEMBERS', message: 'Pool has no members with rides' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { data: rides, error: ridesError } = await supabaseAdmin
+        .from('rides')
+        .select('*')
+        .in('id', rideIds);
+
+      if (ridesError || !rides) {
+        return res.status(500).json({
+          success: false,
+          error: { code: 'RIDES_FETCH_ERROR', message: 'Failed to fetch member rides' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Build member locations
+      const members: PoolMemberLocation[] = rides.map((ride: any) => ({
+        userId: ride.user_id,
+        pickup: { latitude: ride.pickup_lat, longitude: ride.pickup_lng },
+        dropoff: { latitude: ride.dropoff_lat, longitude: ride.dropoff_lng },
+        pickupAddress: ride.pickup_address,
+        dropoffAddress: ride.dropoff_address,
+      }));
+
+      // Calculate optimized route
+      const optimization = await rideEstimationService.calculateOptimizedPoolRoute(
+        members,
+        pool.vehicle_type as VehicleType
+      );
+
+      res.json({
+        success: true,
+        data: {
+          poolId,
+          route: {
+            totalDistanceKm: optimization.totalDistanceKm,
+            totalDurationMinutes: optimization.totalDurationMinutes,
+            farePerPerson: optimization.farePerPerson,
+            coordinates: optimization.optimizedRoute.coordinates,
+            encoded: optimization.optimizedRoute.encoded,
+          },
+          stops: optimization.stops.map(stop => ({
+            type: stop.type,
+            userId: stop.userId,
+            address: stop.address,
+            location: stop.location,
+            order: stop.order,
+            estimatedArrival: stop.estimatedArrival,
+          })),
+          legs: optimization.optimizedRoute.legs,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Recalculate fare for a pool after membership changes
+   * Called automatically when someone joins or leaves
+   */
+  async recalculateFare(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { poolId } = req.params;
+
+      // Get pool with members and their rides
+      const { data: pool, error: poolError } = await supabaseAdmin
+        .from('pools')
+        .select(`
+          *,
+          pool_members(user_id, ride_id)
+        `)
+        .eq('id', poolId)
+        .single();
+
+      if (poolError || !pool) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Get all rides for pool members
+      const rideIds = pool.pool_members?.map((m: any) => m.ride_id).filter(Boolean) || [];
+      
+      if (rideIds.length === 0) {
+        return res.json({
+          success: true,
+          data: {
+            poolId,
+            farePerPerson: 0,
+            totalFare: 0,
+            memberCount: 0,
+            message: 'No members in pool',
+          },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { data: rides, error: ridesError } = await supabaseAdmin
+        .from('rides')
+        .select('*')
+        .in('id', rideIds);
+
+      if (ridesError || !rides) {
+        return res.status(500).json({
+          success: false,
+          error: { code: 'RIDES_FETCH_ERROR', message: 'Failed to fetch member rides' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Build member locations
+      const members: PoolMemberLocation[] = rides.map((ride: any) => ({
+        userId: ride.user_id,
+        pickup: { latitude: ride.pickup_lat, longitude: ride.pickup_lng },
+        dropoff: { latitude: ride.dropoff_lat, longitude: ride.dropoff_lng },
+        pickupAddress: ride.pickup_address,
+        dropoffAddress: ride.dropoff_address,
+      }));
+
+      // Recalculate fare
+      const fareResult = await rideEstimationService.recalculatePoolFare(
+        members,
+        pool.vehicle_type as VehicleType
+      );
+
+      // Update pool with new fare
+      await supabaseAdmin
+        .from('pools')
+        .update({
+          fare_per_person: fareResult.farePerPerson,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', poolId);
+
+      // Notify all pool members about fare change
+      for (const member of pool.pool_members || []) {
+        if (member.user_id !== userId) {
+          await notificationService.sendPushNotification(member.user_id, {
+            title: 'Fare Updated',
+            message: `Pool fare updated to ৳${fareResult.farePerPerson} per person`,
+            type: 'SYSTEM',
+            metadata: { poolId, farePerPerson: fareResult.farePerPerson },
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        data: {
+          poolId,
+          farePerPerson: fareResult.farePerPerson,
+          totalFare: fareResult.totalFare,
+          memberCount: members.length,
+          breakdown: fareResult.breakdown,
+          memberFares: fareResult.memberFares,
+          message: `Fare recalculated for ${members.length} members`,
+        },
         timestamp: new Date().toISOString(),
       });
     } catch (error) {

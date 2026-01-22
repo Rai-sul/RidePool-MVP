@@ -6,6 +6,7 @@ import { Button } from './ui/button';
 import type { Destination, UserProfile, Pool, Location } from '../contexts/GlobalContext';
 import { usePools } from '../hooks/usePools';
 import { useRides } from '../hooks/useRides';
+import { rideService, RideEstimate, RideEstimateResponse, AlternativeRouteInfo } from '../services/ride.service';
 import LinearGradient from './LinearGradient';
 import GoogleMapView from './GoogleMapView';
 
@@ -32,6 +33,11 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
   const [selectedVehicleType, setSelectedVehicleType] = useState<'CAR' | 'CNG' | null>(null);
   const [showConfirmButton, setShowConfirmButton] = useState(false);
   const [isCreatingPool, setIsCreatingPool] = useState(false);
+  const [rideEstimate, setRideEstimate] = useState<RideEstimate | null>(null);
+  const [routeInfo, setRouteInfo] = useState<{ summary?: string; selectedReason?: string } | null>(null);
+  const [alternativeRoutes, setAlternativeRoutes] = useState<AlternativeRouteInfo[]>([]);
+  const [trafficInfo, setTrafficInfo] = useState<string>('');
+  const [estimateLoading, setEstimateLoading] = useState(false);
   const isFemale = userProfile?.gender === 'female';
   
   // Use the pools hook to search for real pools and create new ones
@@ -41,6 +47,46 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
   const availablePools = searchResults?.pools || [];
   const hasMatches = searchResults?.has_matches || false;
   const alternatives = searchResults?.alternatives || [];
+  
+  // Fetch ride estimate when locations and vehicle type are set
+  useEffect(() => {
+    if (!pickupLocation || !destination?.latitude || !destination?.longitude || !selectedVehicleType) {
+      setRideEstimate(null);
+      setRouteInfo(null);
+      setAlternativeRoutes([]);
+      setTrafficInfo('');
+      return;
+    }
+    
+    const fetchEstimate = async () => {
+      setEstimateLoading(true);
+      try {
+        const response = await rideService.getRideEstimate({
+          pickup_lat: pickupLocation.latitude,
+          pickup_lng: pickupLocation.longitude,
+          dropoff_lat: destination.latitude,
+          dropoff_lng: destination.longitude,
+          vehicle_type: selectedVehicleType,
+        });
+        
+        if (response.success && response.data) {
+          setRideEstimate(response.data.estimate);
+          setRouteInfo(response.data.route ? {
+            summary: response.data.route.summary,
+            selectedReason: response.data.route.selectedReason,
+          } : null);
+          setAlternativeRoutes(response.data.alternativeRoutes || []);
+          setTrafficInfo(response.data.trafficInfo || '');
+        }
+      } catch (err) {
+        console.error('Failed to fetch ride estimate:', err);
+      } finally {
+        setEstimateLoading(false);
+      }
+    };
+    
+    fetchEstimate();
+  }, [pickupLocation, destination, selectedVehicleType]);
   
   // Search for pools when location/preferences change
   useEffect(() => {
@@ -336,18 +382,98 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
             </View>
           </View>
 
-          {/* Cost & Time */}
+          {/* Cost & Time - Now using real estimates */}
           <View className="flex flex-row items-center justify-center gap-4 py-3 px-4 bg-gray-50 rounded-xl mx-1 mb-4">
-            <View className="flex flex-row items-center gap-2">
-              <Taka className="w-5 h-5 text-green-600" />
-              <Text className="font-semibold">185 taka</Text>
-            </View>
-            <View className="w-px h-6 bg-gray-300"></View>
-            <View className="flex flex-row items-center gap-2">
-              <Clock className="w-5 h-5 text-blue-600" />
-              <Text className="font-semibold">28 mins</Text>
-            </View>
+            {estimateLoading ? (
+              <ActivityIndicator size="small" color="#2563eb" />
+            ) : rideEstimate ? (
+              <>
+                <View className="flex flex-col items-center">
+                  <View className="flex flex-row items-center gap-2">
+                    <Taka className="w-5 h-5 text-green-600" />
+                    <Text className="font-semibold">৳{rideEstimate.estimatedFare}</Text>
+                  </View>
+                  <Text className="text-xs text-gray-500">per person (with pool)</Text>
+                </View>
+                <View className="w-px h-10 bg-gray-300"></View>
+                <View className="flex flex-col items-center">
+                  <View className="flex flex-row items-center gap-2">
+                    <Clock className="w-5 h-5 text-blue-600" />
+                    <Text className="font-semibold">{rideEstimate.durationInTraffic || rideEstimate.durationMinutes} mins</Text>
+                  </View>
+                  <Text className="text-xs text-gray-500">{rideEstimate.distanceKm} km</Text>
+                </View>
+                {rideEstimate.estimatedSavings > 0 && (
+                  <>
+                    <View className="w-px h-10 bg-gray-300"></View>
+                    <View className="flex flex-col items-center">
+                      <Text className="font-semibold text-green-600">৳{rideEstimate.estimatedSavings}</Text>
+                      <Text className="text-xs text-gray-500">savings</Text>
+                    </View>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                <View className="flex flex-row items-center gap-2">
+                  <Taka className="w-5 h-5 text-green-600" />
+                  <Text className="font-semibold text-gray-400">Select vehicle</Text>
+                </View>
+                <View className="w-px h-6 bg-gray-300"></View>
+                <View className="flex flex-row items-center gap-2">
+                  <Clock className="w-5 h-5 text-blue-600" />
+                  <Text className="font-semibold text-gray-400">--</Text>
+                </View>
+              </>
+            )}
           </View>
+
+          {/* Best Route Info */}
+          {rideEstimate && routeInfo && (
+            <View className="mx-1 mb-4 p-3 bg-green-50 rounded-xl border border-green-200">
+              <View className="flex flex-row items-center gap-2 mb-2">
+                <Navigation className="w-4 h-4 text-green-600" />
+                <Text className="text-sm font-semibold text-green-800">Best Route Selected</Text>
+              </View>
+              {routeInfo.summary && (
+                <Text className="text-sm text-green-700 font-medium">Via {routeInfo.summary}</Text>
+              )}
+              {routeInfo.selectedReason && (
+                <Text className="text-xs text-green-600 mt-1">{routeInfo.selectedReason}</Text>
+              )}
+              <View className="flex flex-row items-center gap-2 mt-2">
+                <Text className="text-xs font-medium text-gray-600">{trafficInfo}</Text>
+              </View>
+            </View>
+          )}
+
+          {/* Alternative Routes */}
+          {alternativeRoutes.length > 0 && (
+            <View className="mx-1 mb-4 p-3 bg-gray-50 rounded-xl">
+              <Text className="text-xs text-gray-600 font-medium mb-2">Other routes available:</Text>
+              {alternativeRoutes.slice(0, 2).map((alt, idx) => (
+                <View key={idx} className="flex flex-row items-center justify-between py-1">
+                  <Text className="text-xs text-gray-500">{alt.description}</Text>
+                  <Text className="text-xs text-orange-600">
+                    +{alt.timeDifference} min {alt.trafficLevel === 'high' ? '🔴' : alt.trafficLevel === 'moderate' ? '🟡' : '🟢'}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Fare breakdown info */}
+          {rideEstimate && (
+            <View className="mx-1 mb-4 p-3 bg-blue-50 rounded-xl">
+              <Text className="text-xs text-blue-700 font-medium mb-2">Fare varies with pool size:</Text>
+              <View className="flex flex-row justify-between">
+                <Text className="text-xs text-blue-600">Solo: ৳{rideEstimate.fareEstimates.solo}</Text>
+                <Text className="text-xs text-blue-600">2 riders: ৳{rideEstimate.fareEstimates.with2Passengers}</Text>
+                <Text className="text-xs text-blue-600">3 riders: ৳{rideEstimate.fareEstimates.with3Passengers}</Text>
+                <Text className="text-xs text-blue-600">4 riders: ৳{rideEstimate.fareEstimates.with4Passengers}</Text>
+              </View>
+            </View>
+          )}
 
           {/* Vehicle Type Selector */}
           <View className="mb-6">
