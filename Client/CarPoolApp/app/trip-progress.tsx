@@ -4,7 +4,7 @@ import { useGlobalContext } from '../contexts/GlobalContext';
 
 export default function TripProgressScreen() {
   const router = useRouter();
-  const { userProfile } = useGlobalContext();
+  const { userProfile, pickupLocation, selectedDestination, selectedPool } = useGlobalContext();
   
   const handleComplete = () => {
     router.push('/payment-summary');
@@ -15,10 +15,19 @@ export default function TripProgressScreen() {
       pathname: '/driver-chat',
       params: {
         driverId: 'DRV001',
-        driverName: 'Ahmed Khan'
+        driverName: selectedPool?.driverName || 'Ahmed Khan'
       }
     });
   };
   
-  return <TripProgress userProfile={userProfile} onComplete={handleComplete} onChatDriver={handleChatDriver} />;
+  return (
+    <TripProgress 
+      userProfile={userProfile} 
+      pickupLocation={pickupLocation}
+      destination={selectedDestination}
+      selectedPool={selectedPool}
+      onComplete={handleComplete} 
+      onChatDriver={handleChatDriver} 
+    />
+  );
 }

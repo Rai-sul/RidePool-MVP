@@ -12,9 +12,14 @@ interface GoogleMapViewProps {
     latitude: number;
     longitude: number;
     title?: string;
+    icon?: 'pickup' | 'dropoff' | 'driver' | 'current' | 'default';
   }>;
+  pickupLocation?: { latitude: number; longitude: number };
+  dropoffLocation?: { latitude: number; longitude: number };
+  showDirections?: boolean;
   style?: any;
   children?: React.ReactNode;
+  showUserLocation?: boolean;
 }
 
 export default function GoogleMapView(props: GoogleMapViewProps) {

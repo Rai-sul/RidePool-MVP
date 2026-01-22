@@ -1,19 +1,20 @@
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Dimensions, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import LinearGradient from './LinearGradient';
-import { MapPin, Tag, Users, Search, ArrowRight, Star, ChevronRight } from './Icons';
+import { MapPin, Tag, Users, Search, ArrowRight, Star, ChevronRight, Navigation } from './Icons';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import DestinationSearch from './DestinationSearch';
-import type { UserProfile, Destination } from '../contexts/GlobalContext';
-
-// Lazy load map component to avoid issues on initial load
-const NativeMap = lazy(() => import('./NativeMap'));
+import LocationSearch from './LocationSearch';
+import GoogleMapView from './GoogleMapView';
+import type { UserProfile, Destination, Location } from '../contexts/GlobalContext';
+import * as ExpoLocation from 'expo-location';
 
 type LandingPageProps = {
   userProfile: UserProfile | null;
   onDestinationSelect: (destination: Destination, rideType?: 'female-only' | 'regular') => void;
+  onPickupSelect?: (location: Location) => void;
   onProfileClick: () => void;
   onFriendsClick?: () => void;
 };
@@ -50,12 +51,59 @@ const promos = [
   },
 ];
 
-export default function LandingPage({ userProfile, onDestinationSelect, onProfileClick, onFriendsClick }: LandingPageProps) {
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
+export default function LandingPage({ userProfile, onDestinationSelect, onPickupSelect, onProfileClick, onFriendsClick }: LandingPageProps) {
+  const [isDestinationSearchOpen, setIsDestinationSearchOpen] = useState(false);
+  const [isPickupSearchOpen, setIsPickupSearchOpen] = useState(false);
+  const [pickupLocation, setPickupLocation] = useState<Location | null>(null);
+  const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
   const initials = userProfile ? `${userProfile.firstName[0]}${userProfile.lastName[0]}` : 'U';
   const isFemale = userProfile?.gender === 'female';
 
   const accentColors = isFemale ? ['#db2777', '#f43f5e'] : ['#1f2937', '#374151'];
+
+  // Get current location on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          setPickupLocation({
+            name: 'Current Location',
+            address: 'Dhaka, Bangladesh',
+            latitude: 23.8103,
+            longitude: 90.4125,
+          });
+          return;
+        }
+
+        const location = await ExpoLocation.getCurrentPositionAsync({});
+        setPickupLocation({
+          name: 'Current Location',
+          address: 'Your current position',
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+      } catch (error) {
+        console.log('Location error:', error);
+        setPickupLocation({
+          name: 'Current Location',
+          address: 'Dhaka, Bangladesh',
+          latitude: 23.8103,
+          longitude: 90.4125,
+        });
+      }
+    })();
+  }, []);
+
+  const handlePickupSelect = (location: Location) => {
+    setPickupLocation(location);
+    onPickupSelect?.(location);
+  };
+
+  const handleDestinationSelect = (destination: Destination) => {
+    setSelectedDestination(destination);
+    onDestinationSelect(destination);
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-white">
@@ -83,52 +131,78 @@ export default function LandingPage({ userProfile, onDestinationSelect, onProfil
           </TouchableOpacity>
         </View>
 
-        {/* Search Bar */}
-        <TouchableOpacity
-          onPress={() => setIsSearchOpen(true)}
-          className="rounded-xl overflow-hidden shadow-lg"
-          activeOpacity={0.9}
-        >
-          <View className="bg-white/90 p-4">
-            <View className="flex-row items-center gap-3">
-              <View className="gap-2">
-                <View className={`w-3 h-3 rounded-full ${isFemale ? 'bg-rose-500' : 'bg-gray-800'}`} />
-                <View className="w-px h-4 bg-gray-300" />
-                <MapPin className={`w-4 h-4 ${isFemale ? 'text-rose-500' : 'text-gray-800'}`} />
+        {/* Search Bar - Pickup and Destination Fields */}
+        <View className="rounded-xl overflow-hidden shadow-lg bg-white/95">
+          <View className="p-4">
+            <View className="flex-row items-stretch gap-3">
+              {/* Route indicators */}
+              <View className="items-center py-2">
+                <View className={`w-3 h-3 rounded-full ${isFemale ? 'bg-green-500' : 'bg-green-600'}`} />
+                <View className="w-0.5 flex-1 bg-gray-300 my-1" />
+                <MapPin className="w-4 h-4" color="#ef4444" />
               </View>
-              <View className="flex-1 gap-2">
-                <View className="flex-row items-center gap-2">
-                  <Text className="text-sm text-gray-500">From</Text>
-                  <View className="flex-1 border-b border-gray-200" />
-                </View>
-                <Text className="text-gray-900">Current Location</Text>
-                <View className="flex-row items-center gap-2 mt-3">
-                  <Text className="text-sm text-gray-500">To</Text>
-                  <View className="flex-1 border-b border-gray-200" />
-                </View>
-                <Text className="text-gray-400">Where to?</Text>
+              
+              {/* Location inputs */}
+              <View className="flex-1 gap-3">
+                {/* Pickup Location - Clickable */}
+                <TouchableOpacity 
+                  onPress={() => setIsPickupSearchOpen(true)}
+                  className="py-2 border-b border-gray-200"
+                  activeOpacity={0.7}
+                >
+                  <Text className="text-xs text-gray-500 mb-1">From</Text>
+                  <View className="flex-row items-center gap-2">
+                    <Navigation className="w-4 h-4" color="#22c55e" />
+                    <Text className="text-gray-900 font-medium" numberOfLines={1}>
+                      {pickupLocation?.name || 'Select pickup location'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+                
+                {/* Destination - Clickable */}
+                <TouchableOpacity 
+                  onPress={() => setIsDestinationSearchOpen(true)}
+                  className="py-2"
+                  activeOpacity={0.7}
+                >
+                  <Text className="text-xs text-gray-500 mb-1">To</Text>
+                  <View className="flex-row items-center gap-2">
+                    <MapPin className="w-4 h-4" color="#ef4444" />
+                    <Text className={selectedDestination ? 'text-gray-900 font-medium' : 'text-gray-400'} numberOfLines={1}>
+                      {selectedDestination?.name || 'Where to?'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
               </View>
-              <Search className="w-5 h-5 text-gray-400" />
+              
+              {/* Search icon */}
+              <TouchableOpacity 
+                onPress={() => setIsDestinationSearchOpen(true)}
+                className="justify-center pl-2"
+              >
+                <Search className="w-5 h-5" color="#9ca3af" />
+              </TouchableOpacity>
             </View>
           </View>
-        </TouchableOpacity>
+        </View>
       </LinearGradient>
 
-      {/* Map Preview Section */}
+      {/* Map Preview Section - Dynamic based on pickup/destination */}
       <View style={mapStyles.mapContainer}>
-        <Suspense fallback={
-          <View style={mapStyles.mapPlaceholder}>
-            <Text style={mapStyles.loadingText}>Loading map...</Text>
-          </View>
-        }>
-          <NativeMap style={mapStyles.map} />
-        </Suspense>
+        <GoogleMapView
+          center={pickupLocation ? { latitude: pickupLocation.latitude, longitude: pickupLocation.longitude } : undefined}
+          zoom={selectedDestination ? 12 : 15}
+          pickupLocation={pickupLocation ? { latitude: pickupLocation.latitude, longitude: pickupLocation.longitude } : undefined}
+          dropoffLocation={selectedDestination?.latitude && selectedDestination?.longitude ? { latitude: selectedDestination.latitude, longitude: selectedDestination.longitude } : undefined}
+          showDirections={!!(pickupLocation && selectedDestination?.latitude)}
+          style={mapStyles.map}
+        />
         <View style={mapStyles.mapOverlay}>
           <TouchableOpacity 
-            onPress={() => setIsSearchOpen(true)}
+            onPress={() => setIsDestinationSearchOpen(true)}
             style={mapStyles.mapSearchButton}
           >
-            <Search style={{ width: 20, height: 20, color: '#6b7280' }} />
+            <Search className="w-5 h-5" color="#6b7280" />
             <Text style={mapStyles.mapSearchText}>Where to?</Text>
           </TouchableOpacity>
         </View>
@@ -257,9 +331,19 @@ export default function LandingPage({ userProfile, onDestinationSelect, onProfil
 
       {/* Destination Search Modal */}
       <DestinationSearch
-        isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
-        onSelectDestination={onDestinationSelect}
+        isOpen={isDestinationSearchOpen}
+        onClose={() => setIsDestinationSearchOpen(false)}
+        onSelectDestination={handleDestinationSelect}
+      />
+
+      {/* Pickup Location Search Modal */}
+      <LocationSearch
+        isOpen={isPickupSearchOpen}
+        onClose={() => setIsPickupSearchOpen(false)}
+        onSelectLocation={handlePickupSelect}
+        title="Select Pickup Location"
+        placeholder="Search pickup location..."
+        type="pickup"
       />
     </SafeAreaView>
   );

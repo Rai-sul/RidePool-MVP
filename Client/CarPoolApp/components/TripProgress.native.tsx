@@ -6,17 +6,21 @@ import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Progress } from './ui/progress';
 import GoogleMapView from './GoogleMapView';
-import type { UserProfile } from '../contexts/GlobalContext';
+import type { UserProfile, Location, Destination, Pool } from '../contexts/GlobalContext';
 
 type TripProgressProps = {
   userProfile: UserProfile | null;
+  pickupLocation?: Location | null;
+  destination?: Destination | null;
+  selectedPool?: Pool | null;
   onComplete?: () => void;
   onChatDriver?: () => void;
 };
 
-export default function TripProgress({ userProfile, onComplete, onChatDriver }: TripProgressProps) {
+export default function TripProgress({ userProfile, pickupLocation, destination, selectedPool, onComplete, onChatDriver }: TripProgressProps) {
   const [progress, setProgress] = useState(15);
   const [tripStatus, setTripStatus] = useState<'waiting' | 'on-the-way' | 'arrived' | 'in-progress' | 'completed'>('waiting');
+  const [driverPosition, setDriverPosition] = useState<{ latitude: number; longitude: number } | null>(null);
   
   const isFemale = userProfile?.gender === 'female';
   const accentColor = isFemale ? 'pink' : 'blue';
@@ -24,15 +28,25 @@ export default function TripProgress({ userProfile, onComplete, onChatDriver }: 
   const accentText = isFemale ? 'text-pink-600' : 'text-blue-600';
   const accentBorder = isFemale ? 'border-pink-500' : 'border-blue-600';
 
-  // Driver info
+  // Use actual pickup location or default
+  const pickupCoords = pickupLocation 
+    ? { latitude: pickupLocation.latitude, longitude: pickupLocation.longitude }
+    : { latitude: 23.8103, longitude: 90.4125 };
+  
+  // Use actual destination or default
+  const dropoffCoords = destination?.latitude && destination?.longitude
+    ? { latitude: destination.latitude, longitude: destination.longitude }
+    : { latitude: 23.82, longitude: 90.43 };
+
+  // Driver info - use pool data if available
   const driver = {
-    name: 'Ahmed Khan',
-    initial: 'A',
-    rating: 4.8,
+    name: selectedPool?.driverName || 'Ahmed Khan',
+    initial: selectedPool?.photo || 'A',
+    rating: selectedPool?.rating || 4.8,
     trips: 1250,
-    vehicle: 'Toyota Corolla',
-    plateNumber: 'DHA-1234',
-    eta: '5 mins',
+    vehicle: selectedPool?.carModel || 'Toyota Corolla',
+    plateNumber: selectedPool?.licensePlate || 'DHA-1234',
+    eta: `${selectedPool?.eta || 5} mins`,
     phone: '+880 1711-123456'
   };
 
@@ -42,7 +56,17 @@ export default function TripProgress({ userProfile, onComplete, onChatDriver }: 
     { name: 'Sarah Ahmed', initial: 'S' },
   ];
 
-  // Simulate trip progress
+  // Initialize driver position between pickup and destination
+  useEffect(() => {
+    if (pickupCoords && dropoffCoords) {
+      // Start driver slightly away from pickup
+      const initialLat = pickupCoords.latitude - 0.005;
+      const initialLng = pickupCoords.longitude - 0.003;
+      setDriverPosition({ latitude: initialLat, longitude: initialLng });
+    }
+  }, []);
+
+  // Simulate trip progress and driver movement
   useEffect(() => {
     const interval = setInterval(() => {
       setProgress((prev) => {
@@ -50,12 +74,35 @@ export default function TripProgress({ userProfile, onComplete, onChatDriver }: 
           setTripStatus('completed');
           return 100;
         }
+        
+        // Move driver position along the route
+        if (driverPosition && pickupCoords && dropoffCoords) {
+          const progressRatio = (prev + 5) / 100;
+          let newLat, newLng;
+          
+          if (prev < 40) {
+            // Driver moving towards pickup
+            const pickupProgress = prev / 40;
+            const startLat = pickupCoords.latitude - 0.005;
+            const startLng = pickupCoords.longitude - 0.003;
+            newLat = startLat + (pickupCoords.latitude - startLat) * pickupProgress;
+            newLng = startLng + (pickupCoords.longitude - startLng) * pickupProgress;
+          } else {
+            // Driver moving from pickup to destination
+            const tripProgress = (prev - 40) / 60;
+            newLat = pickupCoords.latitude + (dropoffCoords.latitude - pickupCoords.latitude) * tripProgress;
+            newLng = pickupCoords.longitude + (dropoffCoords.longitude - pickupCoords.longitude) * tripProgress;
+          }
+          
+          setDriverPosition({ latitude: newLat, longitude: newLng });
+        }
+        
         return prev + 5;
       });
     }, 3000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [driverPosition, pickupCoords, dropoffCoords]);
 
   // Update status based on progress
   useEffect(() => {
@@ -77,20 +124,33 @@ export default function TripProgress({ userProfile, onComplete, onChatDriver }: 
     }
   };
 
+  // Calculate ETA based on progress
+  const getETA = () => {
+    const baseEta = selectedPool?.eta || 5;
+    if (tripStatus === 'waiting' || tripStatus === 'on-the-way') {
+      return `${Math.max(1, Math.round(baseEta * (1 - progress / 40)))} mins`;
+    } else if (tripStatus === 'in-progress') {
+      const remainingProgress = 100 - progress;
+      const remainingMins = Math.max(1, Math.round(25 * remainingProgress / 50));
+      return `${remainingMins} mins`;
+    }
+    return 'Arrived';
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 100 }}>
-        {/* Google Map */}
+        {/* Google Map - Dynamic with real locations */}
         <View style={{ height: 256, position: 'relative' }}>
           <GoogleMapView
-            center={{ latitude: 23.8103, longitude: 90.4125 }}
+            center={driverPosition || pickupCoords}
             zoom={14}
-            pickupLocation={{ latitude: 23.8103, longitude: 90.4125 }}
-            dropoffLocation={{ latitude: 23.82, longitude: 90.43 }}
+            pickupLocation={pickupCoords}
+            dropoffLocation={dropoffCoords}
             showDirections={true}
-            markers={[
-              { id: 'driver', latitude: 23.812, longitude: 90.418, title: 'Driver', icon: 'driver' },
-            ]}
+            markers={driverPosition ? [
+              { id: 'driver', latitude: driverPosition.latitude, longitude: driverPosition.longitude, title: driver.name, icon: 'driver' },
+            ] : []}
           />
           
           {/* Status Badge */}
@@ -126,8 +186,8 @@ export default function TripProgress({ userProfile, onComplete, onChatDriver }: 
                 gap: 8,
               }}
             >
-              <Clock style={{ width: 16, height: 16, color: '#4b5563' }} />
-              <Text style={{ fontWeight: '600' }}>{driver.eta}</Text>
+              <Clock className="w-4 h-4" color="#4b5563" />
+              <Text style={{ fontWeight: '600' }}>{getETA()}</Text>
             </View>
           )}
         </View>
@@ -153,7 +213,7 @@ export default function TripProgress({ userProfile, onComplete, onChatDriver }: 
             <View className="flex-1">
               <Text className="text-lg font-semibold">{driver.name}</Text>
               <View className="flex-row items-center gap-2 mt-1">
-                <Star className="w-4 h-4 text-yellow-500" fill="#eab308" />
+                <Star className="w-4 h-4" color="#eab308" />
                 <Text className="text-sm text-gray-600">{driver.rating} • {driver.trips} trips</Text>
               </View>
               <Text className="text-sm text-gray-500 mt-1">{driver.vehicle} • {driver.plateNumber}</Text>
@@ -161,13 +221,13 @@ export default function TripProgress({ userProfile, onComplete, onChatDriver }: 
 
             <View className="flex-row gap-2">
               <TouchableOpacity className={`w-12 h-12 rounded-full ${accentBg} items-center justify-center`}>
-                <Phone className="w-5 h-5 text-white" />
+                <Phone className="w-5 h-5" color="white" />
               </TouchableOpacity>
               <TouchableOpacity 
                 className="w-12 h-12 rounded-full bg-gray-100 items-center justify-center"
                 onPress={onChatDriver}
               >
-                <MessageCircle className="w-5 h-5 text-gray-600" />
+                <MessageCircle className="w-5 h-5" color="#4b5563" />
               </TouchableOpacity>
             </View>
           </View>
@@ -200,7 +260,10 @@ export default function TripProgress({ userProfile, onComplete, onChatDriver }: 
               <View className="w-3 h-3 rounded-full bg-green-500 mt-1" />
               <View className="flex-1">
                 <Text className="text-sm text-gray-500">Pickup</Text>
-                <Text className="font-medium">Gulshan 2, Dhaka</Text>
+                <Text className="font-medium">{pickupLocation?.name || 'Current Location'}</Text>
+                {pickupLocation?.address && (
+                  <Text className="text-xs text-gray-400" numberOfLines={1}>{pickupLocation.address}</Text>
+                )}
               </View>
             </View>
 
@@ -208,7 +271,10 @@ export default function TripProgress({ userProfile, onComplete, onChatDriver }: 
               <View className="w-3 h-3 rounded-full bg-red-500 mt-1" />
               <View className="flex-1">
                 <Text className="text-sm text-gray-500">Drop-off</Text>
-                <Text className="font-medium">Dhanmondi 27, Dhaka</Text>
+                <Text className="font-medium">{destination?.name || 'Destination'}</Text>
+                {destination?.address && (
+                  <Text className="text-xs text-gray-400" numberOfLines={1}>{destination.address}</Text>
+                )}
               </View>
             </View>
           </View>
@@ -229,8 +295,14 @@ export default function TripProgress({ userProfile, onComplete, onChatDriver }: 
             </View>
             <View className="flex-row justify-between">
               <Text className="text-gray-600">Fare</Text>
-              <Text className={`font-semibold ${accentText}`}>৳ 180</Text>
+              <Text className={`font-semibold ${accentText}`}>৳ {selectedPool ? 185 - (selectedPool.savings || 0) : 180}</Text>
             </View>
+            {selectedPool?.savings && (
+              <View className="flex-row justify-between">
+                <Text className="text-green-600">You save</Text>
+                <Text className="font-semibold text-green-600">৳ {selectedPool.savings}</Text>
+              </View>
+            )}
           </View>
         </View>
 

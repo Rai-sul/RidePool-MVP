@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, Linking, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 
 interface StaticMapViewProps {
@@ -30,13 +30,65 @@ export default function StaticMapView({
   style,
   children,
 }: StaticMapViewProps) {
-  const [imageLoading, setImageLoading] = React.useState(true);
-  const [imageError, setImageError] = React.useState(false);
+  const [imageLoading, setImageLoading] = useState(true);
+  const [imageError, setImageError] = useState(false);
+  const [routePath, setRoutePath] = useState<string | null>(null);
+
+  // Fetch route from Google Directions API for encoded polyline
+  useEffect(() => {
+    if (!showDirections || !pickupLocation || !dropoffLocation || !GOOGLE_MAPS_API_KEY) {
+      setRoutePath(null);
+      return;
+    }
+
+    const fetchRoute = async () => {
+      try {
+        const response = await fetch(
+          `https://maps.googleapis.com/maps/api/directions/json?origin=${pickupLocation.latitude},${pickupLocation.longitude}&destination=${dropoffLocation.latitude},${dropoffLocation.longitude}&key=${GOOGLE_MAPS_API_KEY}`
+        );
+        const data = await response.json();
+
+        if (data.routes && data.routes.length > 0 && data.routes[0].overview_polyline) {
+          setRoutePath(data.routes[0].overview_polyline.points);
+        } else {
+          setRoutePath(null);
+        }
+      } catch (error) {
+        console.error('Route fetch error:', error);
+        setRoutePath(null);
+      }
+    };
+
+    fetchRoute();
+  }, [pickupLocation, dropoffLocation, showDirections]);
 
   const getStaticMapUrl = (): string => {
     const params = new URLSearchParams();
-    params.append('center', `${center.latitude},${center.longitude}`);
-    params.append('zoom', String(zoom));
+    
+    // If we have both pickup and dropoff, let Google auto-center based on path
+    if (pickupLocation && dropoffLocation) {
+      // Calculate center between two points
+      const centerLat = (pickupLocation.latitude + dropoffLocation.latitude) / 2;
+      const centerLng = (pickupLocation.longitude + dropoffLocation.longitude) / 2;
+      params.append('center', `${centerLat},${centerLng}`);
+      
+      // Calculate appropriate zoom based on distance
+      const latDiff = Math.abs(pickupLocation.latitude - dropoffLocation.latitude);
+      const lngDiff = Math.abs(pickupLocation.longitude - dropoffLocation.longitude);
+      const maxDiff = Math.max(latDiff, lngDiff);
+      
+      let calculatedZoom = 14;
+      if (maxDiff > 0.1) calculatedZoom = 11;
+      else if (maxDiff > 0.05) calculatedZoom = 12;
+      else if (maxDiff > 0.02) calculatedZoom = 13;
+      else calculatedZoom = 14;
+      
+      params.append('zoom', String(calculatedZoom));
+    } else {
+      params.append('center', `${center.latitude},${center.longitude}`);
+      params.append('zoom', String(zoom));
+    }
+    
     params.append('size', '640x640');
     params.append('scale', '2');
     params.append('maptype', 'roadmap');
@@ -53,8 +105,15 @@ export default function StaticMapView({
       params.append('markers', `color:${color}|${marker.latitude},${marker.longitude}`);
     });
 
+    // Use encoded polyline path if available for accurate road route
     if (showDirections && pickupLocation && dropoffLocation) {
-      params.append('path', `color:0x4285F4FF|weight:5|${pickupLocation.latitude},${pickupLocation.longitude}|${dropoffLocation.latitude},${dropoffLocation.longitude}`);
+      if (routePath) {
+        // Use encoded polyline for accurate road-following route
+        params.append('path', `color:0x4285F4FF|weight:5|enc:${routePath}`);
+      } else {
+        // Fallback to straight line
+        params.append('path', `color:0x4285F4FF|weight:5|${pickupLocation.latitude},${pickupLocation.longitude}|${dropoffLocation.latitude},${dropoffLocation.longitude}`);
+      }
     }
 
     if (GOOGLE_MAPS_API_KEY) {
