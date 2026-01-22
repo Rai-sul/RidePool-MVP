@@ -1,6 +1,6 @@
 import { apiClient } from '../utils/apiClient';
 import { API_ENDPOINTS, API_CONFIG } from '../config/api.config';
-import { ApiResponse, User, UserPreferences, Location } from '../types';
+import { ApiResponse, User, UserPreferences, Location, AuthSession } from '../types';
 
 export const authService = {
   async register(data: {
@@ -12,15 +12,23 @@ export const authService = {
     full_name?: string;
     gender: 'MALE' | 'FEMALE' | 'OTHER';
     gender_preference?: 'ANY' | 'FEMALE_ONLY';
-  }): Promise<ApiResponse<{ user: User; token: string }>> {
+  }): Promise<ApiResponse<{ user: User; token?: string; session?: AuthSession }>> {
     console.log('[Auth] Registering user:', data.email);
     console.log('[Auth] API URL:', API_CONFIG.BASE_URL + API_ENDPOINTS.AUTH.REGISTER);
     try {
       const response = await apiClient.post(API_ENDPOINTS.AUTH.REGISTER, data);
       console.log('[Auth] Registration response:', response.success ? 'SUCCESS' : 'FAILED');
-      const token = response.data?.session?.access_token || response.data?.token;
+      
+      const session = response.data?.session;
+      const token = session?.access_token || response.data?.token;
+      const refreshToken = session?.refresh_token;
+
       if (token) {
-        await apiClient.setToken(token);
+        if (refreshToken) {
+          await apiClient.setTokens(token, refreshToken);
+        } else {
+          await apiClient.setToken(token);
+        }
         console.log('[Auth] Token stored successfully');
       }
       return response;
@@ -33,16 +41,23 @@ export const authService = {
   async login(data: {
     email: string;
     password: string;
-  }): Promise<ApiResponse<{ user: User; token: string }>> {
+  }): Promise<ApiResponse<{ user: User; token?: string; session?: AuthSession }>> {
     console.log('[Auth] Logging in user:', data.email);
     console.log('[Auth] API URL:', API_CONFIG.BASE_URL + API_ENDPOINTS.AUTH.LOGIN);
     try {
       const response = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, data);
       console.log('[Auth] Login response:', response.success ? 'SUCCESS' : 'FAILED');
       // Server returns session.access_token, store it as auth token
-      const token = response.data?.session?.access_token || response.data?.token;
+      const session = response.data?.session;
+      const token = session?.access_token || response.data?.token;
+      const refreshToken = session?.refresh_token;
+
       if (token) {
-        await apiClient.setToken(token);
+        if (refreshToken) {
+          await apiClient.setTokens(token, refreshToken);
+        } else {
+          await apiClient.setToken(token);
+        }
         console.log('[Auth] Token stored successfully');
       }
       return response;
