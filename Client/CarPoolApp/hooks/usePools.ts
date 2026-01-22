@@ -1,43 +1,37 @@
 import { useState, useCallback } from 'react';
-import { poolService } from '../services/pool.service';
+import { 
+  poolService, 
+  CreatePoolRequest, 
+  SearchPoolsParams, 
+  PoolSearchResult,
+  CreatePoolResponse,
+  JoinPoolResponse,
+  GetPoolResponse 
+} from '../services/pool.service';
 import { Pool } from '../types';
 
 export const usePools = () => {
-  const [pools, setPools] = useState<Pool[]>([]);
   const [currentPool, setCurrentPool] = useState<Pool | null>(null);
+  const [searchResults, setSearchResults] = useState<PoolSearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchPools = useCallback(async (params?: {
-    page?: number;
-    limit?: number;
-  }) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await poolService.getPools(params);
-      if (response.success && response.data) {
-        setPools(response.data.data);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch pools');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const createPool = useCallback(async (data: {
-    name: string;
-    description?: string;
-    max_members?: number;
-  }) => {
+  /**
+   * Create a new pool with destination and preferences
+   */
+  const createPool = useCallback(async (data: CreatePoolRequest) => {
     try {
       setLoading(true);
       setError(null);
       const response = await poolService.createPool(data);
       if (response.success && response.data) {
-        setCurrentPool(response.data);
-        return { success: true, data: response.data };
+        setCurrentPool(response.data.pool);
+        return { 
+          success: true, 
+          data: response.data,
+          lookupExpiresAt: response.data.lookup_expires_at,
+          lookupTimeSeconds: response.data.lookup_time_seconds,
+        };
       }
       throw new Error(response.message || 'Failed to create pool');
     } catch (err: any) {
@@ -49,14 +43,47 @@ export const usePools = () => {
     }
   }, []);
 
-  const joinPool = useCallback(async (id: string) => {
+  /**
+   * Get pool details by ID
+   */
+  const getPool = useCallback(async (poolId: string) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await poolService.joinPool(id);
-      if (response.success) {
-        await fetchPools();
-        return { success: true };
+      const response = await poolService.getPoolById(poolId);
+      if (response.success && response.data) {
+        setCurrentPool(response.data.pool);
+        return { 
+          success: true, 
+          data: response.data,
+          lookupRemainingSeconds: response.data.lookup_remaining_seconds,
+        };
+      }
+      throw new Error(response.message || 'Failed to get pool');
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to get pool';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  /**
+   * Join an existing pool with a ride
+   */
+  const joinPool = useCallback(async (poolId: string, rideId: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await poolService.joinPool(poolId, { ride_id: rideId });
+      if (response.success && response.data) {
+        return { 
+          success: true, 
+          data: response.data,
+          farePerPerson: response.data.fare_per_person,
+          currentPassengers: response.data.current_passengers,
+        };
       }
       throw new Error(response.message || 'Failed to join pool');
     } catch (err: any) {
@@ -66,16 +93,18 @@ export const usePools = () => {
     } finally {
       setLoading(false);
     }
-  }, [fetchPools]);
+  }, []);
 
-  const leavePool = useCallback(async (id: string) => {
+  /**
+   * Leave a pool (before ride starts)
+   */
+  const leavePool = useCallback(async (poolId: string) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await poolService.leavePool(id);
+      const response = await poolService.leavePool(poolId);
       if (response.success) {
         setCurrentPool(null);
-        await fetchPools();
         return { success: true };
       }
       throw new Error(response.message || 'Failed to leave pool');
@@ -86,15 +115,47 @@ export const usePools = () => {
     } finally {
       setLoading(false);
     }
-  }, [fetchPools]);
+  }, []);
 
-  const searchPools = useCallback(async (query: string) => {
+  /**
+   * Cancel a pool (only pool creator can do this)
+   */
+  const cancelPool = useCallback(async (poolId: string) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await poolService.searchPools(query);
+      const response = await poolService.cancelPool(poolId);
+      if (response.success) {
+        setCurrentPool(null);
+        return { success: true };
+      }
+      throw new Error(response.message || 'Failed to cancel pool');
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to cancel pool';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  /**
+   * Search for matching pools based on locations and vehicle type
+   */
+  const searchPools = useCallback(async (params: SearchPoolsParams) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await poolService.searchPools(params);
       if (response.success && response.data) {
-        return { success: true, data: response.data };
+        setSearchResults(response.data);
+        return { 
+          success: true, 
+          data: response.data,
+          hasMatches: response.data.has_matches,
+          totalFound: response.data.total_found,
+          alternatives: response.data.alternatives,
+        };
       }
       throw new Error(response.message || 'Search failed');
     } catch (err: any) {
@@ -106,15 +167,34 @@ export const usePools = () => {
     }
   }, []);
 
+  /**
+   * Clear current search results
+   */
+  const clearSearch = useCallback(() => {
+    setSearchResults(null);
+    setError(null);
+  }, []);
+
+  /**
+   * Clear current pool state
+   */
+  const clearPool = useCallback(() => {
+    setCurrentPool(null);
+    setError(null);
+  }, []);
+
   return {
-    pools,
     currentPool,
+    searchResults,
     loading,
     error,
-    fetchPools,
     createPool,
+    getPool,
     joinPool,
     leavePool,
+    cancelPool,
     searchPools,
+    clearSearch,
+    clearPool,
   };
 };

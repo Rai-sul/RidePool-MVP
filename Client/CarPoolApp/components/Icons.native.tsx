@@ -98,6 +98,7 @@ export const Smartphone = createIcon(LucideIcons.Smartphone);
 export const Building = createIcon(LucideIcons.Building);
 export const MessageCircle = createIcon(LucideIcons.MessageCircle);
 export const FileText = createIcon(LucideIcons.FileText);
+export const RefreshCw = createIcon(LucideIcons.RefreshCw);
 export const Send = createIcon(LucideIcons.Send);
 export const Smile = createIcon(LucideIcons.Smile);
 export const Paperclip = createIcon(LucideIcons.Paperclip);

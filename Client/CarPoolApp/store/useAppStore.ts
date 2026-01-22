@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-import { User } from '../types/user';
-import { Ride } from '../types/ride';
+import { User, Ride } from '../types';
 
 interface AppState {
   user: User | null;

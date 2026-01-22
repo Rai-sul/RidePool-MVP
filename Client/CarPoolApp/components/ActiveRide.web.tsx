@@ -4,12 +4,12 @@ import { MapPin, Shield, Phone, Share2, Navigation, Clock } from './Icons';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Progress } from './ui/progress';
-import type { Pool, Destination } from '../App';
+import type { Pool, Location } from '../types';
 import { motion } from 'motion/react';
 
 type ActiveRideProps = {
   pool: Pool | null;
-  destination: Destination | null;
+  destination: Location | null;
   onComplete: () => void;
 };
 
@@ -91,12 +91,12 @@ export default function ActiveRide({ pool, destination, onComplete }: ActiveRide
             <View className="flex flex-row items-center gap-3">
               <Avatar className="w-12 h-12">
                 <AvatarFallback className="bg-gradient-to-br from-blue-500 to-cyan-400 text-white">
-                  {pool.photo}
+                  {pool.driver?.id?.charAt(0).toUpperCase() || 'D'}
                 </AvatarFallback>
               </Avatar>
               <View>
-                <Text>{pool.driverName}</Text>
-                <Text className="text-sm text-gray-500">{pool.carModel}</Text>
+                <Text>Driver</Text>
+                <Text className="text-sm text-gray-500">{pool.vehicles?.model || pool.vehicle_type}</Text>
               </View>
             </View>
           </View>
@@ -112,7 +112,7 @@ export default function ActiveRide({ pool, destination, onComplete }: ActiveRide
             </View>
             <View>
               <Text className="text-sm text-gray-600 text-right">Destination</Text>
-              <Text className="text-sm text-right">{destination.name}</Text>
+              <Text className="text-sm text-right">{destination.address || 'Destination'}</Text>
             </View>
           </View>
 

@@ -54,13 +54,13 @@ export default function RateReview({ pool, userProfile, onComplete }: RateReview
               className="w-full h-full items-center justify-center"
             >
               <Text className="text-white text-2xl">
-                {pool.photo}
+                {pool.photo ?? pool.driver?.id?.charAt(0).toUpperCase() ?? 'D'}
               </Text>
             </LinearGradient>
           </Avatar>
           <View className="items-center">
-            <Text className="text-lg">How was your trip with {pool.driverName}?</Text>
-            <Text className="text-sm text-gray-500">{pool.carModel}</Text>
+            <Text className="text-lg">How was your trip with {pool.driverName ?? 'Driver'}?</Text>
+            <Text className="text-sm text-gray-500">{pool.carModel ?? pool.vehicles?.model ?? pool.vehicle_type}</Text>
           </View>
         </View>
 

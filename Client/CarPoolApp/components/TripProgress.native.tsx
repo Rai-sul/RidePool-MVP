@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, Phone, MessageCircle, User, Navigation, Clock, Star } from './Icons';
+import { MapPin, Phone, MessageCircle, User, Navigation, Clock, Star, Users, AlertCircle, RefreshCw } from './Icons';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Progress } from './ui/progress';
 import GoogleMapView from './GoogleMapView';
 import type { UserProfile, Location, Destination, Pool } from '../contexts/GlobalContext';
+import { usePoolRealtime } from '../hooks/usePoolRealtime';
 
 type TripProgressProps = {
   userProfile: UserProfile | null;
@@ -21,6 +22,18 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   const [progress, setProgress] = useState(15);
   const [tripStatus, setTripStatus] = useState<'waiting' | 'on-the-way' | 'arrived' | 'in-progress' | 'completed'>('waiting');
   const [driverPosition, setDriverPosition] = useState<{ latitude: number; longitude: number } | null>(null);
+  
+  // Use real-time pool updates
+  const {
+    pool: poolDetails,
+    coRiders,
+    hasDriver,
+    poolStatus,
+    loading: loadingPool,
+    error: poolError,
+    lastUpdated,
+    refresh: refreshPool,
+  } = usePoolRealtime(selectedPool?.id || null, userProfile?.id || null);
   
   const isFemale = userProfile?.gender === 'female';
   const accentColor = isFemale ? 'pink' : 'blue';
@@ -38,23 +51,21 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
     ? { latitude: destination.latitude, longitude: destination.longitude }
     : { latitude: 23.82, longitude: 90.43 };
 
-  // Driver info - use pool data if available
+  // Driver info - use real pool data if available
   const driver = {
-    name: selectedPool?.driverName || 'Ahmed Khan',
-    initial: selectedPool?.photo || 'A',
-    rating: selectedPool?.rating || 4.8,
-    trips: 1250,
-    vehicle: selectedPool?.carModel || 'Toyota Corolla',
-    plateNumber: selectedPool?.licensePlate || 'DHA-1234',
+    name: poolDetails?.driver?.id ? 'Driver' : (selectedPool?.driverName || 'Waiting for driver...'),
+    initial: poolDetails?.driver?.id?.charAt(0).toUpperCase() || selectedPool?.photo || 'D',
+    rating: poolDetails?.driver?.average_rating || selectedPool?.rating || 0,
+    trips: 0,
+    vehicle: poolDetails?.vehicles?.model || selectedPool?.carModel || selectedPool?.vehicle_type || 'N/A',
+    plateNumber: poolDetails?.vehicles?.vehicle_number || selectedPool?.licensePlate || 'N/A',
     eta: `${selectedPool?.eta || 5} mins`,
-    phone: '+880 1711-123456'
+    phone: ''
   };
 
-  // Co-riders
-  const coRiders = [
-    { name: 'Fatima Ali', initial: 'F' },
-    { name: 'Sarah Ahmed', initial: 'S' },
-  ];
+  // Pool status info
+  const currentPassengers = poolDetails?.current_passengers || selectedPool?.current_passengers || 1;
+  const maxPassengers = poolDetails?.max_passengers || selectedPool?.max_passengers || 4;
 
   // Initialize driver position between pickup and destination
   useEffect(() => {
@@ -205,51 +216,138 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
         <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
           <Text className="font-semibold mb-4">Your Driver</Text>
           
-          <View className="flex-row items-center gap-4">
-            <View className="w-16 h-16 rounded-full items-center justify-center bg-gray-300 border-2 border-white shadow-md">
-              <Text className="text-gray-800 text-xl font-semibold">{driver.initial}</Text>
-            </View>
-            
-            <View className="flex-1">
-              <Text className="text-lg font-semibold">{driver.name}</Text>
-              <View className="flex-row items-center gap-2 mt-1">
-                <Star className="w-4 h-4" color="#eab308" />
-                <Text className="text-sm text-gray-600">{driver.rating} • {driver.trips} trips</Text>
+          {hasDriver ? (
+            <View className="flex-row items-center gap-4">
+              <View className={`w-16 h-16 rounded-full items-center justify-center ${isFemale ? 'bg-pink-100' : 'bg-blue-100'} border-2 border-white shadow-md`}>
+                <Text className={`${isFemale ? 'text-pink-800' : 'text-blue-800'} text-xl font-semibold`}>{driver.initial}</Text>
               </View>
-              <Text className="text-sm text-gray-500 mt-1">{driver.vehicle} • {driver.plateNumber}</Text>
-            </View>
+              
+              <View className="flex-1">
+                <Text className="text-lg font-semibold">{driver.name}</Text>
+                <View className="flex-row items-center gap-2 mt-1">
+                  <Star className="w-4 h-4" color="#eab308" />
+                  <Text className="text-sm text-gray-600">
+                    {driver.rating > 0 ? driver.rating.toFixed(1) : 'New'}
+                  </Text>
+                </View>
+                <Text className="text-sm text-gray-500 mt-1">{driver.vehicle} • {driver.plateNumber}</Text>
+              </View>
 
-            <View className="flex-row gap-2">
-              <TouchableOpacity className={`w-12 h-12 rounded-full ${accentBg} items-center justify-center`}>
-                <Phone className="w-5 h-5" color="white" />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                className="w-12 h-12 rounded-full bg-gray-100 items-center justify-center"
-                onPress={onChatDriver}
-              >
-                <MessageCircle className="w-5 h-5" color="#4b5563" />
+              <View className="flex-row gap-2">
+                <TouchableOpacity className={`w-12 h-12 rounded-full ${accentBg} items-center justify-center`}>
+                  <Phone className="w-5 h-5" color="white" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  className="w-12 h-12 rounded-full bg-gray-100 items-center justify-center"
+                  onPress={onChatDriver}
+                >
+                  <MessageCircle className="w-5 h-5" color="#4b5563" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View className="items-center py-4">
+              <View className="w-16 h-16 rounded-full items-center justify-center bg-gray-200 mb-3">
+                <User className="w-8 h-8 text-gray-400" />
+              </View>
+              <Text className="text-gray-600 font-medium">Waiting for driver...</Text>
+              <Text className="text-gray-400 text-sm text-center mt-1">
+                A driver will be assigned once the pool is ready
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Pool Status Card */}
+        <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
+          <View className="flex-row items-center justify-between mb-4">
+            <View className="flex-row items-center gap-2">
+              <Text className="font-semibold">Pool Status</Text>
+              <View className="w-2 h-2 rounded-full bg-green-500" />
+              <Text className="text-xs text-green-600">Live</Text>
+            </View>
+            <View className="flex-row items-center gap-2">
+              {loadingPool && <ActivityIndicator size="small" color="#2563eb" />}
+              <TouchableOpacity onPress={refreshPool} className="p-2">
+                <RefreshCw className="w-4 h-4 text-gray-500" />
               </TouchableOpacity>
             </View>
           </View>
+          
+          {poolError ? (
+            <View className="flex-row items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-red-500" />
+              <Text className="text-red-500 text-sm">{poolError}</Text>
+            </View>
+          ) : (
+            <View className="gap-3">
+              <View className="flex-row justify-between">
+                <Text className="text-gray-600">Status</Text>
+                <View className={`px-2 py-1 rounded ${hasDriver ? 'bg-green-100' : 'bg-yellow-100'}`}>
+                  <Text className={`text-xs font-medium ${hasDriver ? 'text-green-700' : 'text-yellow-700'}`}>
+                    {poolStatus.replace(/_/g, ' ')}
+                  </Text>
+                </View>
+              </View>
+              <View className="flex-row justify-between">
+                <Text className="text-gray-600">Passengers</Text>
+                <View className="flex-row items-center gap-2">
+                  <Users className="w-4 h-4 text-gray-600" />
+                  <Text className="font-medium">{currentPassengers}/{maxPassengers}</Text>
+                </View>
+              </View>
+              <View className="flex-row justify-between">
+                <Text className="text-gray-600">Driver</Text>
+                <Text className={`font-medium ${hasDriver ? 'text-green-600' : 'text-yellow-600'}`}>
+                  {hasDriver ? 'Assigned' : 'Waiting for driver...'}
+                </Text>
+              </View>
+              {lastUpdated && (
+                <Text className="text-xs text-gray-400 text-right">
+                  Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </Text>
+              )}
+            </View>
+          )}
         </View>
 
         {/* Co-Riders Card */}
-        {coRiders.length > 0 && (
-          <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
-            <Text className="font-semibold mb-4">Co-Riders ({coRiders.length})</Text>
-            
+        <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
+          <Text className="font-semibold mb-4">
+            Co-Riders {coRiders.length > 0 ? `(${coRiders.length})` : ''}
+          </Text>
+          
+          {loadingPool ? (
+            <View className="items-center py-4">
+              <ActivityIndicator size="small" color="#2563eb" />
+              <Text className="text-gray-500 text-sm mt-2">Loading co-riders...</Text>
+            </View>
+          ) : coRiders.length > 0 ? (
             <View className="gap-3">
               {coRiders.map((rider, index) => (
-                <View key={index} className="flex-row items-center gap-3">
-                  <View className="w-10 h-10 rounded-full items-center justify-center bg-gray-300 border-2 border-white">
-                    <Text className="text-gray-800 font-semibold">{rider.initial}</Text>
+                <View key={rider.userId || index} className="flex-row items-center gap-3">
+                  <View className={`w-10 h-10 rounded-full items-center justify-center ${isFemale ? 'bg-pink-100' : 'bg-blue-100'} border-2 border-white`}>
+                    <Text className={`${isFemale ? 'text-pink-800' : 'text-blue-800'} font-semibold`}>{rider.initial}</Text>
                   </View>
-                  <Text className="text-gray-800">{rider.name}</Text>
+                  <View className="flex-1">
+                    <Text className="text-gray-800 font-medium">{rider.name}</Text>
+                    <Text className="text-xs text-gray-500">
+                      Joined {new Date(rider.joinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
                 </View>
               ))}
             </View>
-          </View>
-        )}
+          ) : (
+            <View className="items-center py-4">
+              <Users className="w-8 h-8 text-gray-300 mb-2" />
+              <Text className="text-gray-500 text-center">No other riders yet</Text>
+              <Text className="text-gray-400 text-xs text-center mt-1">
+                Waiting for more riders to join...
+              </Text>
+            </View>
+          )}
+        </View>
 
         {/* Route Info */}
         <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
@@ -286,23 +384,25 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
           
           <View className="gap-3">
             <View className="flex-row justify-between">
-              <Text className="text-gray-600">Distance</Text>
-              <Text className="font-medium">12.5 km</Text>
+              <Text className="text-gray-600">Vehicle Type</Text>
+              <Text className="font-medium">{poolDetails?.vehicle_type || selectedPool?.vehicle_type || 'N/A'}</Text>
             </View>
             <View className="flex-row justify-between">
               <Text className="text-gray-600">Estimated Time</Text>
-              <Text className="font-medium">25 mins</Text>
+              <Text className="font-medium">{selectedPool?.eta || '~'} mins</Text>
             </View>
             <View className="flex-row justify-between">
-              <Text className="text-gray-600">Fare</Text>
-              <Text className={`font-semibold ${accentText}`}>৳ {selectedPool ? 185 - (selectedPool.savings || 0) : 180}</Text>
+              <Text className="text-gray-600">Fare per Person</Text>
+              <Text className={`font-semibold ${accentText}`}>
+                ৳ {poolDetails?.fare_per_person || selectedPool?.fare_per_person || 'Calculating...'}
+              </Text>
             </View>
-            {selectedPool?.savings && (
-              <View className="flex-row justify-between">
-                <Text className="text-green-600">You save</Text>
-                <Text className="font-semibold text-green-600">৳ {selectedPool.savings}</Text>
-              </View>
-            )}
+            <View className="flex-row justify-between">
+              <Text className="text-gray-600">Destination</Text>
+              <Text className="font-medium text-right flex-1 ml-4" numberOfLines={1}>
+                {poolDetails?.destination_address || selectedPool?.destination_address || destination?.name || 'N/A'}
+              </Text>
+            </View>
           </View>
         </View>
 

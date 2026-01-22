@@ -4,7 +4,7 @@ import { MapPin, Phone, MessageSquare, Clock } from './Icons';
 import { Navigation } from './Icons';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
-import type { Pool } from '../App';
+import type { Pool } from '../types';
 
 type DriverMatchedProps = {
   pool: Pool | null;
@@ -59,17 +59,17 @@ export default function DriverMatched({ pool, onStartRide, onChatDriver }: Drive
             <View className="flex-row items-center gap-4">
               <Avatar className="w-16 h-16 border-2 border-blue-200">
                 <AvatarFallback className="bg-blue-500">
-                  <Text className="text-white text-xl font-semibold">{pool.photo}</Text>
+                  <Text className="text-white text-xl font-semibold">{pool.driver?.id?.charAt(0).toUpperCase() || 'D'}</Text>
                 </AvatarFallback>
               </Avatar>
               
               <View className="gap-1">
-                <Text className="text-xl font-semibold">{pool.driverName}</Text>
+                <Text className="text-xl font-semibold">Driver</Text>
                 <View className="flex-row items-center gap-1">
-                  <Text className="text-sm text-gray-600">⭐ {pool.rating}</Text>
+                  <Text className="text-sm text-gray-600">⭐ {pool.driver?.average_rating?.toFixed(1) || 'N/A'}</Text>
                 </View>
-                <Text className="text-sm text-gray-600">{pool.carModel}</Text>
-                <Text className="text-sm text-gray-500">{pool.licensePlate}</Text>
+                <Text className="text-sm text-gray-600">{pool.vehicles?.model || pool.vehicle_type}</Text>
+                <Text className="text-sm text-gray-500">{pool.vehicles?.vehicle_number || ''}</Text>
               </View>
             </View>
 
@@ -93,8 +93,8 @@ export default function DriverMatched({ pool, onStartRide, onChatDriver }: Drive
             <View className="flex-row items-start gap-3">
               <MapPin size={20} color="#2563eb" />
               <View className="flex-1">
-                <Text className="text-sm text-gray-600">Pickup Location</Text>
-                <Text className="font-medium">Meet at the corner of Northend Coffee</Text>
+                <Text className="text-sm text-gray-600">Destination</Text>
+                <Text className="font-medium">{pool.destination_address || 'Destination'}</Text>
               </View>
             </View>
           </View>
@@ -103,11 +103,11 @@ export default function DriverMatched({ pool, onStartRide, onChatDriver }: Drive
           <View className="border-t border-gray-200 pt-4 gap-3">
             <View className="flex-row items-center justify-between">
               <Text className="text-sm text-gray-600">Seats in pool</Text>
-              <Text className="text-sm font-semibold">{pool.seatsLeft} available</Text>
+              <Text className="text-sm font-semibold">{pool.max_passengers - pool.current_passengers} available</Text>
             </View>
             <View className="flex-row items-center justify-between">
-              <Text className="text-sm text-gray-600">Your savings</Text>
-              <Text className="text-sm font-semibold text-green-600">{pool.savings} taka</Text>
+              <Text className="text-sm text-gray-600">Fare per person</Text>
+              <Text className="text-sm font-semibold text-green-600">{pool.fare_per_person || 'TBD'} taka</Text>
             </View>
           </View>
         </View>

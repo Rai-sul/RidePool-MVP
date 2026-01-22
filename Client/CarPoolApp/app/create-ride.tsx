@@ -19,9 +19,9 @@ export default function CreateRideScreen() {
   const [pickupLng, setPickupLng] = useState('');
   const [dropoffLat, setDropoffLat] = useState('');
   const [dropoffLng, setDropoffLng] = useState('');
-  const [pickupTime, setPickupTime] = useState('');
+  const [vehicleType, setVehicleType] = useState<'CAR' | 'CNG'>('CAR');
 
-  const { createRide, loading } = useRides();
+  const { requestRide, loading } = useRides();
   const { location } = useLocation();
   const router = useRouter();
 
@@ -44,18 +44,14 @@ export default function CreateRideScreen() {
       return;
     }
 
-    const result = await createRide({
-      pickup_location: {
-        latitude: pickup_lat,
-        longitude: pickup_lng,
-        address: pickupAddress,
-      },
-      dropoff_location: {
-        latitude: dropoff_lat,
-        longitude: dropoff_lng,
-        address: dropoffAddress,
-      },
-      pickup_time: pickupTime || undefined,
+    const result = await requestRide({
+      pickup_lat,
+      pickup_lng,
+      pickup_address: pickupAddress || undefined,
+      dropoff_lat,
+      dropoff_lng,
+      dropoff_address: dropoffAddress || undefined,
+      vehicle_type: vehicleType,
     });
 
     if (result.success) {
@@ -134,13 +130,21 @@ export default function CreateRideScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Pickup Time (Optional)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="YYYY-MM-DD HH:MM:SS"
-            value={pickupTime}
-            onChangeText={setPickupTime}
-          />
+          <Text style={styles.sectionTitle}>Vehicle Type</Text>
+          <View style={styles.vehicleTypeRow}>
+            <TouchableOpacity
+              style={[styles.vehicleTypeButton, vehicleType === 'CAR' && styles.vehicleTypeButtonActive]}
+              onPress={() => setVehicleType('CAR')}
+            >
+              <Text style={[styles.vehicleTypeText, vehicleType === 'CAR' && styles.vehicleTypeTextActive]}>Car</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.vehicleTypeButton, vehicleType === 'CNG' && styles.vehicleTypeButtonActive]}
+              onPress={() => setVehicleType('CNG')}
+            >
+              <Text style={[styles.vehicleTypeText, vehicleType === 'CNG' && styles.vehicleTypeTextActive]}>CNG</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <TouchableOpacity
@@ -242,5 +246,32 @@ const styles = StyleSheet.create({
   infoText: {
     color: '#1976D2',
     fontSize: 12,
+  },
+  vehicleTypeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  vehicleTypeButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    alignItems: 'center',
+    marginHorizontal: 5,
+    backgroundColor: '#fff',
+  },
+  vehicleTypeButtonActive: {
+    borderColor: '#2196F3',
+    backgroundColor: '#e3f2fd',
+  },
+  vehicleTypeText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#666',
+  },
+  vehicleTypeTextActive: {
+    color: '#2196F3',
+    fontWeight: '600',
   },
 });

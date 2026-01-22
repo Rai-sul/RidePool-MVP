@@ -34,7 +34,7 @@ const mockPools: Pool[] = [
     carModel: 'Black Honda Civic',
     licensePlate: 'DHK METRO GA-12-36-36',
     photo: 'R',
-    vehicleType: 'car'
+    vehicle_type: 'car'
   },
   {
     id: '2',
@@ -47,7 +47,7 @@ const mockPools: Pool[] = [
     carModel: 'White Toyota Corolla',
     licensePlate: 'DHK METRO HA-45-12-89',
     photo: 'F',
-    vehicleType: 'car'
+    vehicle_type: 'car'
   },
   {
     id: '3',
@@ -60,7 +60,7 @@ const mockPools: Pool[] = [
     carModel: 'Silver Honda City',
     licensePlate: 'DHK METRO BA-78-23-45',
     photo: 'A',
-    vehicleType: 'cng'
+    vehicle_type: 'cng'
   },
   {
     id: '4',
@@ -73,7 +73,7 @@ const mockPools: Pool[] = [
     carModel: 'Red Toyota Yaris',
     licensePlate: 'DHK METRO CA-56-78-90',
     photo: 'A',
-    vehicleType: 'car'
+    vehicle_type: 'car'
   },
   {
     id: '5',
@@ -86,7 +86,7 @@ const mockPools: Pool[] = [
     carModel: 'Green CNG Auto',
     licensePlate: 'DHK METRO DA-23-45-67',
     photo: 'N',
-    vehicleType: 'cng'
+    vehicle_type: 'cng'
   },
   {
     id: '6',
@@ -99,7 +99,7 @@ const mockPools: Pool[] = [
     carModel: 'Yellow CNG Auto',
     licensePlate: 'DHK METRO EA-11-22-33',
     photo: 'K',
-    vehicleType: 'cng'
+    vehicle_type: 'cng'
   },
 ];
 
@@ -175,7 +175,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
     
     // Then filter by vehicle type if selected
     if (selectedVehicleType) {
-      pools = pools.filter(p => p.vehicleType === selectedVehicleType);
+      pools = pools.filter(p => p.vehicle_type === selectedVehicleType);
     }
     
     return pools;

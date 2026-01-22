@@ -4,11 +4,11 @@ import { Star, X } from './Icons';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback } from './ui/avatar';
-import type { Pool, UserProfile } from '../App';
+import type { Pool, User } from '../types';
 
 type RateReviewProps = {
   pool: Pool | null;
-  userProfile: UserProfile | null;
+  userProfile: User | null;
   onComplete: () => void;
 };
 
@@ -48,12 +48,12 @@ export default function RateReview({ pool, userProfile, onComplete }: RateReview
         <View className="flex flex-col items-center gap-3">
           <Avatar className="w-20 h-20 border-2 border-blue-200">
             <AvatarFallback className="bg-gradient-to-br from-blue-500 to-cyan-400 text-white text-2xl">
-              {pool.photo}
+              {pool.driver?.id?.charAt(0).toUpperCase() || 'D'}
             </AvatarFallback>
           </Avatar>
           <View className="items-center">
-            <Text className="text-lg">How was your trip with {pool.driverName}?</Text>
-            <Text className="text-sm text-gray-500">{pool.carModel}</Text>
+            <Text className="text-lg">How was your trip?</Text>
+            <Text className="text-sm text-gray-500">{pool.vehicles?.model || pool.vehicle_type}</Text>
           </View>
         </View>
 

@@ -1,5 +1,6 @@
 import { createContext, useState, useContext, useEffect } from 'react';
 import { useAuthContext } from './AuthContext';
+import { Pool as ApiPool, PoolStatus, VehicleType, GenderPreference } from '../types';
 
 export type UserProfile = {
   firstName: string;
@@ -11,19 +12,35 @@ export type UserProfile = {
   id?: string;
 };
 
-export type Pool = {
-  id: string;
-  driverName: string;
-  seatsLeft: number;
-  savings: number;
-  eta: number;
-  walkDistance: number;
-  rating: number;
-  carModel: string;
-  licensePlate: string;
-  photo: string;
-  vehicleType: 'car' | 'cng';
+// Extended Pool type for UI display (includes both API data and display helpers)
+export type Pool = ApiPool & {
+  // Display-friendly computed properties (optional, for UI convenience)
+  driverName?: string;
+  seatsLeft?: number;
+  savings?: number;
+  eta?: number;
+  walkDistance?: number;
+  rating?: number;
+  carModel?: string;
+  licensePlate?: string;
+  photo?: string;
 };
+
+// Helper function to create display-friendly pool from API pool
+export function toDisplayPool(apiPool: ApiPool): Pool {
+  return {
+    ...apiPool,
+    driverName: 'Driver',
+    seatsLeft: apiPool.max_passengers - apiPool.current_passengers,
+    savings: apiPool.fare_per_person ? Math.round(apiPool.fare_per_person * 0.3) : 0,
+    eta: 5, // Will be calculated from actual route
+    walkDistance: 0,
+    rating: apiPool.driver?.average_rating || 0,
+    carModel: apiPool.vehicles?.model || apiPool.vehicle_type,
+    licensePlate: apiPool.vehicles?.vehicle_number || '',
+    photo: apiPool.driver?.id?.charAt(0).toUpperCase() || 'D',
+  };
+}
 
 export type Destination = {
   name: string;
