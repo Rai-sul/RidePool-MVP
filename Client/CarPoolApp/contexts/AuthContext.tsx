@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
+import { ApiError } from '../utils/apiClient';
 import { authService, userService } from '../services/auth.service';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { signInWithOAuth, signOut as supabaseSignOut, OAuthProvider } from '../lib/supabase';
@@ -49,7 +50,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       }
     } catch (err: any) {
-      console.error('Auth check failed:', err);
+      if (err instanceof ApiError && err.status === 401) {
+        console.log('Session expired, clearing auth state');
+      } else {
+        console.error('Auth check failed:', err);
+      }
       await AsyncStorage.removeItem('authToken');
     } finally {
       setLoading(false);

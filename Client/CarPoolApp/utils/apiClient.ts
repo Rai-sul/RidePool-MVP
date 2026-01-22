@@ -207,7 +207,11 @@ class ApiClient {
       return data;
     } catch (error: any) {
       clearTimeout(timeoutId);
-      console.error(`[ApiClient] Request failed:`, error.message || error);
+      
+      // Don't log expected auth errors as system errors
+      if (!(error instanceof ApiError && error.status === 401)) {
+        console.error(`[ApiClient] Request failed:`, error.message || error);
+      }
 
       if (error.name === 'AbortError') {
         console.error('[ApiClient] Request timed out');
