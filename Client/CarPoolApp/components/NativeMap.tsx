@@ -8,14 +8,14 @@ const isExpoGo = Constants.appOwnership === 'expo';
 
 let NativeMapView: any = null;
 let NativeMarker: any = null;
-let PROVIDER_DEFAULT: any = null;
+let PROVIDER_GOOGLE: any = null;
 
 if (!isExpoGo) {
   try {
     const RNMaps = require('react-native-maps');
     NativeMapView = RNMaps.default;
     NativeMarker = RNMaps.Marker;
-    PROVIDER_DEFAULT = RNMaps.PROVIDER_DEFAULT;
+    PROVIDER_GOOGLE = RNMaps.PROVIDER_GOOGLE;
   } catch (e) {
     console.log('react-native-maps not available');
   }
@@ -84,7 +84,7 @@ export default function NativeMap({ style, showUserLocation = true }: NativeMapP
     <View style={[styles.container, style]}>
       <NativeMapView
         style={styles.map}
-        provider={PROVIDER_DEFAULT}
+        provider={PROVIDER_GOOGLE}
         initialRegion={{
           latitude: location.latitude,
           longitude: location.longitude,
@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   map: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
   },
   loading: {
     justifyContent: 'center',

@@ -49,10 +49,11 @@
     "plugins": [
       "expo-router",
       [
-        "react-native-maps",
+        "expo-build-properties",
         {
-          "androidGoogleMapsApiKey": "AIzaSyBIuA5jCeQ_S6DnAPdvFiJGtYEpliOT6Xc",
-          "iosGoogleMapsApiKey": "AIzaSyBIuA5jCeQ_S6DnAPdvFiJGtYEpliOT6Xc"
+          "android": {
+            "extraMavenRepos": ["https://maven.google.com"]
+          }
         }
       ],
       [
@@ -74,7 +75,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/CarPoolLogo.jpg",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",

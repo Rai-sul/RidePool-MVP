@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Dimensions, Text } from 'react-native';
+import { View, StyleSheet, Text } from 'react-native';
 import Constants from 'expo-constants';
 import { getH3Boundary } from '../utils/h3Utils';
 import StaticMapView from './StaticMapView';
@@ -9,7 +9,7 @@ const isExpoGo = Constants.appOwnership === 'expo';
 let NativeMapView: any = null;
 let NativeMarker: any = null;
 let NativePolyline: any = null;
-let PROVIDER_DEFAULT: any = null;
+let PROVIDER_GOOGLE: any = null;
 
 if (!isExpoGo) {
   try {
@@ -17,7 +17,7 @@ if (!isExpoGo) {
     NativeMapView = RNMaps.default;
     NativeMarker = RNMaps.Marker;
     NativePolyline = RNMaps.Polyline;
-    PROVIDER_DEFAULT = RNMaps.PROVIDER_DEFAULT;
+    PROVIDER_GOOGLE = RNMaps.PROVIDER_GOOGLE;
   } catch (e) {
     console.log('react-native-maps not available');
   }
@@ -90,7 +90,7 @@ export const MapComponent: React.FC<MapViewProps> = ({
       <NativeMapView
         ref={mapRef}
         style={styles.map}
-        provider={PROVIDER_DEFAULT}
+        provider={PROVIDER_GOOGLE}
         initialRegion={initialRegion}
         onRegionChangeComplete={onRegionChange}
         showsUserLocation
@@ -130,8 +130,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   map: {
-    width: Dimensions.get('window').width,
-    height: Dimensions.get('window').height,
+    ...StyleSheet.absoluteFillObject,
   },
 });
 
