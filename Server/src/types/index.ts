@@ -494,6 +494,9 @@ export interface CreateRideRequest {
 }
 
 export interface CreatePoolRequest {
+  pickup_lat: number;
+  pickup_lng: number;
+  pickup_address?: string;
   destination_lat: number;
   destination_lng: number;
   destination_address?: string;

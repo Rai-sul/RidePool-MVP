@@ -198,9 +198,17 @@ export class PoolMatchingService {
         }
 
         // Check gender restriction compatibility
+        // 1. FEMALE_ONLY pool can only be joined by FEMALE_ONLY users
+        // 2. FEMALE_ONLY users should only see FEMALE_ONLY pools (they want female-only environment)
         if (
           pool.gender_restriction === "FEMALE_ONLY" &&
           ride.gender_restriction !== "FEMALE_ONLY"
+        ) {
+          continue;
+        }
+        if (
+          ride.gender_restriction === "FEMALE_ONLY" &&
+          pool.gender_restriction !== "FEMALE_ONLY"
         ) {
           continue;
         }
@@ -475,8 +483,14 @@ export class PoolMatchingService {
           continue;
         }
 
-        // Check gender restriction
+        // Check gender restriction compatibility
+        // 1. FEMALE_ONLY pool can only be joined by FEMALE_ONLY users
+        // 2. FEMALE_ONLY users should only see FEMALE_ONLY pools (they want female-only environment)
         if (pool.gender_restriction === "FEMALE_ONLY" && ride.gender_restriction !== "FEMALE_ONLY") {
+          incompatibleReasons['gender_restriction']++;
+          continue;
+        }
+        if (ride.gender_restriction === "FEMALE_ONLY" && pool.gender_restriction !== "FEMALE_ONLY") {
           incompatibleReasons['gender_restriction']++;
           continue;
         }
@@ -741,7 +755,9 @@ export class PoolMatchingService {
       };
     }
 
-    // Check 2: Gender restriction
+    // Check 2: Gender restriction compatibility
+    // 1. FEMALE_ONLY pool can only be joined by FEMALE_ONLY users
+    // 2. FEMALE_ONLY users should only see FEMALE_ONLY pools
     if (
       pool.gender_restriction === "FEMALE_ONLY" &&
       ride.gender_restriction !== "FEMALE_ONLY"
@@ -749,6 +765,15 @@ export class PoolMatchingService {
       return {
         compatible: false,
         reason: "Pool has female-only restriction",
+      };
+    }
+    if (
+      ride.gender_restriction === "FEMALE_ONLY" &&
+      pool.gender_restriction !== "FEMALE_ONLY"
+    ) {
+      return {
+        compatible: false,
+        reason: "User requires female-only pool",
       };
     }
 

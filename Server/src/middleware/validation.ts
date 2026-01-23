@@ -42,6 +42,9 @@ export const CreateRideSchema = z.object({
 });
 
 export const CreatePoolSchema = z.object({
+  pickup_lat: z.number().min(-90).max(90),
+  pickup_lng: z.number().min(-180).max(180),
+  pickup_address: z.string().max(500).optional(),
   destination_lat: z.number().min(-90).max(90),
   destination_lng: z.number().min(-180).max(180),
   destination_address: z.string().max(500).optional(),
@@ -93,6 +96,7 @@ export const SearchPoolsSchema = z.object({
   dropoff_lat: z.string().transform((val) => parseFloat(val)).pipe(z.number().min(-90).max(90)),
   dropoff_lng: z.string().transform((val) => parseFloat(val)).pipe(z.number().min(-180).max(180)),
   vehicle_type: VehicleTypeEnum,
+  gender_restriction: GenderPreferenceEnum.optional().default('ANY'),
 });
 
 export const ProcessPaymentSchema = z.object({

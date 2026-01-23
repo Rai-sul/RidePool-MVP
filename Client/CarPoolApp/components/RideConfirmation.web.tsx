@@ -103,13 +103,16 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
   
   // Handle creating a new pool when no matches found
   const handleCreatePool = useCallback(async () => {
-    if (!destination?.latitude || !destination?.longitude || !selectedVehicleType) {
+    if (!pickupLocation?.latitude || !pickupLocation?.longitude || !destination?.latitude || !destination?.longitude || !selectedVehicleType) {
       return;
     }
     
     setIsCreatingPool(true);
     try {
       const result = await createPool({
+        pickup_lat: pickupLocation.latitude,
+        pickup_lng: pickupLocation.longitude,
+        pickup_address: pickupLocation.address || pickupLocation.name,
         destination_lat: destination.latitude,
         destination_lng: destination.longitude,
         destination_address: destination.address || destination.name,
@@ -127,7 +130,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
     } finally {
       setIsCreatingPool(false);
     }
-  }, [destination, selectedVehicleType, isFemale, activeRideType, createPool, onPoolSelect]);
+  }, [pickupLocation, destination, selectedVehicleType, isFemale, activeRideType, createPool, onPoolSelect]);
   
   // Delay showing the confirm button to prevent touch event overlap
   useEffect(() => {

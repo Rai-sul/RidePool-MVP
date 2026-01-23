@@ -3,6 +3,9 @@ import { API_ENDPOINTS } from '../config/api.config';
 import { ApiResponse, Pool, VehicleType, GenderPreference } from '../types';
 
 export interface CreatePoolRequest {
+  pickup_lat: number;
+  pickup_lng: number;
+  pickup_address?: string;
   destination_lat: number;
   destination_lng: number;
   destination_address?: string;

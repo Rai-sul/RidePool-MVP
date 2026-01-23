@@ -25,7 +25,7 @@ export class PoolController {
         });
       }
 
-      const { pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, vehicle_type } = req.query;
+      const { pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, vehicle_type, gender_restriction } = req.query;
 
       if (!pickup_lat || !pickup_lng || !dropoff_lat || !dropoff_lng || !vehicle_type) {
         return res.status(400).json({
@@ -42,7 +42,7 @@ export class PoolController {
         dropoff_lat: parseFloat(dropoff_lat as string),
         dropoff_lng: parseFloat(dropoff_lng as string),
         vehicle_type: vehicle_type as any,
-        gender_restriction: 'ANY',
+        gender_restriction: (gender_restriction as string) || 'ANY',
         status: 'CREATING_POOL',
       } as Ride;
 
@@ -91,12 +91,40 @@ export class PoolController {
 
       const poolData: CreatePoolRequest = req.body;
 
+      const pickup = {
+        latitude: poolData.pickup_lat,
+        longitude: poolData.pickup_lng,
+      };
+
       const destination = {
         latitude: poolData.destination_lat,
         longitude: poolData.destination_lng,
       };
 
       const destinationH3 = h3Utils.latLngToH3(destination, 7);
+      const pickupH3 = h3Utils.latLngToH3(pickup, 9);
+
+      // Calculate initial fare based on pickup to destination
+      // This ensures consistent pricing for all pool members with same route
+      const rideEstimate = await rideEstimationService.getRideEstimate(
+        pickup,
+        destination,
+        poolData.vehicle_type as VehicleType,
+        2 // Initial estimate for 2 passengers
+      );
+
+      // Store pickup info in score_breakdown for reference
+      const scoreBreakdown = {
+        creator_pickup: {
+          lat: poolData.pickup_lat,
+          lng: poolData.pickup_lng,
+          address: poolData.pickup_address,
+          h3_index: pickupH3,
+        },
+        base_distance_km: rideEstimate.distanceKm,
+        base_duration_minutes: rideEstimate.durationMinutes,
+        calculated_at: new Date().toISOString(),
+      };
 
       const { data: pool, error } = await supabaseAdmin
         .from('pools')
@@ -111,6 +139,8 @@ export class PoolController {
           gender_restriction: poolData.gender_restriction || 'ANY',
           current_passengers: 1,
           status: 'WAITING_FOR_RIDERS' as PoolStatus,
+          fare_per_person: rideEstimate.fareEstimates.with2Passengers,
+          score_breakdown: scoreBreakdown,
         })
         .select()
         .single();
