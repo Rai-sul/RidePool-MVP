@@ -11,7 +11,7 @@ import { CreatePoolRequest, Pool, PoolStatus, Ride, RideStatus, Location, Vehicl
 import { h3Utils } from '../utils/h3.utils';
 import { logger } from '../utils/logger';
 
-const LOOKUP_TIME_MS = parseInt(process.env.LOOKUP_TIME_MS || '30000', 10);
+const LOOKUP_TIME_MS = parseInt(process.env.LOOKUP_TIME_MS || '300000', 10); // 5 minutes default
 
 export class PoolController {
   async searchPools(req: AuthRequest, res: Response, next: NextFunction) {
@@ -46,7 +46,11 @@ export class PoolController {
         status: 'CREATING_POOL',
       } as Ride;
 
+      logger.info(`[Pool Search] User ${userId} searching with: pickup=${pickup_lat},${pickup_lng} dest=${dropoff_lat},${dropoff_lng} vehicle=${vehicle_type} gender=${gender_restriction || 'ANY'}`);
+
       const searchResult = await poolMatchingService.findMatchingPoolsEnhanced(mockRide as Ride, userId);
+
+      logger.info(`[Pool Search] Found ${searchResult.matches.length} matches, hasMatches=${searchResult.hasMatches}`);
 
       res.json({
         success: true,
@@ -103,6 +107,8 @@ export class PoolController {
 
       const destinationH3 = h3Utils.latLngToH3(destination, 7);
       const pickupH3 = h3Utils.latLngToH3(pickup, 9);
+
+      logger.info(`[Pool] Creating pool with destination H3: ${destinationH3}, vehicle: ${poolData.vehicle_type}, gender: ${poolData.gender_restriction || 'ANY'}`);
 
       // Calculate initial fare based on pickup to destination
       // This ensures consistent pricing for all pool members with same route

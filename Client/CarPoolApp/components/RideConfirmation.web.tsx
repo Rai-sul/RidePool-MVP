@@ -98,8 +98,9 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
       dropoff_lat: destination.latitude,
       dropoff_lng: destination.longitude,
       vehicle_type: selectedVehicleType,
+      gender_restriction: (isFemale && activeRideType === 'female-only') ? 'FEMALE_ONLY' : 'ANY',
     });
-  }, [pickupLocation, destination, selectedVehicleType]);
+  }, [pickupLocation, destination, selectedVehicleType, isFemale, activeRideType]);
   
   // Handle creating a new pool when no matches found
   const handleCreatePool = useCallback(async () => {

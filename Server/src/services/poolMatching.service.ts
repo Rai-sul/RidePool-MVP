@@ -144,7 +144,9 @@ export class PoolMatchingService {
       );
 
       // Step 5: Query database for potential pools
-      const { data: pools, error } = (await supabase
+      // Note: We filter current_passengers < max_passengers in code since Supabase doesn't support column-to-column comparison
+      // Note: We use .or() for driver_id because .neq() excludes NULL values
+      const { data: rawPools, error } = (await supabase
         .from("pools")
         .select("*")
         .eq("vehicle_type", ride.vehicle_type)
@@ -154,18 +156,47 @@ export class PoolMatchingService {
         ] as PoolStatus[])
         .in("destination_h3_index", destinationSearchHexagons)
         .neq("creator_user_id", userId)
-        .neq("driver_id", userId)
-        .gt("current_passengers", 0)
-        .lt("current_passengers", "max_passengers")) as any; // Less than max
+        .or(`driver_id.is.null,driver_id.neq.${userId}`)
+        .gt("current_passengers", 0)) as any;
 
       if (error) {
         console.error("[PoolMatching] Database query error:", error);
         throw error;
       }
 
+      // Filter pools where current_passengers < max_passengers (can't do column comparison in Supabase)
+      let pools = rawPools?.filter((pool: any) => pool.current_passengers < pool.max_passengers) || [];
+
+      // Filter pools by pickup H3 - pools should have similar pickup location
+      // The pickup H3 is stored in score_breakdown.creator_pickup.h3_index
+      // First try exact pickup area match
+      let pickupFilteredPools = pools.filter((pool: any) => {
+        const poolPickupH3 = pool.score_breakdown?.creator_pickup?.h3_index;
+        if (!poolPickupH3) {
+          return false;
+        }
+        return pickupSearchHexagons.includes(poolPickupH3);
+      });
+
+      // If no pools found, expand search to adjacent hexagons (larger ring)
+      if (pickupFilteredPools.length === 0 && pools.length > 0) {
+        console.log("[PoolMatching] No pools in pickup area, expanding to adjacent hexagons...");
+        const expandedPickupHexagons = h3Utils.getH3Ring(pickupH3, config.h3.searchRadius + 2);
+        
+        pickupFilteredPools = pools.filter((pool: any) => {
+          const poolPickupH3 = pool.score_breakdown?.creator_pickup?.h3_index;
+          if (!poolPickupH3) {
+            return false;
+          }
+          return expandedPickupHexagons.includes(poolPickupH3);
+        });
+      }
+
+      pools = pickupFilteredPools;
+
       // Step 6: Return empty if no pools found
       if (!pools || pools.length === 0) {
-        console.log("[PoolMatching] No pools found in destination search area");
+        console.log("[PoolMatching] No pools found matching pickup and destination");
         return [];
       }
 
@@ -182,20 +213,6 @@ export class PoolMatchingService {
           latitude: pool.destination_lat,
           longitude: pool.destination_lng,
         };
-
-        // Calculate distance from rider's pickup to pool's destination area
-        // Pools are destination-based groupings, so we check if pickup is within range
-        const riderPickupToPoolDestDistance = calculateDistance(
-          pickup.latitude,
-          pickup.longitude,
-          pool.destination_lat,
-          pool.destination_lng
-        );
-
-        // Skip if rider's pickup is too far from pool destination area
-        if (riderPickupToPoolDestDistance > CONSTANTS.PICKUP_RANGE_KM) {
-          continue;
-        }
 
         // Check gender restriction compatibility
         // 1. FEMALE_ONLY pool can only be joined by FEMALE_ONLY users
@@ -251,21 +268,14 @@ export class PoolMatchingService {
           continue;
         }
 
-        // Check hexagon matches
-        const pickupHexMatch = pickupH3 === pool.pickup_h3_index;
+        // Check hexagon matches (pools don't have pickup_h3_index, so only check destination)
+        const pickupHexMatch = false; // Pools are destination-based, no pickup H3 stored
         const destinationHexMatch = destinationH3 === poolDestinationH3;
 
-        // Calculate distance to pool pickup
-        const pickupDistanceToPoolPickup = calculateDistance(
-          pickup.latitude,
-          pickup.longitude,
-          pool.destination_lat,
-          pool.destination_lng
-        );
-
         // Calculate comprehensive match score
+        // Use destination distance for scoring since pools don't have pickup info
         const scoreResult = this.calculatePoolScore({
-          pickupDistance: pickupDistanceToPoolPickup,
+          pickupDistance: 0, // Not applicable for destination-based pools
           destinationDistance,
           routeOverlapPercentage: routeOverlap,
           pickupHexMatch,
@@ -406,24 +416,80 @@ export class PoolMatchingService {
       const pickupSearchHexagons = h3Utils.getH3Ring(pickupH3, config.h3.searchRadius);
       const destinationSearchHexagons = h3Utils.getH3Ring(destinationH3, config.h3.searchRadius);
 
+      console.log("[PoolMatching] Search params:", {
+        userId,
+        vehicleType: ride.vehicle_type,
+        genderRestriction: ride.gender_restriction,
+        pickupH3,
+        destinationH3,
+        destinationSearchHexagonsCount: destinationSearchHexagons.length,
+        destinationSearchHexagons: destinationSearchHexagons.slice(0, 5), // First 5 for brevity
+      });
+
       // Step 4: Query database for potential pools
-      const { data: pools, error } = (await supabase
+      // Note: We filter current_passengers < max_passengers in code since Supabase doesn't support column-to-column comparison
+      // Note: We use .or() for driver_id because .neq() excludes NULL values
+      const { data: rawPools, error } = (await supabase
         .from("pools")
         .select("*")
         .eq("vehicle_type", ride.vehicle_type)
         .in("status", ["WAITING_FOR_RIDERS", "WAITING_FOR_DRIVER"] as PoolStatus[])
         .in("destination_h3_index", destinationSearchHexagons)
         .neq("creator_user_id", userId)
-        .neq("driver_id", userId)
-        .gt("current_passengers", 0)
-        .lt("current_passengers", "max_passengers")) as any;
+        .or(`driver_id.is.null,driver_id.neq.${userId}`)
+        .gt("current_passengers", 0)) as any;
 
       if (error) {
         console.error("[PoolMatching] Database query error:", error);
         throw error;
       }
 
+      console.log("[PoolMatching] Raw pools from DB:", {
+        count: rawPools?.length || 0,
+        pools: rawPools?.map((p: any) => ({
+          id: p.id,
+          destination_h3_index: p.destination_h3_index,
+          current_passengers: p.current_passengers,
+          max_passengers: p.max_passengers,
+          gender_restriction: p.gender_restriction,
+          status: p.status,
+          creator_user_id: p.creator_user_id,
+        })),
+      });
+
+      // Filter pools where current_passengers < max_passengers (can't do column comparison in Supabase)
+      let pools = rawPools?.filter((pool: any) => pool.current_passengers < pool.max_passengers) || [];
+
+      // Filter pools by pickup H3 - pools should have similar pickup location
+      // The pickup H3 is stored in score_breakdown.creator_pickup.h3_index
+      // First try exact pickup area match
+      let pickupFilteredPools = pools.filter((pool: any) => {
+        const poolPickupH3 = pool.score_breakdown?.creator_pickup?.h3_index;
+        if (!poolPickupH3) {
+          return false;
+        }
+        return pickupSearchHexagons.includes(poolPickupH3);
+      });
+
+      // If no pools found, expand search to adjacent hexagons (larger ring)
+      if (pickupFilteredPools.length === 0 && pools.length > 0) {
+        console.log("[PoolMatching] No pools in pickup area, expanding to adjacent hexagons...");
+        const expandedPickupHexagons = h3Utils.getH3Ring(pickupH3, config.h3.searchRadius + 2); // Expand by 2 more rings
+        
+        pickupFilteredPools = pools.filter((pool: any) => {
+          const poolPickupH3 = pool.score_breakdown?.creator_pickup?.h3_index;
+          if (!poolPickupH3) {
+            return false;
+          }
+          return expandedPickupHexagons.includes(poolPickupH3);
+        });
+        console.log("[PoolMatching] After expanded pickup search:", { count: pickupFilteredPools.length });
+      }
+
+      pools = pickupFilteredPools;
       const totalPoolsChecked = pools?.length || 0;
+
+      console.log("[PoolMatching] After capacity and pickup filter:", { count: pools.length });
 
       // Step 5: Handle no pools found scenario
       if (!pools || pools.length === 0) {
@@ -470,19 +536,6 @@ export class PoolMatchingService {
           longitude: pool.destination_lng,
         };
 
-        // Calculate pickup distance
-        const pickupDistance = calculateDistance(
-          pickup.latitude,
-          pickup.longitude,
-          pool.destination_lat,
-          pool.destination_lng
-        );
-
-        if (pickupDistance > CONSTANTS.PICKUP_RANGE_KM) {
-          incompatibleReasons['pickup_too_far']++;
-          continue;
-        }
-
         // Check gender restriction compatibility
         // 1. FEMALE_ONLY pool can only be joined by FEMALE_ONLY users
         // 2. FEMALE_ONLY users should only see FEMALE_ONLY pools (they want female-only environment)
@@ -528,12 +581,12 @@ export class PoolMatchingService {
           continue;
         }
 
-        // Calculate score
-        const pickupHexMatch = pickupH3 === pool.pickup_h3_index;
+        // Calculate score (pools don't have pickup_h3_index, so only check destination)
+        const pickupHexMatch = false; // Pools are destination-based, no pickup H3 stored
         const destinationHexMatch = destinationH3 === poolDestinationH3;
 
         const scoreResult = this.calculatePoolScore({
-          pickupDistance,
+          pickupDistance: 0, // Not applicable for destination-based pools
           destinationDistance,
           routeOverlapPercentage: routeOverlap,
           pickupHexMatch,
@@ -730,23 +783,23 @@ export class PoolMatchingService {
       longitude: pool.destination_lng,
     };
 
-    // Check 1: Pickup distance (hard requirement)
-    const pickupDistance = calculateDistance(
-      ridePickup.latitude,
-      ridePickup.longitude,
-      pool.destination_lat,
-      pool.destination_lng
+    // Check 1: Destination distance (pools are destination-based)
+    const destinationDistance = calculateDistance(
+      rideDestination.latitude,
+      rideDestination.longitude,
+      poolDestination.latitude,
+      poolDestination.longitude
     );
 
-    if (pickupDistance > CONSTANTS.PICKUP_RANGE_KM) {
+    if (destinationDistance > (CONSTANTS.DESTINATION_RANGE_KM || 5)) {
       return {
         compatible: false,
-        reason: `Pickup too far: ${pickupDistance.toFixed(2)}km (max: ${
-          CONSTANTS.PICKUP_RANGE_KM
+        reason: `Destination too far: ${destinationDistance.toFixed(2)}km (max: ${
+          CONSTANTS.DESTINATION_RANGE_KM || 5
         }km)`,
         details: {
-          pickupDistance,
-          destinationDistance: 0,
+          pickupDistance: 0,
+          destinationDistance,
           routeOverlapPercentage: 0,
           commonHexagonsCount: 0,
           pickupHexMatch: false,
@@ -805,8 +858,8 @@ export class PoolMatchingService {
         compatible: false,
         reason: "No route overlap detected",
         details: {
-          pickupDistance,
-          destinationDistance: 0,
+          pickupDistance: 0,
+          destinationDistance,
           routeOverlapPercentage: 0,
           commonHexagonsCount: 0,
           pickupHexMatch: false,
@@ -815,24 +868,11 @@ export class PoolMatchingService {
       };
     }
 
-    // Check 6: Destination distance
-    const destinationDistance = calculateDistance(
-      rideDestination.latitude,
-      rideDestination.longitude,
-      poolDestination.latitude,
-      poolDestination.longitude
-    );
-
-    // Check 7: H3 hexagon matching
+    // Check 6: H3 hexagon matching (pools don't have pickup H3, only destination)
     const ridePickupH3 = h3Utils.latLngToH3(ridePickup, 9);
     const rideDestinationH3 = h3Utils.latLngToH3(rideDestination, 7);
 
-    const pickupHexMatch =
-      ridePickupH3 ===
-      h3Utils.latLngToH3(
-        { latitude: pool.destination_lat, longitude: pool.destination_lng },
-        9
-      );
+    const pickupHexMatch = false; // Pools are destination-based, no pickup H3 stored
 
     const destinationHexMatch = rideDestinationH3 === pool.destination_h3_index;
 
@@ -843,7 +883,7 @@ export class PoolMatchingService {
 
     // Calculate final score
     const scoreResult = this.calculatePoolScore({
-      pickupDistance,
+      pickupDistance: 0, // Pools are destination-based, no pickup comparison
       destinationDistance,
       routeOverlapPercentage: routeOverlap,
       pickupHexMatch,
@@ -860,7 +900,7 @@ export class PoolMatchingService {
         score: scoreResult.totalScore,
         reason: `Score too low: ${scoreResult.totalScore} (min: ${minScore})`,
         details: {
-          pickupDistance,
+          pickupDistance: 0,
           destinationDistance,
           routeOverlapPercentage: Math.round(routeOverlap * 100),
           commonHexagonsCount: commonHexagons.length,
@@ -874,7 +914,7 @@ export class PoolMatchingService {
       compatible: true,
       score: scoreResult.totalScore,
       details: {
-        pickupDistance,
+        pickupDistance: 0,
         destinationDistance,
         routeOverlapPercentage: Math.round(routeOverlap * 100),
         commonHexagonsCount: commonHexagons.length,

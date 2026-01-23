@@ -38,6 +38,7 @@ export interface SearchPoolsParams {
   dropoff_lat: number;
   dropoff_lng: number;
   vehicle_type: VehicleType;
+  gender_restriction?: GenderPreference;
 }
 
 export interface PoolSearchResult {

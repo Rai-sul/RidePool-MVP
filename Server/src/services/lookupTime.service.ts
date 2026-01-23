@@ -3,7 +3,7 @@ import { PoolStatus, RideStatus } from '../types';
 import { notificationService } from './notification.service';
 import { logger } from '../utils/logger';
 
-const LOOKUP_TIME_MS = parseInt(process.env.LOOKUP_TIME_MS || '30000', 10);
+const LOOKUP_TIME_MS = parseInt(process.env.LOOKUP_TIME_MS || '300000', 10); // 5 minutes default
 const MIN_PASSENGERS_TO_START = 2;
 
 interface LookupTimer {
@@ -71,10 +71,25 @@ export class LookupTimeService {
         return;
       }
 
-      if (pool.current_passengers < MIN_PASSENGERS_TO_START) {
-        await this.cancelPool(poolId, pool.creator_user_id);
-      } else {
+      if (pool.current_passengers >= MIN_PASSENGERS_TO_START) {
+        // Pool has enough passengers, transition to waiting for driver
         await this.transitionToWaitingForDriver(poolId);
+      } else {
+        // Pool doesn't have enough passengers yet
+        // Instead of cancelling immediately, extend the timer once more
+        // If already extended, then cancel
+        logger.info(`[LookupTime] Pool ${poolId} has ${pool.current_passengers} passengers, extending lookup time`);
+        
+        // Start a new extended timer (another 5 minutes)
+        this.startLookupTimer(poolId, LOOKUP_TIME_MS);
+        
+        // Notify the creator that pool is still searching
+        await notificationService.sendPushNotification(pool.creator_user_id, {
+          title: 'Still Searching...',
+          message: 'Looking for more riders to join your pool. Extended search time.',
+          type: 'SYSTEM',
+          metadata: { poolId, currentPassengers: pool.current_passengers },
+        });
       }
     } catch (error) {
       logger.error(`[LookupTime] Error handling timeout for pool ${poolId}:`, error);
