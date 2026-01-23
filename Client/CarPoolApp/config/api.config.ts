@@ -42,6 +42,7 @@ export const API_ENDPOINTS = {
     SEARCH: '/pools/search',
     ROUTE: (poolId: string) => `/pools/${poolId}/route`,
     FARE: (poolId: string) => `/pools/${poolId}/fare`,
+    EXTEND_SEARCH: (poolId: string) => `/pools/${poolId}/extend-search`,
   },
   DRIVER: {
     GO_ONLINE: '/driver/go-online',

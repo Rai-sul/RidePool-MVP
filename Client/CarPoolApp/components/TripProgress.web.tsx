@@ -1,19 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, Phone, MessageCircle, User, Navigation, Clock, Star, Users, AlertCircle, RefreshCw, Plus } from './Icons';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native-web';
+import { MapPin, Phone, MessageCircle, User, Navigation, Clock, Star, Users, AlertCircle, RefreshCw } from './Icons';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Progress } from './ui/progress';
 import GoogleMapView from './GoogleMapView';
 import type { UserProfile, Location, Destination, Pool } from '../contexts/GlobalContext';
 import { usePoolRealtime } from '../hooks/usePoolRealtime';
-import { poolService } from '../services/pool.service';
-
-const INITIAL_LOOKUP_SECONDS = 30;
-const EXTENDED_LOOKUP_SECONDS = 10;
-
-type LookupPhase = 'initial' | 'extended' | 'no-match' | 'matched';
 
 type TripProgressProps = {
   userProfile: UserProfile | null;
@@ -22,18 +15,10 @@ type TripProgressProps = {
   selectedPool?: Pool | null;
   onComplete?: () => void;
   onChatDriver?: () => void;
-  onCreateNewPool?: () => void;
 };
 
-export default function TripProgress({ userProfile, pickupLocation, destination, selectedPool, onComplete, onChatDriver, onCreateNewPool }: TripProgressProps) {
-  const [progress, setProgress] = useState(15);
-  const [tripStatus, setTripStatus] = useState<'waiting' | 'on-the-way' | 'arrived' | 'in-progress' | 'completed'>('waiting');
-  const [driverPosition, setDriverPosition] = useState<{ latitude: number; longitude: number } | null>(null);
-  
-  // Lookup timer state
-  const [lookupPhase, setLookupPhase] = useState<LookupPhase>('initial');
-  const [remainingSeconds, setRemainingSeconds] = useState(INITIAL_LOOKUP_SECONDS);
-  const [isExtendedSearching, setIsExtendedSearching] = useState(false);
+export default function TripProgress({ userProfile, pickupLocation, destination, selectedPool, onComplete, onChatDriver }: TripProgressProps) {
+  const [tripStatus, setTripStatus] = useState<'waiting' | 'driver-assigned' | 'on-the-way' | 'arrived' | 'in-progress' | 'completed'>('waiting');
   
   // Use real-time pool updates
   const {
@@ -79,14 +64,14 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   const currentPassengers = poolDetails?.current_passengers || selectedPool?.current_passengers || 1;
   const maxPassengers = poolDetails?.max_passengers || selectedPool?.max_passengers || 4;
 
-  // Update trip status based on pool status from realtime updates
+  // Update trip status based on pool status
   useEffect(() => {
     if (poolStatus === 'WAITING_FOR_RIDERS') {
       setTripStatus('waiting');
     } else if (poolStatus === 'WAITING_FOR_DRIVER') {
       setTripStatus('waiting');
     } else if (poolStatus === 'READY_TO_START') {
-      setTripStatus('on-the-way');
+      setTripStatus('driver-assigned');
     } else if (poolStatus === 'STARTED') {
       setTripStatus('in-progress');
     } else if (poolStatus === 'COMPLETED') {
@@ -98,83 +83,20 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   const getProgress = () => {
     switch (tripStatus) {
       case 'waiting': return 15;
-      case 'on-the-way': return 35;
-      case 'arrived': return 50;
+      case 'driver-assigned': return 35;
+      case 'on-the-way': return 50;
+      case 'arrived': return 60;
       case 'in-progress': return 75;
       case 'completed': return 100;
       default: return 0;
     }
   };
 
-  useEffect(() => {
-    setProgress(getProgress());
-  }, [tripStatus]);
-
-  // Lookup timer - 30 seconds initial, then 10 seconds extended search
-  useEffect(() => {
-    // Skip if already matched (has other riders or driver)
-    if (currentPassengers > 1 || hasDriver || poolStatus === 'WAITING_FOR_DRIVER' || poolStatus === 'READY_TO_START') {
-      setLookupPhase('matched');
-      return;
-    }
-
-    // Skip if pool is cancelled or completed
-    if (poolStatus === 'CANCELLED' || poolStatus === 'COMPLETED') {
-      return;
-    }
-
-    // Only run timer during waiting phase
-    if (lookupPhase === 'no-match' || lookupPhase === 'matched') {
-      return;
-    }
-
-    const timer = setInterval(() => {
-      setRemainingSeconds((prev) => {
-        if (prev <= 1) {
-          if (lookupPhase === 'initial') {
-            // Initial 30 seconds expired - start extended search
-            setLookupPhase('extended');
-            setIsExtendedSearching(true);
-            // Trigger extended search with wider range (handled by server)
-            // Only call if pool is still accepting riders
-            if (selectedPool?.id && poolStatus === 'WAITING_FOR_RIDERS') {
-              poolService.extendPoolSearch(selectedPool.id).catch((err) => {
-                console.log('[TripProgress] Extended search skipped:', err.message);
-              });
-            }
-            return EXTENDED_LOOKUP_SECONDS;
-          } else if (lookupPhase === 'extended') {
-            // Extended 10 seconds expired - no match found
-            setLookupPhase('no-match');
-            setIsExtendedSearching(false);
-            clearInterval(timer);
-            return 0;
-          }
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [lookupPhase, currentPassengers, hasDriver, poolStatus, selectedPool?.id]);
-
-  // Watch for new riders joining
-  useEffect(() => {
-    if (currentPassengers > 1 && lookupPhase !== 'matched') {
-      setLookupPhase('matched');
-    }
-  }, [currentPassengers, lookupPhase]);
-
-  const handleCreateNewPool = useCallback(() => {
-    if (onCreateNewPool) {
-      onCreateNewPool();
-    }
-  }, [onCreateNewPool]);
-
   const getStatusText = () => {
     switch (tripStatus) {
       case 'waiting': return hasDriver ? 'Driver assigned' : 'Waiting for riders...';
-      case 'on-the-way': return 'Driver is on the way';
+      case 'driver-assigned': return 'Driver is on the way';
+      case 'on-the-way': return 'Driver arriving soon';
       case 'arrived': return 'Driver has arrived';
       case 'in-progress': return 'Trip in progress';
       case 'completed': return 'Trip completed';
@@ -182,21 +104,17 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
     }
   };
 
-  // Calculate ETA based on progress
+  // Calculate ETA based on actual data
   const getETA = () => {
     const baseEta = selectedPool?.eta || 5;
-    if (tripStatus === 'waiting' || tripStatus === 'on-the-way') {
-      return `${Math.max(1, Math.round(baseEta * (1 - progress / 40)))} mins`;
-    } else if (tripStatus === 'in-progress') {
-      const remainingProgress = 100 - progress;
-      const remainingMins = Math.max(1, Math.round(25 * remainingProgress / 50));
-      return `${remainingMins} mins`;
+    if (tripStatus === 'completed') {
+      return 'Arrived';
     }
-    return 'Arrived';
+    return `${baseEta} mins`;
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <View className="h-full w-full flex flex-col bg-gray-50">
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Google Map - Shows real locations only, no simulation */}
         <View style={{ height: 256, position: 'relative' }}>
@@ -250,70 +168,12 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
 
         {/* Progress Bar */}
         <View className="px-6 py-4 bg-white">
-          <Progress value={progress} className="h-2" />
+          <Progress value={getProgress()} className="h-2" />
           <View className="flex-row justify-between mt-2">
             <Text className="text-sm text-gray-500">Pickup</Text>
             <Text className="text-sm text-gray-500">Destination</Text>
           </View>
         </View>
-
-        {/* Lookup Timer Card - Only show during waiting phase */}
-        {(lookupPhase === 'initial' || lookupPhase === 'extended') && poolStatus === 'WAITING_FOR_RIDERS' && (
-          <View className="mx-6 mt-4 bg-blue-50 rounded-2xl p-5 border-2 border-blue-200">
-            <View className="flex-row items-center justify-between mb-3">
-              <View className="flex-row items-center gap-2">
-                <Clock className="w-5 h-5" color="#2563eb" />
-                <Text className="font-semibold text-blue-800">
-                  {lookupPhase === 'initial' ? 'Searching for Riders' : 'Extended Search'}
-                </Text>
-              </View>
-              <View className="bg-blue-600 px-3 py-1 rounded-full">
-                <Text className="text-white font-bold">{remainingSeconds}s</Text>
-              </View>
-            </View>
-            
-            <Text className="text-blue-700 text-sm">
-              {lookupPhase === 'initial' 
-                ? 'Your pool is visible to nearby users with similar routes...'
-                : 'Searching in wider area for potential riders...'}
-            </Text>
-            
-            {isExtendedSearching && (
-              <View className="flex-row items-center gap-2 mt-2">
-                <ActivityIndicator size="small" color="#2563eb" />
-                <Text className="text-blue-600 text-xs">Expanding search range...</Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* No Match Card - Show when no one joined after extended search */}
-        {lookupPhase === 'no-match' && (
-          <View className="mx-6 mt-4 bg-yellow-50 rounded-2xl p-5 border-2 border-yellow-300">
-            <View className="items-center py-4">
-              <Users className="w-12 h-12 text-yellow-600 mb-3" />
-              <Text className="text-lg font-semibold text-yellow-800 text-center">No Riders Found</Text>
-              <Text className="text-yellow-700 text-sm text-center mt-2">
-                No one joined your pool within the search time. You can try creating a new pool or wait for a driver.
-              </Text>
-              
-              <TouchableOpacity
-                onPress={handleCreateNewPool}
-                className="mt-4 bg-blue-600 rounded-xl px-6 py-3 flex-row items-center gap-2"
-                style={{
-                  shadowColor: '#2563eb',
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 8,
-                  elevation: 6,
-                }}
-              >
-                <Plus className="w-5 h-5" color="white" />
-                <Text className="text-white font-semibold">Create New Pool</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
 
         {/* Driver Card */}
         <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
@@ -533,6 +393,6 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }

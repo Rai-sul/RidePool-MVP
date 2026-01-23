@@ -14,5 +14,6 @@ router.get('/:poolId/fare', authenticate, validate(PoolIdParamSchema, 'params'),
 router.post('/:poolId/join', authenticate, validate(PoolIdParamSchema, 'params'), validate(JoinPoolSchema), (req, res, next) => poolController.joinPool(req, res, next));
 router.post('/:poolId/leave', authenticate, validate(PoolIdParamSchema, 'params'), (req, res, next) => poolController.leavePool(req, res, next));
 router.post('/:poolId/cancel', authenticate, validate(PoolIdParamSchema, 'params'), (req, res, next) => poolController.cancelPool(req, res, next));
+router.post('/:poolId/extend-search', authenticate, validate(PoolIdParamSchema, 'params'), (req, res, next) => poolController.extendSearch(req, res, next));
 
 export default router;

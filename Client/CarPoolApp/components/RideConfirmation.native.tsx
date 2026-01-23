@@ -64,8 +64,8 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
         const response = await rideService.getRideEstimate({
           pickup_lat: pickupLocation.latitude,
           pickup_lng: pickupLocation.longitude,
-          dropoff_lat: destination.latitude,
-          dropoff_lng: destination.longitude,
+          dropoff_lat: destination.latitude!,
+          dropoff_lng: destination.longitude!,
           vehicle_type: selectedVehicleType,
         });
         

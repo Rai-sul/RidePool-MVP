@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text } from 'react-native-web';
 import { MapPin, Phone, MessageSquare, Clock } from './Icons';
 import { Navigation } from './Icons';
@@ -13,17 +13,6 @@ type DriverMatchedProps = {
 };
 
 export default function DriverMatched({ pool, onStartRide, onChatDriver }: DriverMatchedProps) {
-  // Simulate ride starting after a few seconds
-  useEffect(() => {
-    if (!pool) return;
-    
-    const timeout = setTimeout(() => {
-      onStartRide();
-    }, 5000);
-
-    return () => clearTimeout(timeout);
-  }, [pool, onStartRide]);
-
   if (!pool) return null;
 
   return (

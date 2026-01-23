@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native-web';
-import { MapPin, Clock, Users, Navigation, ChevronRight, ChevronLeft, Car, Taka } from './Icons';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native-web';
+import { MapPin, Clock, Users, Navigation, ChevronRight, ChevronLeft, Car, Taka, AlertCircle, Plus } from './Icons';
 import { Button } from './ui/button';
 import GoogleMapView from './GoogleMapView';
+import LinearGradient from './LinearGradient';
 import type { Destination, UserProfile, Pool, Location } from '../contexts/GlobalContext';
+import { usePools } from '../hooks/usePools';
+import { rideService, RideEstimate, AlternativeRouteInfo } from '../services/ride.service';
 
 type RideConfirmationProps = {
   pickupLocation?: Location | null;
@@ -22,177 +25,186 @@ type PoolStop = {
   y: number;
 };
 
-const mockPools: Pool[] = [
-  {
-    id: '1',
-    driverName: 'Raisul',
-    seatsLeft: 2,
-    savings: 145,
-    eta: 5,
-    walkDistance: 150,
-    rating: 4.92,
-    carModel: 'Black Honda Civic',
-    licensePlate: 'DHK METRO GA-12-36-36',
-    photo: 'R',
-    vehicle_type: 'car'
-  },
-  {
-    id: '2',
-    driverName: 'Fatima',
-    seatsLeft: 3,
-    savings: 120,
-    eta: 8,
-    walkDistance: 200,
-    rating: 4.88,
-    carModel: 'White Toyota Corolla',
-    licensePlate: 'DHK METRO HA-45-12-89',
-    photo: 'F',
-    vehicle_type: 'car'
-  },
-  {
-    id: '3',
-    driverName: 'Ahmed',
-    seatsLeft: 1,
-    savings: 160,
-    eta: 3,
-    walkDistance: 100,
-    rating: 4.95,
-    carModel: 'Silver Honda City',
-    licensePlate: 'DHK METRO BA-78-23-45',
-    photo: 'A',
-    vehicle_type: 'cng'
-  },
-  {
-    id: '4',
-    driverName: 'Aisha',
-    seatsLeft: 2,
-    savings: 155,
-    eta: 4,
-    walkDistance: 120,
-    rating: 4.93,
-    carModel: 'Red Toyota Yaris',
-    licensePlate: 'DHK METRO CA-56-78-90',
-    photo: 'A',
-    vehicle_type: 'car'
-  },
-  {
-    id: '5',
-    driverName: 'Nadia',
-    seatsLeft: 1,
-    savings: 135,
-    eta: 6,
-    walkDistance: 180,
-    rating: 4.90,
-    carModel: 'Green CNG Auto',
-    licensePlate: 'DHK METRO DA-23-45-67',
-    photo: 'N',
-    vehicle_type: 'cng'
-  },
-  {
-    id: '6',
-    driverName: 'Karim',
-    seatsLeft: 1,
-    savings: 140,
-    eta: 7,
-    walkDistance: 190,
-    rating: 4.87,
-    carModel: 'Yellow CNG Auto',
-    licensePlate: 'DHK METRO EA-11-22-33',
-    photo: 'K',
-    vehicle_type: 'cng'
-  },
-];
-
-// Female driver names for filtering
-const femaleDrivers = ['Fatima', 'Aisha', 'Nadia'];
-
 export default function RideConfirmation({ pickupLocation, destination, userProfile, rideType, onPoolSelect, onBack }: RideConfirmationProps) {
   const [selectedPoolId, setSelectedPoolId] = useState<string | null>(null);
   const [activeRideType, setActiveRideType] = useState<'female-only' | 'regular'>(rideType || 'regular');
-  const [selectedVehicleType, setSelectedVehicleType] = useState<'car' | 'cng' | null>(null);
+  const [selectedVehicleType, setSelectedVehicleType] = useState<'CAR' | 'CNG' | null>(null);
+  const [showConfirmButton, setShowConfirmButton] = useState(false);
+  const [isCreatingPool, setIsCreatingPool] = useState(false);
+  const [rideEstimate, setRideEstimate] = useState<RideEstimate | null>(null);
+  const [routeInfo, setRouteInfo] = useState<{ summary?: string; selectedReason?: string } | null>(null);
+  const [alternativeRoutes, setAlternativeRoutes] = useState<AlternativeRouteInfo[]>([]);
+  const [trafficInfo, setTrafficInfo] = useState<string>('');
+  const [estimateLoading, setEstimateLoading] = useState(false);
   const isFemale = userProfile?.gender === 'female';
   
-  // Mock stops for each pool showing other riders' pickups and drop-offs
-  const poolStops: Record<string, PoolStop[]> = {
-    '1': [
+  // Use the pools hook to search for real pools and create new ones
+  const { searchPools, createPool, searchResults, currentPool, loading, error, clearSearch } = usePools();
+  
+  // Get available pools from search results
+  const availablePools = searchResults?.pools || [];
+  const hasMatches = searchResults?.has_matches || false;
+  const alternatives = searchResults?.alternatives || [];
+  
+  // Fetch ride estimate when locations and vehicle type are set
+  useEffect(() => {
+    if (!pickupLocation || !destination?.latitude || !destination?.longitude || !selectedVehicleType) {
+      setRideEstimate(null);
+      setRouteInfo(null);
+      setAlternativeRoutes([]);
+      setTrafficInfo('');
+      return;
+    }
+    
+    const fetchEstimate = async () => {
+      setEstimateLoading(true);
+      try {
+        const response = await rideService.getRideEstimate({
+          pickup_lat: pickupLocation.latitude,
+          pickup_lng: pickupLocation.longitude,
+          dropoff_lat: destination.latitude!,
+          dropoff_lng: destination.longitude!,
+          vehicle_type: selectedVehicleType,
+        });
+        
+        if (response.success && response.data) {
+          setRideEstimate(response.data.estimate);
+          setRouteInfo(response.data.route ? {
+            summary: response.data.route.summary,
+            selectedReason: response.data.route.selectedReason,
+          } : null);
+          setAlternativeRoutes(response.data.alternativeRoutes || []);
+          setTrafficInfo(response.data.trafficInfo || '');
+        }
+      } catch (err) {
+        console.error('Failed to fetch ride estimate:', err);
+      } finally {
+        setEstimateLoading(false);
+      }
+    };
+    
+    fetchEstimate();
+  }, [pickupLocation, destination, selectedVehicleType]);
+  
+  // Search for pools when location/preferences change
+  useEffect(() => {
+    if (!pickupLocation || !destination?.latitude || !destination?.longitude || !selectedVehicleType) {
+      return;
+    }
+    
+    searchPools({
+      pickup_lat: pickupLocation.latitude,
+      pickup_lng: pickupLocation.longitude,
+      dropoff_lat: destination.latitude,
+      dropoff_lng: destination.longitude,
+      vehicle_type: selectedVehicleType,
+    });
+  }, [pickupLocation, destination, selectedVehicleType]);
+  
+  // Handle creating a new pool when no matches found
+  const handleCreatePool = useCallback(async () => {
+    if (!destination?.latitude || !destination?.longitude || !selectedVehicleType) {
+      return;
+    }
+    
+    setIsCreatingPool(true);
+    try {
+      const result = await createPool({
+        destination_lat: destination.latitude,
+        destination_lng: destination.longitude,
+        destination_address: destination.address || destination.name,
+        vehicle_type: selectedVehicleType,
+        max_passengers: selectedVehicleType === 'CNG' ? 2 : 4,
+        gender_restriction: (isFemale && activeRideType === 'female-only') ? 'FEMALE_ONLY' : 'ANY',
+      });
+      
+      if (result.success && result.data?.pool) {
+        // Pool created successfully - navigate to searching screen
+        onPoolSelect(result.data.pool as Pool);
+      }
+    } catch (err) {
+      console.error('Failed to create pool:', err);
+    } finally {
+      setIsCreatingPool(false);
+    }
+  }, [destination, selectedVehicleType, isFemale, activeRideType, createPool, onPoolSelect]);
+  
+  // Delay showing the confirm button to prevent touch event overlap
+  useEffect(() => {
+    if (selectedPoolId) {
+      const timer = setTimeout(() => {
+        setShowConfirmButton(true);
+      }, 150);
+      return () => clearTimeout(timer);
+    } else {
+      setShowConfirmButton(false);
+    }
+  }, [selectedPoolId]);
+  
+  // Generate dynamic stops based on pool data
+  const getPoolStops = (pool: any): PoolStop[] => {
+    const stops: PoolStop[] = [
       { type: 'pickup', name: 'Your Pickup', rider: 'You', x: 25, y: 30 },
-      { type: 'pickup', name: 'Gulshan Circle', rider: 'Sarah', x: 40, y: 45 },
-      { type: 'dropoff', name: 'Banani Office', rider: 'Sarah', x: 55, y: 60 },
-      { type: 'dropoff', name: destination?.name || 'Your Destination', rider: 'You', x: 75, y: 75 },
-    ],
-    '2': [
-      { type: 'pickup', name: 'Your Pickup', rider: 'You', x: 20, y: 35 },
-      { type: 'pickup', name: 'Bashundhara', rider: 'Ali', x: 35, y: 50 },
-      { type: 'pickup', name: 'Niketon', rider: 'Fatima', x: 50, y: 55 },
-      { type: 'dropoff', name: 'Mohakhali', rider: 'Ali', x: 60, y: 65 },
-      { type: 'dropoff', name: destination?.name || 'Your Destination', rider: 'You', x: 70, y: 80 },
-      { type: 'dropoff', name: 'Uttara', rider: 'Fatima', x: 80, y: 85 },
-    ],
-    '3': [
-      // Ahmed's CNG pool - driver + user only (max 2 passengers)
-      { type: 'pickup', name: 'Mirpur 10', rider: 'Ahmed (Driver)', x: 20, y: 20 },
-      { type: 'pickup', name: 'Your Pickup', rider: 'You', x: 30, y: 25 },
-      { type: 'dropoff', name: destination?.name || 'Your Destination', rider: 'You', x: 70, y: 75 },
-      { type: 'dropoff', name: 'Uttara Sector 7', rider: 'Ahmed (Driver)', x: 80, y: 80 },
-    ],
-    '4': [
-      { type: 'pickup', name: 'Your Pickup', rider: 'You', x: 25, y: 30 },
-      { type: 'pickup', name: 'Gulshan Circle', rider: 'Sarah', x: 40, y: 45 },
-      { type: 'dropoff', name: 'Banani Office', rider: 'Sarah', x: 55, y: 60 },
-      { type: 'dropoff', name: destination?.name || 'Your Destination', rider: 'You', x: 75, y: 75 },
-    ],
-    '5': [
-      // Nadia's CNG pool - driver + user only (max 2 passengers)
-      { type: 'pickup', name: 'Dhanmondi 27', rider: 'Nadia (Driver)', x: 15, y: 30 },
-      { type: 'pickup', name: 'Your Pickup', rider: 'You', x: 20, y: 35 },
-      { type: 'dropoff', name: destination?.name || 'Your Destination', rider: 'You', x: 70, y: 80 },
-      { type: 'dropoff', name: 'Mohammadpur', rider: 'Nadia (Driver)', x: 75, y: 85 },
-    ],
-    '6': [
-      // Karim's CNG pool - driver + user only (max 2 passengers)
-      { type: 'pickup', name: 'Badda Link Road', rider: 'Karim (Driver)', x: 18, y: 25 },
-      { type: 'pickup', name: 'Your Pickup', rider: 'You', x: 25, y: 30 },
-      { type: 'dropoff', name: destination?.name || 'Your Destination', rider: 'You', x: 75, y: 75 },
-      { type: 'dropoff', name: 'Rampura TV Gate', rider: 'Karim (Driver)', x: 82, y: 80 },
-    ],
+    ];
+    
+    // Add dropoff
+    stops.push({ 
+      type: 'dropoff', 
+      name: destination?.name || 'Your Destination', 
+      rider: 'You', 
+      x: 75, 
+      y: 75 
+    });
+    
+    return stops;
   };
   
-  // Filter pools based on user gender and ride type selection
-  const filteredPools = (() => {
-    let pools = mockPools;
-    
-    // First filter by gender and ride type
-    if (isFemale && activeRideType === 'female-only') {
-      // Female users with female-only selection: show only female driver pools
-      pools = pools.filter(p => femaleDrivers.includes(p.driverName));
-    } else if (isFemale && activeRideType === 'regular') {
-      // Female users with regular selection: show all pools
-      pools = mockPools;
-    } else {
-      // Male users: show only non-female-only pools (male drivers)
-      pools = pools.filter(p => !femaleDrivers.includes(p.driverName));
-    }
-    
-    // Then filter by vehicle type if selected
-    if (selectedVehicleType) {
-      pools = pools.filter(p => p.vehicle_type === selectedVehicleType);
-    }
-    
-    return pools;
-  })();
+  // Filter pools based on gender preference (server already handles most filtering)
+  const filteredPools = availablePools;
   
-  const handlePoolClick = (pool: Pool) => {
-    setSelectedPoolId(pool.id);
+  const handlePoolClick = (poolResult: any) => {
+    setSelectedPoolId(poolResult.poolId);
   };
 
   const handleConfirm = () => {
     if (selectedPoolId) {
-      const pool = mockPools.find(p => p.id === selectedPoolId);
-      if (pool) {
-        onPoolSelect(pool);
+      const poolResult = filteredPools.find((p: any) => p.poolId === selectedPoolId);
+      if (poolResult) {
+        // Create a Pool object from the search result
+        const selectedPool: Pool = {
+          id: poolResult.poolId,
+          creator_user_id: '',
+          driver_id: null,
+          vehicle_id: null,
+          status: 'WAITING_FOR_RIDERS',
+          destination_lat: destination?.latitude || 0,
+          destination_lng: destination?.longitude || 0,
+          destination_address: destination?.address || destination?.name || null,
+          destination_h3_index: '',
+          vehicle_type: selectedVehicleType || 'CAR',
+          gender_restriction: (isFemale && activeRideType === 'female-only') ? 'FEMALE_ONLY' : 'ANY',
+          current_passengers: 1,
+          max_passengers: selectedVehicleType === 'CNG' ? 2 : 4,
+          viability_score: poolResult.score || null,
+          score_breakdown: null,
+          fare_per_person: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          started_at: null,
+          completed_at: null,
+          deleted_at: null,
+          // Display properties
+          eta: poolResult.exactETA || 5,
+          rating: 4.5,
+        };
+        onPoolSelect(selectedPool);
       }
     }
   };
+
+  // Get stops for selected pool
+  const selectedPoolResult = selectedPoolId ? filteredPools.find((p: any) => p.poolId === selectedPoolId) : null;
+  const currentStops = selectedPoolResult ? getPoolStops(selectedPoolResult) : [];
 
   // Use pickup location from props or default to Dhaka center
   const pickupCoords = pickupLocation 
@@ -330,17 +342,50 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
             </View>
           </View>
 
-          {/* Cost & Time */}
-          <View className="flex flex-row items-center gap-4 py-3 px-4 bg-gray-50 rounded-xl">
-            <View className="flex flex-row items-center gap-2">
-              <Taka className="w-5 h-5 text-green-600" />
-              <Text>185 taka</Text>
-            </View>
-            <View className="w-px h-6 bg-gray-300"></View>
-            <View className="flex flex-row items-center gap-2">
-              <Clock className="w-5 h-5 text-blue-600" />
-              <Text>28 mins</Text>
-            </View>
+          {/* Cost & Time - Now using real estimates */}
+          <View className="flex flex-row items-center justify-center gap-4 py-3 px-4 bg-gray-50 rounded-xl">
+            {estimateLoading ? (
+              <ActivityIndicator size="small" color="#2563eb" />
+            ) : rideEstimate ? (
+              <>
+                <View className="flex flex-col items-center">
+                  <View className="flex flex-row items-center gap-2">
+                    <Taka className="w-5 h-5 text-green-600" />
+                    <Text className="font-semibold">৳{rideEstimate.estimatedFare}</Text>
+                  </View>
+                  <Text className="text-xs text-gray-500">per person (with pool)</Text>
+                </View>
+                <View className="w-px h-10 bg-gray-300"></View>
+                <View className="flex flex-col items-center">
+                  <View className="flex flex-row items-center gap-2">
+                    <Clock className="w-5 h-5 text-blue-600" />
+                    <Text className="font-semibold">{rideEstimate.durationInTraffic || rideEstimate.durationMinutes} mins</Text>
+                  </View>
+                  <Text className="text-xs text-gray-500">{rideEstimate.distanceKm} km</Text>
+                </View>
+                {rideEstimate.estimatedSavings > 0 && (
+                  <>
+                    <View className="w-px h-10 bg-gray-300"></View>
+                    <View className="flex flex-col items-center">
+                      <Text className="font-semibold text-green-600">৳{rideEstimate.estimatedSavings}</Text>
+                      <Text className="text-xs text-gray-500">savings</Text>
+                    </View>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                <View className="flex flex-row items-center gap-2">
+                  <Taka className="w-5 h-5 text-green-600" />
+                  <Text className="font-semibold text-gray-400">Select vehicle</Text>
+                </View>
+                <View className="w-px h-6 bg-gray-300"></View>
+                <View className="flex flex-row items-center gap-2">
+                  <Clock className="w-5 h-5 text-blue-600" />
+                  <Text className="font-semibold text-gray-400">--</Text>
+                </View>
+              </>
+            )}
           </View>
 
           {/* Vehicle Type Selector */}
@@ -350,27 +395,27 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
               {/* Car Option */}
               <TouchableOpacity
                 onPress={() => {
-                  setSelectedVehicleType('car');
+                  setSelectedVehicleType('CAR');
                   setSelectedPoolId(null); // Reset pool selection when switching vehicle type
                 }}
                 className={`flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all active:scale-[0.98] ${
-                  selectedVehicleType === 'car'
+                  selectedVehicleType === 'CAR'
                     ? 'border-blue-500 bg-blue-50 shadow-md'
                     : 'border-gray-200'
                 }`}
               >
                 <View className={`w-14 h-14 rounded-full flex items-center justify-center ${
-                  selectedVehicleType === 'car' ? 'bg-blue-500' : 'bg-gray-200'
+                  selectedVehicleType === 'CAR' ? 'bg-blue-500' : 'bg-gray-200'
                 }`}>
                   <Car className={`w-7 h-7 ${
-                    selectedVehicleType === 'car' ? 'text-white' : 'text-gray-600'
+                    selectedVehicleType === 'CAR' ? 'text-white' : 'text-gray-600'
                   }`} />
                 </View>
                 <View className="items-center">
                   <Text>Car</Text>
                   <Text className="text-xs text-gray-500">Max 3 passengers</Text>
                 </View>
-                {selectedVehicleType === 'car' && (
+                {selectedVehicleType === 'CAR' && (
                   <View
                     
                     
@@ -384,23 +429,23 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
               {/* CNG Option */}
               <TouchableOpacity
                 onPress={() => {
-                  setSelectedVehicleType('cng');
+                  setSelectedVehicleType('CNG');
                   setSelectedPoolId(null); // Reset pool selection when switching vehicle type
                 }}
                 className={`flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all active:scale-[0.98] relative ${
-                  selectedVehicleType === 'cng'
+                  selectedVehicleType === 'CNG'
                     ? 'border-green-500 bg-green-50 shadow-md'
                     : 'border-gray-200'
                 }`}
               >
                 <View className={`w-14 h-14 rounded-full flex items-center justify-center ${
-                  selectedVehicleType === 'cng' ? 'bg-green-500' : 'bg-gray-200'
+                  selectedVehicleType === 'CNG' ? 'bg-green-500' : 'bg-gray-200'
                 }`}>
                   {/* CNG Icon - simplified three-wheeler */}
                   <svg
                     viewBox="0 0 24 24"
                     className={`w-7 h-7 ${
-                      selectedVehicleType === 'cng' ? 'text-white' : 'text-gray-600'
+                      selectedVehicleType === 'CNG' ? 'text-white' : 'text-gray-600'
                     }`}
                     fill="none"
                     stroke="currentColor"
@@ -416,7 +461,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                   <Text>CNG</Text>
                   <Text className="text-xs text-gray-500">Max 2 passengers</Text>
                 </View>
-                {selectedVehicleType === 'cng' && (
+                {selectedVehicleType === 'CNG' && (
                   <View
                     
                     
@@ -440,98 +485,121 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                 <Text>Available Pools</Text>
               </View>
               
-              {!selectedPoolId && (
-                <Text className="text-sm text-gray-500">Tap a pool to see the route and other riders</Text>
+              {/* Loading State */}
+              {loading && (
+                <View className="items-center py-8 px-4 bg-gray-50 rounded-xl">
+                  <ActivityIndicator size="large" color="#2563eb" />
+                  <Text className="text-gray-600 mt-3">Searching for pools...</Text>
+                </View>
               )}
               
-              {filteredPools.length > 0 ? (
+              {/* Error State */}
+              {error && !loading && (
+                <View className="items-center py-8 px-4 bg-red-50 rounded-xl">
+                  <AlertCircle className="w-12 h-12 text-red-500 mb-3" />
+                  <Text className="text-red-700 font-medium text-center">Failed to search pools</Text>
+                  <Text className="text-sm text-red-500 mt-2 text-center">{error}</Text>
+                </View>
+              )}
+              
+              {/* No Pools Found - Show Create Pool Option */}
+              {!loading && !error && filteredPools.length === 0 && (
+                <View className="items-center py-8 px-4 bg-blue-50 rounded-xl">
+                  <Users className="w-12 h-12 text-blue-500 mb-3" />
+                  <Text className="text-gray-800 font-semibold text-center text-lg">No matching pools found</Text>
+                  <Text className="text-sm text-gray-600 mt-2 text-center">
+                    Be the first to create a pool for this route!
+                  </Text>
+                  
+                  <TouchableOpacity
+                    onPress={handleCreatePool}
+                    disabled={isCreatingPool}
+                    className="mt-4 bg-blue-600 rounded-xl px-6 py-3 flex-row items-center gap-2"
+                    style={{
+                      boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
+                    }}
+                  >
+                    {isCreatingPool ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <>
+                        <Plus className="w-5 h-5 text-white" />
+                        <Text className="text-white font-semibold">Create New Pool</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                  
+                  {/* Show alternatives if available */}
+                  {alternatives.length > 0 && (
+                    <View className="mt-4 w-full">
+                      <Text className="text-sm text-gray-600 mb-2">Or try:</Text>
+                      {alternatives.map((alt: any, idx: number) => (
+                        <View key={idx} className="bg-white rounded-lg p-3 mb-2 border border-gray-200">
+                          <Text className="font-medium text-gray-800">{alt.title}</Text>
+                          <Text className="text-sm text-gray-500">{alt.description}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
+              
+              {/* Pool Results */}
+              {!loading && !error && filteredPools.length > 0 && (
                 <View className="space-y-3">
-                  {filteredPools.map((pool) => (
+                  <Text className="text-sm text-gray-500">Tap a pool to join</Text>
+                  {filteredPools.map((poolResult: any) => (
                     <TouchableOpacity
-                      key={pool.id}
-                      onPress={() => handlePoolClick(pool)}
+                      key={poolResult.poolId}
+                      onPress={() => handlePoolClick(poolResult)}
                       className={`border-2 rounded-2xl p-4 space-y-3 transition-all ${
-                        selectedPoolId === pool.id
+                        selectedPoolId === poolResult.poolId
                           ? 'border-blue-500 shadow-lg bg-blue-50'
                           : 'border-gray-200'
                       }`}
                     >
                       <View className="flex flex-row items-center justify-between">
                         <View className="flex flex-row items-center gap-3">
-                          <View className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-full flex items-center justify-center">
-                            <Text className="text-white">{pool.photo}</Text>
-                          </View>
+                          <LinearGradient
+                            colors={['#2563eb', '#06b6d4']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            className="w-12 h-12 rounded-full flex items-center justify-center"
+                          >
+                            <Text className="text-white text-lg font-bold">P</Text>
+                          </LinearGradient>
                           <View>
-                            <Text>{pool.driverName}'s Pool</Text>
+                            <Text className="font-semibold">Pool #{poolResult.poolId.slice(0, 8)}</Text>
                             <View className="flex flex-row items-center gap-1">
-                              <Text className="text-sm text-gray-600">⭐ {pool.rating}</Text>
+                              <Text className="text-sm text-gray-600">Match: {Math.round(poolResult.score * 100)}%</Text>
                             </View>
                           </View>
                         </View>
-                        {selectedPoolId === pool.id && (
-                          <View
-                            
-                            
-                            className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center"
-                          >
+                        {selectedPoolId === poolResult.poolId && (
+                          <View className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
                             <View className="w-2 h-2 bg-white rounded-full"></View>
                           </View>
                         )}
                       </View>
 
                       <View className="grid grid-cols-2 gap-2">
-                        <View className="flex flex-row items-center gap-2 text-gray-600">
-                          <Users className="w-4 h-4 text-gray-600" />
-                          <Text className="text-sm text-gray-600">{pool.seatsLeft} seats left</Text>
-                        </View>
-                        <View className="flex flex-row items-center gap-2">
-                          <Taka className="w-4 h-4 text-green-600" />
-                          <Text className="text-sm text-green-600">Save {pool.savings} taka</Text>
-                        </View>
-                        <View className="flex flex-row items-center gap-2">
-                          <Clock className="w-4 h-4 text-gray-600" />
-                          <Text className="text-sm text-gray-600">{pool.eta} min away</Text>
-                        </View>
                         <View className="flex flex-row items-center gap-2">
                           <Navigation className="w-4 h-4 text-gray-600" />
-                          <Text className="text-sm text-gray-600">Walk {pool.walkDistance}m</Text>
+                          <Text className="text-sm text-gray-600">{poolResult.routeOverlapPercentage}% route match</Text>
                         </View>
-                      </View>
-
-                      {selectedPoolId === pool.id && poolStops[pool.id] && (
-                        <View
-                          
-                          
-                          className="pt-3 border-t border-blue-200 space-y-2"
-                        >
-                          <Text className="text-sm text-blue-900">Route Stops:</Text>
-                          <View className="space-y-1">
-                            {poolStops[pool.id].map((stop, idx) => (
-                              <View key={idx} className="flex flex-row items-center gap-2">
-                                {stop.type === 'pickup' ? (
-                                  <View className={`w-2 h-2 rounded-full ${
-                                    stop.rider === 'You' ? 'bg-blue-600' : 'bg-green-500'
-                                  }`}></View>
-                                ) : (
-                                  <MapPin className={`w-3 h-3 ${
-                                    stop.rider === 'You' ? 'text-red-600 fill-red-600' : 'text-orange-500 fill-orange-500'
-                                  }`} />
-                                )}
-                                <Text className={`text-sm ${stop.rider === 'You' ? 'text-blue-900' : 'text-gray-600'}`}>
-                                  {stop.rider} - {stop.name}
-                                </Text>
-                              </View>
-                            ))}
+                        <View className="flex flex-row items-center gap-2">
+                          <Clock className="w-4 h-4 text-blue-600" />
+                          <Text className="text-sm text-gray-600">{poolResult.exactETA || 'N/A'} min</Text>
+                        </View>
+                        {poolResult.estimatedDetour > 0 && (
+                          <View className="flex flex-row items-center gap-2">
+                            <MapPin className="w-4 h-4 text-orange-500" />
+                            <Text className="text-sm text-orange-600">+{poolResult.estimatedDetour} min detour</Text>
                           </View>
-                        </View>
-                      )}
+                        )}
+                      </View>
                     </TouchableOpacity>
                   ))}
-                </View>
-              ) : (
-                <View className="items-center py-8 px-4 bg-gray-50 rounded-xl">
-                  <Text className="text-gray-600">No pools available for the selected vehicle type</Text>
-                  <Text className="text-sm text-gray-500 mt-2">Try selecting a different vehicle type</Text>
                 </View>
               )}
             </View>
@@ -554,7 +622,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
       </ScrollView>
 
       {/* Fixed Confirm Button above bottom nav */}
-      {selectedPoolId && (
+      {showConfirmButton && selectedPoolId && (
         <View
           
           

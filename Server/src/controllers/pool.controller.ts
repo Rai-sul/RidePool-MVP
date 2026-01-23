@@ -9,8 +9,9 @@ import { penaltyService } from '../services/penalty.service';
 import { notificationService } from '../services/notification.service';
 import { CreatePoolRequest, Pool, PoolStatus, Ride, RideStatus, Location, VehicleType } from '../types';
 import { h3Utils } from '../utils/h3.utils';
+import { logger } from '../utils/logger';
 
-const LOOKUP_TIME_MS = parseInt(process.env.LOOKUP_TIME_MS || '180000', 10);
+const LOOKUP_TIME_MS = parseInt(process.env.LOOKUP_TIME_MS || '30000', 10);
 
 export class PoolController {
   async searchPools(req: AuthRequest, res: Response, next: NextFunction) {
@@ -116,6 +117,21 @@ export class PoolController {
 
       if (error) {
         throw error;
+      }
+
+      // Add the creator as the first pool member
+      const { error: memberError } = await supabaseAdmin
+        .from('pool_members')
+        .insert({
+          pool_id: pool.id,
+          user_id: userId,
+          ride_id: null, // Creator may not have a ride yet
+          join_type: 'INITIAL',
+          joined_at: new Date().toISOString(),
+        });
+
+      if (memberError) {
+        logger.warn(`Failed to add creator as pool member: ${memberError.message}`);
       }
 
       lookupTimeService.startLookupTimer(pool.id, LOOKUP_TIME_MS);
@@ -787,6 +803,86 @@ export class PoolController {
           breakdown: fareResult.breakdown,
           memberFares: fareResult.memberFares,
           message: `Fare recalculated for ${members.length} members`,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Extend pool search to wider geographic area
+   * Called after initial 30-second lookup expires
+   * Expands search to additional H3 hexagons (neighbors of neighbors)
+   */
+  async extendSearch(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { poolId } = req.params;
+
+      // Get the pool
+      const { data: pool, error: poolError } = await supabaseAdmin
+        .from('pools')
+        .select('id, creator_user_id, status, destination_h3_index, vehicle_type, gender_restriction')
+        .eq('id', poolId)
+        .single();
+
+      if (poolError || !pool) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Only pool creator can extend search
+      if (pool.creator_user_id !== userId) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'NOT_CREATOR', message: 'Only pool creator can extend search' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Can only extend if still waiting for riders - return graceful response if not
+      if (pool.status !== 'WAITING_FOR_RIDERS') {
+        return res.json({
+          success: true,
+          data: {
+            extended: false,
+            reason: 'Pool status changed',
+            current_status: pool.status,
+          },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Extend the lookup timer by 10 more seconds
+      const EXTENDED_TIME_MS = 10000;
+      lookupTimeService.extendLookupTime(poolId, EXTENDED_TIME_MS);
+
+      // Get expanded H3 indexes (neighbors of neighbors for wider search)
+      const baseH3 = pool.destination_h3_index;
+      const expandedH3Indexes = baseH3 ? h3Utils.getExtendedNeighbors(baseH3, 2) : [];
+
+      logger.info(`[Pool] Extended search for pool ${poolId} to ${expandedH3Indexes.length} hexagons`);
+
+      res.json({
+        success: true,
+        data: {
+          extended: true,
+          new_search_radius: 2, // H3 ring distance
+          extended_h3_count: expandedH3Indexes.length,
+          extended_time_seconds: EXTENDED_TIME_MS / 1000,
         },
         timestamp: new Date().toISOString(),
       });

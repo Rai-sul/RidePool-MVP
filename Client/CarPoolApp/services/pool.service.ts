@@ -183,4 +183,12 @@ export const poolService = {
   async getPoolFare(poolId: string): Promise<ApiResponse<PoolFareResponse>> {
     return apiClient.get(API_ENDPOINTS.POOL.FARE(poolId));
   },
+
+  /**
+   * Extend pool search to wider geographic area (additional H3 hexagons)
+   * Called after initial 30-second search expires
+   */
+  async extendPoolSearch(poolId: string): Promise<ApiResponse<{ extended: boolean; new_search_radius: number }>> {
+    return apiClient.post(API_ENDPOINTS.POOL.EXTEND_SEARCH(poolId));
+  },
 };

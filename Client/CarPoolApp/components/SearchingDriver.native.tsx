@@ -9,9 +9,9 @@ type SearchingDriverProps = {
 };
 
 const statusMessages = [
-  'Finding your driver...',
-  'Matching you with co-riders...',
-  'Almost there...',
+  'Setting up your pool...',
+  'Preparing your trip...',
+  'Almost ready...',
 ];
 
 export default function SearchingDriver({ onCancel, onDriverFound }: SearchingDriverProps) {
@@ -19,17 +19,21 @@ export default function SearchingDriver({ onCancel, onDriverFound }: SearchingDr
   const [scaleAnim] = useState(new Animated.Value(1));
   const [opacityAnim] = useState(new Animated.Value(0.5));
 
+  // Navigate to TripProgress after brief animation (2 seconds)
   useEffect(() => {
-    // Auto-navigate to trip progress after 5 seconds
     const timeout = setTimeout(() => {
       if (onDriverFound) {
         onDriverFound();
       }
-    }, 5000);
+    }, 2000);
 
+    return () => clearTimeout(timeout);
+  }, [onDriverFound]);
+
+  useEffect(() => {
     const interval = setInterval(() => {
       setMessageIndex((prev) => (prev + 1) % statusMessages.length);
-    }, 1200);
+    }, 800);
 
     // Pulse animation
     Animated.loop(
@@ -63,9 +67,8 @@ export default function SearchingDriver({ onCancel, onDriverFound }: SearchingDr
 
     return () => {
       clearInterval(interval);
-      clearTimeout(timeout);
     };
-  }, [scaleAnim, opacityAnim, onDriverFound]);
+  }, [scaleAnim, opacityAnim]);
 
   return (
     <View className="flex-1 bg-white items-center justify-center p-8 pb-24">
@@ -81,14 +84,14 @@ export default function SearchingDriver({ onCancel, onDriverFound }: SearchingDr
           />
           
           <View className="z-10">
-            <MapPin size={96} color="#2563eb" fill="#2563eb" />
+            <MapPin size={96} color="#2563eb" />
           </View>
         </View>
 
         {/* Status Message */}
         <View className="items-center gap-2">
           <Text className="text-2xl font-semibold text-center">{statusMessages[messageIndex]}</Text>
-          <Text className="text-gray-500 text-center">This usually takes a few seconds</Text>
+          <Text className="text-gray-500 text-center">Please wait...</Text>
         </View>
 
         {/* Loading dots */}

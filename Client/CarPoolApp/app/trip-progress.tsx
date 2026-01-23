@@ -4,7 +4,7 @@ import { useGlobalContext } from '../contexts/GlobalContext';
 
 export default function TripProgressScreen() {
   const router = useRouter();
-  const { userProfile, pickupLocation, selectedDestination, selectedPool } = useGlobalContext();
+  const { userProfile, pickupLocation, selectedDestination, selectedPool, setSelectedPool } = useGlobalContext();
   
   const handleComplete = () => {
     router.push('/payment-summary');
@@ -19,6 +19,12 @@ export default function TripProgressScreen() {
       }
     });
   };
+
+  const handleCreateNewPool = () => {
+    // Clear the current pool and go back to ride confirmation to create a new pool
+    setSelectedPool(null);
+    router.replace('/ride-confirmation');
+  };
   
   return (
     <TripProgress 
@@ -27,7 +33,8 @@ export default function TripProgressScreen() {
       destination={selectedDestination}
       selectedPool={selectedPool}
       onComplete={handleComplete} 
-      onChatDriver={handleChatDriver} 
+      onChatDriver={handleChatDriver}
+      onCreateNewPool={handleCreateNewPool}
     />
   );
 }

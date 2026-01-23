@@ -1,22 +1,64 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Animated } from 'react-native-web';
-import { MapPin, Users } from './Icons';
+import { MapPin, Users, Clock } from './Icons';
 import { Button } from './ui/button';
+import { useGlobalContext } from '../contexts/GlobalContext';
+import { usePoolRealtime } from '../hooks/usePoolRealtime';
 
 type SearchingDriverProps = {
   onCancel: () => void;
+  onDriverFound?: () => void;
 };
 
+const SEARCH_TIMEOUT_SECONDS = 30;
+
 const statusMessages = [
-  'Finding your driver...',
-  'Matching you with co-riders...',
+  'Waiting for other riders...',
+  'Looking for matching pools...',
   'Almost there...',
 ];
 
-export default function SearchingDriver({ onCancel }: SearchingDriverProps) {
+export default function SearchingDriver({ onCancel, onDriverFound }: SearchingDriverProps) {
   const [messageIndex, setMessageIndex] = useState(0);
   const [scaleAnim] = useState(new Animated.Value(1));
   const [opacityAnim] = useState(new Animated.Value(0.5));
+  const [remainingSeconds, setRemainingSeconds] = useState(SEARCH_TIMEOUT_SECONDS);
+  
+  const { selectedPool, userProfile } = useGlobalContext();
+  
+  // Use realtime pool updates
+  const { poolStatus, hasDriver, pool: poolDetails } = usePoolRealtime(
+    selectedPool?.id || null,
+    userProfile?.id || null
+  );
+
+  // Countdown timer
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setRemainingSeconds((prev) => {
+        if (prev <= 1) {
+          // Timer expired, navigate to trip progress
+          if (onDriverFound) {
+            onDriverFound();
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [onDriverFound]);
+
+  // Watch for pool status changes - navigate when pool is ready or has driver
+  useEffect(() => {
+    if (poolStatus === 'WAITING_FOR_DRIVER' || poolStatus === 'READY_TO_START' || hasDriver) {
+      // Pool has progressed, navigate to trip progress
+      if (onDriverFound) {
+        onDriverFound();
+      }
+    }
+  }, [poolStatus, hasDriver, onDriverFound]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -74,11 +116,32 @@ export default function SearchingDriver({ onCancel }: SearchingDriverProps) {
           </View>
         </View>
 
+        {/* Countdown Timer */}
+        <View className="items-center bg-blue-50 px-6 py-3 rounded-full">
+          <View className="flex-row items-center gap-2">
+            <Clock size={20} color="#2563eb" />
+            <Text className="text-2xl font-bold text-blue-600">{remainingSeconds}s</Text>
+          </View>
+          <Text className="text-xs text-blue-500 mt-1">Searching for riders</Text>
+        </View>
+
         {/* Status Message */}
         <View className="items-center gap-2">
           <Text className="text-2xl font-semibold text-center">{statusMessages[messageIndex]}</Text>
-          <Text className="text-gray-500 text-center">This usually takes a few seconds</Text>
+          <Text className="text-gray-500 text-center">Your pool is visible to other users nearby</Text>
         </View>
+
+        {/* Pool Info */}
+        {poolDetails && (
+          <View className="items-center bg-gray-50 px-4 py-3 rounded-xl">
+            <View className="flex-row items-center gap-2">
+              <Users size={16} color="#6b7280" />
+              <Text className="text-gray-600">
+                {poolDetails.current_passengers || 1}/{poolDetails.max_passengers || 4} riders
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Loading dots */}
         <View className="flex-row gap-2">

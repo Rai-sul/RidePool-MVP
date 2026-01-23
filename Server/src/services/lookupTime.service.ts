@@ -3,7 +3,7 @@ import { PoolStatus, RideStatus } from '../types';
 import { notificationService } from './notification.service';
 import { logger } from '../utils/logger';
 
-const LOOKUP_TIME_MS = parseInt(process.env.LOOKUP_TIME_MS || '180000', 10);
+const LOOKUP_TIME_MS = parseInt(process.env.LOOKUP_TIME_MS || '30000', 10);
 const MIN_PASSENGERS_TO_START = 2;
 
 interface LookupTimer {
