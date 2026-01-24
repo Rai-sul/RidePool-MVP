@@ -107,6 +107,7 @@ export class PoolController {
 
       const destinationH3 = h3Utils.latLngToH3(destination, 7);
       const pickupH3 = h3Utils.latLngToH3(pickup, 9);
+      const dropoffH3 = h3Utils.latLngToH3(destination, 7);
 
       logger.info(`[Pool] Creating pool with destination H3: ${destinationH3}, vehicle: ${poolData.vehicle_type}, gender: ${poolData.gender_restriction || 'ANY'}`);
 
@@ -132,6 +133,32 @@ export class PoolController {
         calculated_at: new Date().toISOString(),
       };
 
+      // First, create a ride for the pool creator
+      const { data: creatorRide, error: rideError } = await supabaseAdmin
+        .from('rides')
+        .insert({
+          user_id: userId,
+          pickup_lat: poolData.pickup_lat,
+          pickup_lng: poolData.pickup_lng,
+          pickup_address: poolData.pickup_address,
+          pickup_h3_index: pickupH3,
+          dropoff_lat: poolData.destination_lat,
+          dropoff_lng: poolData.destination_lng,
+          dropoff_address: poolData.destination_address,
+          dropoff_h3_index: dropoffH3,
+          vehicle_type: poolData.vehicle_type,
+          gender_restriction: poolData.gender_restriction || 'ANY',
+          status: 'CREATING_POOL',
+          distance_km: rideEstimate.distanceKm,
+        })
+        .select()
+        .single();
+
+      if (rideError) {
+        logger.error(`[Pool] Failed to create ride for pool creator: ${rideError.message}`);
+        throw rideError;
+      }
+
       const { data: pool, error } = await supabaseAdmin
         .from('pools')
         .insert({
@@ -155,13 +182,19 @@ export class PoolController {
         throw error;
       }
 
-      // Add the creator as the first pool member
+      // Update the ride with pool_id
+      await supabaseAdmin
+        .from('rides')
+        .update({ pool_id: pool.id, status: 'MATCHED' })
+        .eq('id', creatorRide.id);
+
+      // Add the creator as the first pool member with ride_id
       const { error: memberError } = await supabaseAdmin
         .from('pool_members')
         .insert({
           pool_id: pool.id,
           user_id: userId,
-          ride_id: null, // Creator may not have a ride yet
+          ride_id: creatorRide.id,
           join_type: 'INITIAL',
           joined_at: new Date().toISOString(),
         });
@@ -377,19 +410,65 @@ export class PoolController {
         .from('pools')
         .select(`
           *,
-          pool_members(user_id, ride_id, join_score, joined_at),
+          pool_members(
+            id,
+            user_id,
+            ride_id,
+            join_type,
+            join_score,
+            is_front_route,
+            joined_at,
+            left_at
+          ),
           vehicles(vehicle_number, model, color),
-          driver:users!driver_id(id, average_rating)
+          driver:users!driver_id(id, full_name, average_rating)
         `)
         .eq('id', poolId)
         .single();
 
-      if (error || !pool) {
+      if (error) {
+        logger.warn(`[Pool] Error fetching pool ${poolId}: ${error.message}`);
         return res.status(404).json({
           success: false,
           error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
           timestamp: new Date().toISOString(),
         });
+      }
+
+      if (!pool) {
+        logger.warn(`[Pool] Pool ${poolId} not found in database`);
+        return res.status(404).json({
+          success: false,
+          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Fetch user details for pool members separately to avoid join issues
+      if (pool.pool_members && pool.pool_members.length > 0) {
+        const userIds = pool.pool_members.map((m: any) => m.user_id);
+        const rideIds = pool.pool_members.map((m: any) => m.ride_id).filter(Boolean);
+        
+        // Fetch user profiles
+        const { data: users } = await supabaseAdmin
+          .from('users')
+          .select('id, full_name')
+          .in('id', userIds);
+        
+        // Fetch ride details
+        const { data: rides } = rideIds.length > 0 
+          ? await supabaseAdmin
+              .from('rides')
+              .select('id, pickup_lat, pickup_lng, pickup_address, dropoff_lat, dropoff_lng, dropoff_address')
+              .in('id', rideIds)
+          : { data: [] };
+        
+        // Attach user and ride info to pool members
+        pool.pool_members = pool.pool_members.map((member: any) => ({
+          ...member,
+          user: users?.find((u: any) => u.id === member.user_id) || null,
+          ride: rides?.find((r: any) => r.id === member.ride_id) || null,
+        }));
       }
 
       const remainingTime = lookupTimeService.getRemainingTime(poolId);

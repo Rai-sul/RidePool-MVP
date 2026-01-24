@@ -22,10 +22,11 @@ type TripProgressProps = {
   selectedPool?: Pool | null;
   onComplete?: () => void;
   onChatDriver?: () => void;
+  onChatCoRider?: (userId: string, userName: string) => void;
   onCreateNewPool?: () => void;
 };
 
-export default function TripProgress({ userProfile, pickupLocation, destination, selectedPool, onComplete, onChatDriver, onCreateNewPool }: TripProgressProps) {
+export default function TripProgress({ userProfile, pickupLocation, destination, selectedPool, onComplete, onChatDriver, onChatCoRider, onCreateNewPool }: TripProgressProps) {
   const [progress, setProgress] = useState(15);
   const [tripStatus, setTripStatus] = useState<'waiting' | 'on-the-way' | 'arrived' | 'in-progress' | 'completed'>('waiting');
   const [driverPosition, setDriverPosition] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -438,6 +439,13 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
                       Joined {new Date(rider.joinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </Text>
                   </View>
+                  {/* Chat button for co-rider */}
+                  <TouchableOpacity 
+                    className="w-10 h-10 rounded-full bg-gray-100 items-center justify-center"
+                    onPress={() => onChatCoRider?.(rider.userId, rider.name)}
+                  >
+                    <MessageCircle className="w-5 h-5" color="#4b5563" />
+                  </TouchableOpacity>
                 </View>
               ))}
             </View>
@@ -492,12 +500,22 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
             </View>
             <View className="flex-row justify-between">
               <Text className="text-gray-600">Estimated Time</Text>
-              <Text className="font-medium">{selectedPool?.eta || '~'} mins</Text>
+              <Text className="font-medium">
+                {poolDetails?.score_breakdown?.base_duration_minutes 
+                  ? `${Math.round(poolDetails.score_breakdown.base_duration_minutes)} mins`
+                  : selectedPool?.eta 
+                    ? `${selectedPool.eta} mins` 
+                    : 'Calculating...'}
+              </Text>
             </View>
             <View className="flex-row justify-between">
               <Text className="text-gray-600">Fare per Person</Text>
               <Text className={`font-semibold ${accentText}`}>
-                ৳ {poolDetails?.fare_per_person || selectedPool?.fare_per_person || 'Calculating...'}
+                ৳ {poolDetails?.fare_per_person 
+                  ? Math.round(poolDetails.fare_per_person) 
+                  : selectedPool?.fare_per_person 
+                    ? Math.round(selectedPool.fare_per_person as number)
+                    : 'Calculating...'}
               </Text>
             </View>
             <View className="flex-row justify-between">

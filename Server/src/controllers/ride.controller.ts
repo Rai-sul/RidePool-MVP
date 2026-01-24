@@ -1,6 +1,6 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { supabase } from '../config/supabase';
+import { supabaseAdmin } from '../config/supabase';
 import { poolMatchingService } from '../services/poolMatching.service';
 import { geolocationService } from '../services/geolocation.service';
 import { rideEstimationService } from '../services/rideEstimation.service';
@@ -30,7 +30,7 @@ export class RideController {
       const pickupH3 = h3Utils.latLngToH3(pickup, 9);
       const dropoffH3 = h3Utils.latLngToH3(dropoff, 7);
 
-      const { data: ride, error } = await supabase
+      const { data: ride, error } = await supabaseAdmin
         .from('rides')
         .insert({
           user_id: userId,
@@ -82,7 +82,7 @@ export class RideController {
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
-      const { data: rides, error } = await supabase
+      const { data: rides, error } = await supabaseAdmin
         .from('rides')
         .select('*')
         .eq('user_id', userId)
@@ -108,7 +108,7 @@ export class RideController {
       const { rideId } = req.params;
       const { reason } = req.body;
 
-      const { data: ride, error: fetchError } = await supabase
+      const { data: ride, error: fetchError } = await supabaseAdmin
         .from('rides')
         .select('*')
         .eq('id', rideId)
@@ -123,7 +123,7 @@ export class RideController {
         return res.status(400).json({ error: 'Ride cannot be cancelled' });
       }
 
-      const { error: updateError } = await supabase
+      const { error: updateError } = await supabaseAdmin
         .from('rides')
         .update({
           status: 'CANCELLED' as RideStatus,

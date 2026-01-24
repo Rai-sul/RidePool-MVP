@@ -16,6 +16,24 @@ interface CoRiderInfo {
   name: string;
   initial: string;
   joinedAt: string;
+  pickupLocation?: { latitude: number; longitude: number; address?: string };
+  dropoffLocation?: { latitude: number; longitude: number; address?: string };
+}
+
+// Extended pool member with user profile info from API
+interface PoolMemberWithProfile extends PoolMember {
+  user?: {
+    id?: string;
+    full_name?: string;
+  };
+  ride?: {
+    pickup_lat: number;
+    pickup_lng: number;
+    pickup_address?: string;
+    dropoff_lat: number;
+    dropoff_lng: number;
+    dropoff_address?: string;
+  };
 }
 
 /**
@@ -33,8 +51,12 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
 
   // Fetch initial pool data
   const fetchPoolData = useCallback(async () => {
-    if (!poolId) return;
+    if (!poolId) {
+      console.log('[usePoolRealtime] No poolId provided, skipping fetch');
+      return;
+    }
 
+    console.log(`[usePoolRealtime] Fetching pool data for: ${poolId}`);
     setState(prev => ({ ...prev, loading: true, error: null }));
 
     try {
@@ -42,23 +64,72 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
       
       if (response.success && response.data?.pool) {
         const pool = response.data.pool;
+        console.log(`[usePoolRealtime] Pool fetched successfully: ${pool.id}, status: ${pool.status}, members: ${pool.pool_members?.length || 0}`);
         setState(prev => ({
           ...prev,
           pool,
           members: pool.pool_members || [],
           loading: false,
           lastUpdated: new Date(),
+          error: null,
         }));
       } else {
-        throw new Error(response.message || 'Failed to fetch pool');
+        // API returned but without pool data
+        const errorMessage = response.message || 'Pool not found';
+        const isNotFound = errorMessage.toLowerCase().includes('not found');
+        console.log(`[usePoolRealtime] Pool ${poolId} response issue: ${errorMessage}`);
+        
+        // Only set error if pool is genuinely not found
+        if (isNotFound) {
+          setState(prev => ({
+            ...prev,
+            pool: null,
+            members: [],
+            loading: false,
+            error: 'This pool is no longer available',
+          }));
+        } else {
+          // For other issues, keep existing pool data if available
+          setState(prev => ({
+            ...prev,
+            loading: false,
+            error: prev.pool ? null : errorMessage,
+          }));
+        }
       }
     } catch (err: any) {
-      console.error('Failed to fetch pool data:', err);
-      setState(prev => ({
-        ...prev,
-        loading: false,
-        error: err.message || 'Failed to load pool',
-      }));
+      // Handle specific error cases gracefully
+      const errorMessage = err.message || 'Failed to load pool';
+      const isNotFound = errorMessage.toLowerCase().includes('not found');
+      const isCancelled = errorMessage.toLowerCase().includes('cancelled');
+      
+      console.warn('[usePoolRealtime] Failed to fetch pool data:', errorMessage);
+      
+      if (isNotFound) {
+        setState(prev => ({
+          ...prev,
+          pool: null,
+          members: [],
+          loading: false,
+          error: 'This pool is no longer available',
+        }));
+      } else if (isCancelled) {
+        setState(prev => ({
+          ...prev,
+          pool: null,
+          members: [],
+          loading: false,
+          error: 'This pool was cancelled',
+        }));
+      } else {
+        // For other errors (network, temporary issues), keep existing pool data if available
+        setState(prev => ({
+          ...prev,
+          loading: false,
+          // Only set error if we don't have pool data - otherwise the user is in a valid pool
+          error: prev.pool ? null : errorMessage,
+        }));
+      }
     }
   }, [poolId]);
 
@@ -110,25 +181,14 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           console.log('Pool member update received:', payload.eventType);
           
           if (payload.eventType === 'INSERT' && payload.new) {
-            setState(prev => ({
-              ...prev,
-              members: [...prev.members, payload.new as PoolMember],
-              pool: prev.pool ? {
-                ...prev.pool,
-                current_passengers: (prev.pool.current_passengers || 0) + 1,
-              } : null,
-              lastUpdated: new Date(),
-            }));
+            // Refetch full pool data to get complete member info with user profiles and ride details
+            // This ensures we have the joined user/ride data, not just the raw pool_members record
+            console.log('[usePoolRealtime] New member joined, refetching pool data...');
+            fetchPoolData();
           } else if (payload.eventType === 'DELETE' && payload.old) {
-            setState(prev => ({
-              ...prev,
-              members: prev.members.filter(m => m.id !== (payload.old as PoolMember).id),
-              pool: prev.pool ? {
-                ...prev.pool,
-                current_passengers: Math.max(0, (prev.pool.current_passengers || 1) - 1),
-              } : null,
-              lastUpdated: new Date(),
-            }));
+            // Refetch pool data when a member leaves to get updated fare and member list
+            console.log('[usePoolRealtime] Member left, refetching pool data...');
+            fetchPoolData();
           } else if (payload.eventType === 'UPDATE' && payload.new) {
             setState(prev => ({
               ...prev,
@@ -157,12 +217,28 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
   // Derived state: co-riders (excluding current user)
   const coRiders: CoRiderInfo[] = state.members
     .filter(member => member.user_id !== currentUserId)
-    .map((member, index) => ({
-      userId: member.user_id,
-      name: `Rider ${index + 1}`,
-      initial: `R${index + 1}`.charAt(0),
-      joinedAt: member.joined_at,
-    }));
+    .map((member, index) => {
+      const memberWithProfile = member as PoolMemberWithProfile;
+      const userName = memberWithProfile.user?.full_name || `Rider ${index + 1}`;
+      const initial = userName.charAt(0).toUpperCase();
+      
+      return {
+        userId: member.user_id,
+        name: userName,
+        initial,
+        joinedAt: member.joined_at,
+        pickupLocation: memberWithProfile.ride ? {
+          latitude: memberWithProfile.ride.pickup_lat,
+          longitude: memberWithProfile.ride.pickup_lng,
+          address: memberWithProfile.ride.pickup_address,
+        } : undefined,
+        dropoffLocation: memberWithProfile.ride ? {
+          latitude: memberWithProfile.ride.dropoff_lat,
+          longitude: memberWithProfile.ride.dropoff_lng,
+          address: memberWithProfile.ride.dropoff_address,
+        } : undefined,
+      };
+    });
 
   // Derived state: has driver
   const hasDriver = !!state.pool?.driver_id;
