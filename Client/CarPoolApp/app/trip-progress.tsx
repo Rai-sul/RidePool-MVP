@@ -20,6 +20,17 @@ export default function TripProgressScreen() {
     });
   };
 
+  const handleChatCoRider = (userId: string, userName: string) => {
+    router.push({
+      pathname: '/chat',
+      params: {
+        recipientId: userId,
+        recipientName: userName,
+        poolId: selectedPool?.id,
+      }
+    });
+  };
+
   const handleCreateNewPool = () => {
     // Clear the current pool and go back to ride confirmation to create a new pool
     setSelectedPool(null);
@@ -34,6 +45,7 @@ export default function TripProgressScreen() {
       selectedPool={selectedPool}
       onComplete={handleComplete} 
       onChatDriver={handleChatDriver}
+      onChatCoRider={handleChatCoRider}
       onCreateNewPool={handleCreateNewPool}
     />
   );

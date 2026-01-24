@@ -1,61 +1,34 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Animated, Keyboard, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Animated, Keyboard, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Send, Smile, Paperclip, MoreVertical } from './Icons';
+import { ArrowLeft, Send, Smile, Paperclip, MoreVertical, RefreshCw } from './Icons';
 import type { UserProfile } from '../contexts/GlobalContext';
+import { useChatRealtime } from '../hooks/useChatRealtime';
 
 type ChatScreenProps = {
   userProfile: UserProfile | null;
-  friendId?: string;
-  friendName?: string;
+  recipientId: string;
+  recipientName: string;
+  poolId?: string;
   onBack: () => void;
 };
 
-type Message = {
-  id: string;
-  text: string;
-  sender: 'user' | 'friend';
-  timestamp: Date;
-  status?: 'sent' | 'delivered' | 'read';
-};
-
-export default function ChatScreen({ userProfile, friendId = 'RS2024', friendName = 'Raisul', onBack }: ChatScreenProps) {
-  const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: 'Hey! Are you available for the ride today?',
-      sender: 'friend',
-      timestamp: new Date(Date.now() - 3600000),
-      status: 'read'
-    },
-    {
-      id: '2',
-      text: 'Yes! What time are you planning to leave?',
-      sender: 'user',
-      timestamp: new Date(Date.now() - 3500000),
-      status: 'read'
-    },
-    {
-      id: '3',
-      text: 'Around 8:30 AM from Mirpur. Does that work for you?',
-      sender: 'friend',
-      timestamp: new Date(Date.now() - 3400000),
-      status: 'read'
-    },
-    {
-      id: '4',
-      text: 'Perfect! I\'ll be ready. See you then!',
-      sender: 'user',
-      timestamp: new Date(Date.now() - 3300000),
-      status: 'read'
-    },
-  ]);
-  
+export default function ChatScreen({ userProfile, recipientId, recipientName, poolId, onBack }: ChatScreenProps) {
+  const [messageText, setMessageText] = useState('');
   const scrollViewRef = useRef<ScrollView>(null);
   const keyboardHeight = useRef(new Animated.Value(0)).current;
   const isFemale = userProfile?.gender === 'female';
   const accentColor = isFemale ? '#ec4899' : '#1f2937';
+
+  // Use real-time chat hook
+  const {
+    messages,
+    loading,
+    sending,
+    error,
+    sendMessage,
+    refresh,
+  } = useChatRealtime(userProfile?.id || null, recipientId, poolId);
 
   useEffect(() => {
     const keyboardWillShow = Keyboard.addListener(
@@ -86,26 +59,30 @@ export default function ChatScreen({ userProfile, friendId = 'RS2024', friendNam
     };
   }, []);
 
-  const handleSendMessage = () => {
-    if (message.trim()) {
-      const newMessage: Message = {
-        id: Date.now().toString(),
-        text: message.trim(),
-        sender: 'user',
-        timestamp: new Date(),
-        status: 'sent'
-      };
-      
-      setMessages([...messages, newMessage]);
-      setMessage('');
-      
+  // Scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (messages.length > 0) {
       setTimeout(() => {
         scrollViewRef.current?.scrollToEnd({ animated: true });
       }, 100);
     }
+  }, [messages.length]);
+
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || sending) return;
+    
+    const text = messageText.trim();
+    setMessageText('');
+    
+    const result = await sendMessage(text);
+    if (!result.success) {
+      // Restore message if failed
+      setMessageText(text);
+    }
   };
 
-  const formatTime = (date: Date) => {
+  const formatTime = (dateStr: string) => {
+    const date = new Date(dateStr);
     return date.toLocaleTimeString('en-US', { 
       hour: 'numeric', 
       minute: '2-digit',
@@ -113,7 +90,8 @@ export default function ChatScreen({ userProfile, friendId = 'RS2024', friendNam
     });
   };
 
-  const formatDate = (date: Date) => {
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
@@ -139,78 +117,110 @@ export default function ChatScreen({ userProfile, friendId = 'RS2024', friendNam
             
             <View className="relative">
               <View className="w-11 h-11 rounded-full items-center justify-center bg-gray-300 border-2 border-white shadow-sm">
-                <Text className="text-gray-800 font-semibold text-base">{friendName[0]}</Text>
+                <Text className="text-gray-800 font-semibold text-base">{recipientName[0]?.toUpperCase()}</Text>
               </View>
               <View className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></View>
             </View>
             
             <View className="flex-1">
-              <Text className="text-gray-900 font-bold text-lg">{friendName}</Text>
+              <Text className="text-gray-900 font-bold text-lg">{recipientName}</Text>
               <Text className="text-xs text-green-600">Active now</Text>
             </View>
           </View>
           
-          <TouchableOpacity activeOpacity={0.7}>
-            <MoreVertical className="w-6 h-6 text-gray-600" />
+          <TouchableOpacity onPress={refresh} activeOpacity={0.7} className="p-2">
+            <RefreshCw className="w-5 h-5 text-gray-600" />
           </TouchableOpacity>
         </View>
 
-        {/* Messages */}
-        <ScrollView 
-          ref={scrollViewRef}
-          className="flex-1 bg-gray-50"
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 20 }}
-          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View className="flex items-center mb-6">
-            <View className="bg-gray-200 px-4 py-1.5 rounded-full">
-              <Text className="text-xs text-gray-600 font-medium">{formatDate(new Date())}</Text>
-            </View>
+        {/* Loading State */}
+        {loading && messages.length === 0 && (
+          <View className="flex-1 items-center justify-center">
+            <ActivityIndicator size="large" color={accentColor} />
+            <Text className="text-gray-500 mt-3">Loading messages...</Text>
           </View>
+        )}
 
-          <View className="space-y-3">
-            {messages.map((msg, index) => {
-              const isUser = msg.sender === 'user';
-              const showTime = index === 0 || 
-                messages[index - 1].sender !== msg.sender ||
-                (msg.timestamp.getTime() - messages[index - 1].timestamp.getTime()) > 300000;
-              
-              return (
-                <View key={msg.id} className={`flex ${isUser ? 'items-end' : 'items-start'} mb-2`}>
-                  <View className={`max-w-[75%] ${isUser ? 'items-end' : 'items-start'}`}>
-                    <View 
-                      className={`px-5 py-3 rounded-2xl shadow-sm ${isUser ? '' : 'bg-white'}`}
-                      style={isUser ? { 
-                        borderBottomRightRadius: 4,
-                        backgroundColor: accentColor 
-                      } : { 
-                        borderBottomLeftRadius: 4 
-                      }}
-                    >
-                      <Text className={`${isUser ? 'text-white' : 'text-gray-900'} text-base leading-6`}>
-                        {msg.text}
-                      </Text>
-                    </View>
-                    
-                    {showTime && (
-                      <View className="flex-row items-center gap-1 mt-1.5 px-2">
-                        <Text className="text-xs text-gray-500">
-                          {formatTime(msg.timestamp)}
-                        </Text>
-                        {isUser && msg.status && (
-                          <Text className="text-xs text-gray-500">
-                            • {msg.status === 'read' ? 'Read' : msg.status === 'delivered' ? 'Delivered' : 'Sent'}
-                          </Text>
-                        )}
-                      </View>
-                    )}
-                  </View>
-                </View>
-              );
-            })}
+        {/* Error State */}
+        {error && messages.length === 0 && (
+          <View className="flex-1 items-center justify-center px-6">
+            <Text className="text-red-500 text-center mb-4">{error}</Text>
+            <TouchableOpacity 
+              onPress={refresh}
+              className="px-4 py-2 bg-gray-200 rounded-lg"
+            >
+              <Text className="text-gray-700">Retry</Text>
+            </TouchableOpacity>
           </View>
-        </ScrollView>
+        )}
+
+        {/* Empty State */}
+        {!loading && !error && messages.length === 0 && (
+          <View className="flex-1 items-center justify-center px-6">
+            <Text className="text-gray-500 text-center text-lg mb-2">No messages yet</Text>
+            <Text className="text-gray-400 text-center">Send a message to start the conversation!</Text>
+          </View>
+        )}
+
+        {/* Messages */}
+        {messages.length > 0 && (
+          <ScrollView 
+            ref={scrollViewRef}
+            className="flex-1 bg-gray-50"
+            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 20 }}
+            onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View className="flex items-center mb-6">
+              <View className="bg-gray-200 px-4 py-1.5 rounded-full">
+                <Text className="text-xs text-gray-600 font-medium">
+                  {messages.length > 0 ? formatDate(messages[0].created_at) : formatDate(new Date().toISOString())}
+                </Text>
+              </View>
+            </View>
+
+            <View className="space-y-3">
+              {messages.map((msg, index) => {
+                const showTime = index === 0 || 
+                  messages[index - 1].is_mine !== msg.is_mine ||
+                  (new Date(msg.created_at).getTime() - new Date(messages[index - 1].created_at).getTime()) > 300000;
+                
+                return (
+                  <View key={msg.id} className={`flex ${msg.is_mine ? 'items-end' : 'items-start'} mb-2`}>
+                    <View className={`max-w-[75%] ${msg.is_mine ? 'items-end' : 'items-start'}`}>
+                      <View 
+                        className={`px-5 py-3 rounded-2xl shadow-sm ${msg.is_mine ? '' : 'bg-white'}`}
+                        style={msg.is_mine ? { 
+                          borderBottomRightRadius: 4,
+                          backgroundColor: accentColor 
+                        } : { 
+                          borderBottomLeftRadius: 4 
+                        }}
+                      >
+                        <Text className={`${msg.is_mine ? 'text-white' : 'text-gray-900'} text-base leading-6`}>
+                          {msg.content}
+                        </Text>
+                      </View>
+                      
+                      {showTime && (
+                        <View className="flex-row items-center gap-1 mt-1.5 px-2">
+                          <Text className="text-xs text-gray-500">
+                            {formatTime(msg.created_at)}
+                          </Text>
+                          {msg.is_mine && (
+                            <Text className="text-xs text-gray-500">
+                              • {msg.is_read ? 'Read' : 'Sent'}
+                            </Text>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </ScrollView>
+        )}
 
         {/* Input Area */}
         <Animated.View 
@@ -224,8 +234,8 @@ export default function ChatScreen({ userProfile, friendId = 'RS2024', friendNam
 
             <View className="flex-1 bg-gray-100 rounded-3xl px-5 py-3 flex-row items-center gap-2">
               <TextInput
-                value={message}
-                onChangeText={setMessage}
+                value={messageText}
+                onChangeText={setMessageText}
                 placeholder="Type a message..."
                 placeholderTextColor="#9ca3af"
                 multiline
@@ -234,6 +244,7 @@ export default function ChatScreen({ userProfile, friendId = 'RS2024', friendNam
                 style={{ minHeight: 24 }}
                 returnKeyType="default"
                 blurOnSubmit={false}
+                editable={!sending}
               />
               <TouchableOpacity activeOpacity={0.7}>
                 <Smile className="w-6 h-6 text-gray-400" />
@@ -244,10 +255,14 @@ export default function ChatScreen({ userProfile, friendId = 'RS2024', friendNam
               onPress={handleSendMessage}
               activeOpacity={0.7}
               className="p-3 rounded-full mb-0.5"
-              style={{ backgroundColor: message.trim() ? accentColor : '#e5e7eb' }}
-              disabled={!message.trim()}
+              style={{ backgroundColor: messageText.trim() && !sending ? accentColor : '#e5e7eb' }}
+              disabled={!messageText.trim() || sending}
             >
-              <Send className="w-5 h-5" color={message.trim() ? '#ffffff' : '#9ca3af'} />
+              {sending ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <Send className="w-5 h-5" color={messageText.trim() ? '#ffffff' : '#9ca3af'} />
+              )}
             </TouchableOpacity>
           </View>
         </Animated.View>

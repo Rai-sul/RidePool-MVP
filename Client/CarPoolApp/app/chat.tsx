@@ -10,8 +10,9 @@ export default function Chat() {
   return (
     <ChatScreen 
       userProfile={userProfile} 
-      friendId={params.friendId as string}
-      friendName={params.friendName as string}
+      recipientId={params.recipientId as string || params.friendId as string}
+      recipientName={params.recipientName as string || params.friendName as string || 'User'}
+      poolId={params.poolId as string}
       onBack={() => router.back()}
     />
   );
