@@ -49,6 +49,14 @@ export interface PoolSearchResult {
     estimatedDetour: number;
     exactDistance?: number;
     exactETA?: number;
+    // Pool pickup location (where the pool's creator/driver is)
+    poolPickupLocation?: {
+      lat: number;
+      lng: number;
+      address?: string;
+    };
+    // Distance from user's pickup to pool's current location
+    distanceToPoolKm?: number;
   }>;
   alternatives: Array<{
     action: string;

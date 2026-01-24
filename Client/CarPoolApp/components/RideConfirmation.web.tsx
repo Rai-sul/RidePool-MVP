@@ -6,6 +6,7 @@ import GoogleMapView from './GoogleMapView';
 import LinearGradient from './LinearGradient';
 import type { Destination, UserProfile, Pool, Location } from '../contexts/GlobalContext';
 import { usePools } from '../hooks/usePools';
+import { useRides } from '../hooks/useRides';
 import { rideService, RideEstimate, AlternativeRouteInfo } from '../services/ride.service';
 
 type RideConfirmationProps = {
@@ -31,6 +32,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
   const [selectedVehicleType, setSelectedVehicleType] = useState<'CAR' | 'CNG' | null>(null);
   const [showConfirmButton, setShowConfirmButton] = useState(false);
   const [isCreatingPool, setIsCreatingPool] = useState(false);
+  const [isJoiningPool, setIsJoiningPool] = useState(false);
   const [rideEstimate, setRideEstimate] = useState<RideEstimate | null>(null);
   const [routeInfo, setRouteInfo] = useState<{ summary?: string; selectedReason?: string } | null>(null);
   const [alternativeRoutes, setAlternativeRoutes] = useState<AlternativeRouteInfo[]>([]);
@@ -39,7 +41,10 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
   const isFemale = userProfile?.gender === 'female';
   
   // Use the pools hook to search for real pools and create new ones
-  const { searchPools, createPool, searchResults, currentPool, loading, error, clearSearch } = usePools();
+  const { searchPools, createPool, joinPool, searchResults, currentPool, loading, error, clearSearch } = usePools();
+  
+  // Use the rides hook to create rides
+  const { requestRide } = useRides();
   
   // Get available pools from search results
   const availablePools = searchResults?.pools || [];
@@ -170,41 +175,80 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
     setSelectedPoolId(poolResult.poolId);
   };
 
-  const handleConfirm = () => {
-    if (selectedPoolId) {
-      const poolResult = filteredPools.find((p: any) => p.poolId === selectedPoolId);
-      if (poolResult) {
-        // Create a Pool object from the search result
-        const selectedPool: Pool = {
-          id: poolResult.poolId,
-          creator_user_id: '',
-          driver_id: null,
-          vehicle_id: null,
-          status: 'WAITING_FOR_RIDERS',
-          destination_lat: destination?.latitude || 0,
-          destination_lng: destination?.longitude || 0,
-          destination_address: destination?.address || destination?.name || null,
-          destination_h3_index: '',
-          vehicle_type: selectedVehicleType || 'CAR',
-          gender_restriction: (isFemale && activeRideType === 'female-only') ? 'FEMALE_ONLY' : 'ANY',
-          current_passengers: 1,
-          max_passengers: selectedVehicleType === 'CNG' ? 2 : 4,
-          viability_score: poolResult.score || null,
-          score_breakdown: null,
-          fare_per_person: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          started_at: null,
-          completed_at: null,
-          deleted_at: null,
-          // Display properties
-          eta: poolResult.exactETA || 5,
-          rating: 4.5,
-        };
-        onPoolSelect(selectedPool);
-      }
+  // Handle joining an existing pool - creates a ride first, then joins the pool
+  const handleConfirm = useCallback(async () => {
+    if (!selectedPoolId || !pickupLocation?.latitude || !pickupLocation?.longitude || 
+        !destination?.latitude || !destination?.longitude || !selectedVehicleType) {
+      return;
     }
-  };
+
+    const poolResult = filteredPools.find((p: any) => p.poolId === selectedPoolId);
+    if (!poolResult) return;
+
+    setIsJoiningPool(true);
+    try {
+      // Step 1: Create a ride request first
+      const rideResult = await requestRide({
+        pickup_lat: pickupLocation.latitude,
+        pickup_lng: pickupLocation.longitude,
+        pickup_address: pickupLocation.address || pickupLocation.name,
+        dropoff_lat: destination.latitude,
+        dropoff_lng: destination.longitude,
+        dropoff_address: destination.address || destination.name,
+        vehicle_type: selectedVehicleType,
+        gender_restriction: (isFemale && activeRideType === 'female-only') ? 'FEMALE_ONLY' : 'ANY',
+      });
+
+      if (!rideResult.success || !rideResult.data) {
+        console.error('Failed to create ride:', rideResult.error);
+        throw new Error(rideResult.error || 'Failed to create ride');
+      }
+
+      // Step 2: Join the pool with the ride ID
+      const joinResult = await joinPool(selectedPoolId, rideResult.data.id);
+      
+      if (!joinResult.success) {
+        console.error('Failed to join pool:', joinResult.error);
+        throw new Error(joinResult.error || 'Failed to join pool');
+      }
+
+      // Step 3: Create the pool object for navigation
+      const selectedPool: Pool = {
+        id: poolResult.poolId,
+        creator_user_id: '',
+        driver_id: null,
+        vehicle_id: null,
+        status: 'WAITING_FOR_RIDERS',
+        destination_lat: destination.latitude,
+        destination_lng: destination.longitude,
+        destination_address: destination.address || destination.name || null,
+        destination_h3_index: '',
+        vehicle_type: selectedVehicleType,
+        gender_restriction: (isFemale && activeRideType === 'female-only') ? 'FEMALE_ONLY' : 'ANY',
+        current_passengers: joinResult.currentPassengers || 2,
+        max_passengers: selectedVehicleType === 'CNG' ? 2 : 4,
+        viability_score: poolResult.score || null,
+        score_breakdown: null,
+        fare_per_person: joinResult.farePerPerson || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        started_at: null,
+        completed_at: null,
+        deleted_at: null,
+        // Display properties
+        eta: poolResult.exactETA || 5,
+        rating: 4.5,
+      };
+      
+      // Navigate to the searching/waiting screen
+      onPoolSelect(selectedPool);
+    } catch (err) {
+      console.error('Failed to join pool:', err);
+    } finally {
+      setIsJoiningPool(false);
+    }
+  }, [selectedPoolId, pickupLocation, destination, selectedVehicleType, isFemale, activeRideType, 
+      filteredPools, requestRide, joinPool, onPoolSelect]);
 
   // Get stops for selected pool
   const selectedPoolResult = selectedPoolId ? filteredPools.find((p: any) => p.poolId === selectedPoolId) : null;
@@ -220,29 +264,46 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
     ? { latitude: destination.latitude, longitude: destination.longitude }
     : { latitude: 23.82, longitude: 90.43 };
 
+  // Get pool's pickup location for map display
+  const poolPickupCoords = selectedPoolResult?.poolPickupLocation
+    ? { latitude: selectedPoolResult.poolPickupLocation.lat, longitude: selectedPoolResult.poolPickupLocation.lng }
+    : null;
+
+  // Build markers for the map - includes pool location when selected
+  const getMapMarkers = () => {
+    const markers: Array<{
+      id: string;
+      latitude: number;
+      longitude: number;
+      title: string;
+      icon: 'pickup' | 'dropoff' | 'pool';
+    }> = [];
+
+    // Add pool location marker when a pool is selected
+    if (selectedPoolId && poolPickupCoords) {
+      markers.push({
+        id: 'pool-location',
+        latitude: poolPickupCoords.latitude,
+        longitude: poolPickupCoords.longitude,
+        title: `Pool Location${selectedPoolResult?.poolPickupLocation?.address ? ` - ${selectedPoolResult.poolPickupLocation.address}` : ''}`,
+        icon: 'pool',
+      });
+    }
+
+    return markers;
+  };
+
   return (
     <View className="h-full w-full flex flex-col bg-white">
       {/* Google Map */}
       <View style={{ height: '33%', position: 'relative' }}>
         <GoogleMapView
-          center={pickupCoords}
+          center={selectedPoolId && poolPickupCoords ? poolPickupCoords : pickupCoords}
           zoom={12}
           pickupLocation={pickupCoords}
           dropoffLocation={dropoffCoords}
           showDirections={true}
-          markers={
-            selectedPoolId && currentStops.length > 0
-              ? currentStops
-                  .filter(stop => stop.rider !== 'You')
-                  .map((stop, idx) => ({
-                    id: `stop-${idx}`,
-                    latitude: pickupCoords.latitude + (stop.y - 50) * 0.0015,
-                    longitude: pickupCoords.longitude + (stop.x - 50) * 0.0015,
-                    title: `${stop.rider} - ${stop.name}`,
-                    icon: stop.type === 'pickup' ? 'pickup' : 'dropoff',
-                  }))
-              : []
-          }
+          markers={getMapMarkers()}
         >
           {/* Back Button Overlay */}
           <Button
@@ -587,6 +648,17 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                       </View>
 
                       <View className="grid grid-cols-2 gap-2">
+                        {/* Distance to pool - shows distance from user's pickup to pool's current location */}
+                        {poolResult.distanceToPoolKm !== undefined && (
+                          <View className="flex flex-row items-center gap-2">
+                            <MapPin className="w-4 h-4 text-blue-600" />
+                            <Text className="text-sm text-blue-700">
+                              {poolResult.distanceToPoolKm < 1 
+                                ? `${Math.round(poolResult.distanceToPoolKm * 1000)}m away` 
+                                : `${poolResult.distanceToPoolKm.toFixed(1)}km away`}
+                            </Text>
+                          </View>
+                        )}
                         <View className="flex flex-row items-center gap-2">
                           <Navigation className="w-4 h-4 text-gray-600" />
                           <Text className="text-sm text-gray-600">{poolResult.routeOverlapPercentage}% route match</Text>
@@ -598,7 +670,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                         {poolResult.estimatedDetour > 0 && (
                           <View className="flex flex-row items-center gap-2">
                             <MapPin className="w-4 h-4 text-orange-500" />
-                            <Text className="text-sm text-orange-600">+{poolResult.estimatedDetour} min detour</Text>
+                            <Text className="text-sm text-orange-600">+{poolResult.estimatedDetour.toFixed(1)}km detour</Text>
                           </View>
                         )}
                       </View>
@@ -634,9 +706,17 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
         >
           <Button
             onClick={handleConfirm}
-            className={`w-full h-14 ${isFemale ? 'bg-pink-500 hover:bg-pink-600' : 'bg-blue-600 hover:bg-blue-700'} active:scale-[0.98] transition-transform`}
+            disabled={isJoiningPool}
+            className={`w-full h-14 ${isFemale ? 'bg-pink-500 hover:bg-pink-600' : 'bg-blue-600 hover:bg-blue-700'} active:scale-[0.98] transition-transform ${isJoiningPool ? 'opacity-70' : ''}`}
           >
-            Confirm RideShare Pool
+            {isJoiningPool ? (
+              <View className="flex-row items-center gap-2">
+                <ActivityIndicator size="small" color="#ffffff" />
+                <Text className="text-white font-bold text-base">Joining Pool...</Text>
+              </View>
+            ) : (
+              'Join RideShare Pool'
+            )}
           </Button>
         </View>
       )}

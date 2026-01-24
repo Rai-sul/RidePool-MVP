@@ -28,7 +28,7 @@ interface MarkerData {
   latitude: number;
   longitude: number;
   title?: string;
-  icon?: 'pickup' | 'dropoff' | 'driver' | 'current' | 'default';
+  icon?: 'pickup' | 'dropoff' | 'driver' | 'current' | 'default' | 'pool';
 }
 
 interface GoogleMapViewProps {
@@ -49,6 +49,7 @@ const markerColors: Record<string, string> = {
   driver: '#3B82F6',
   current: '#3B82F6',
   default: '#F59E0B',
+  pool: '#8B5CF6', // Purple for pool location
 };
 
 export default function GoogleMapView({

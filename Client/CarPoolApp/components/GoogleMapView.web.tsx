@@ -9,7 +9,7 @@ interface MarkerData {
   latitude: number;
   longitude: number;
   title?: string;
-  icon?: 'pickup' | 'dropoff' | 'driver' | 'current' | 'default';
+  icon?: 'pickup' | 'dropoff' | 'driver' | 'current' | 'default' | 'pool';
 }
 
 interface GoogleMapViewProps {
@@ -34,6 +34,7 @@ const markerIcons: Record<string, string> = {
   driver: 'https://maps.google.com/mapfiles/kml/shapes/cabs.png',
   current: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
   default: 'https://maps.google.com/mapfiles/ms/icons/yellow-dot.png',
+  pool: 'https://maps.google.com/mapfiles/ms/icons/purple-dot.png', // Purple for pool location
 };
 
 export default function GoogleMapView({

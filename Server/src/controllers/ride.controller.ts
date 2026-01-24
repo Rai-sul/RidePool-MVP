@@ -56,10 +56,11 @@ export class RideController {
       const searchResult = await poolMatchingService.findMatchingPoolsEnhanced(ride as Ride, userId);
 
       res.json({
+        success: true,
+        data: ride,
         message: searchResult.hasMatches 
           ? 'Ride requested successfully - Pools found!' 
           : 'Ride requested - No pools found, see alternatives',
-        ride,
         poolSearch: {
           matches: searchResult.matches.slice(0, 5),
           alternatives: searchResult.alternatives,
@@ -67,6 +68,7 @@ export class RideController {
           metadata: searchResult.metadata,
           hasMatches: searchResult.hasMatches,
         },
+        timestamp: new Date().toISOString(),
       });
     } catch (error) {
       next(error);

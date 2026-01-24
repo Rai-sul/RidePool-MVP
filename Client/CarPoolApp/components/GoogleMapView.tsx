@@ -12,7 +12,7 @@ interface GoogleMapViewProps {
     latitude: number;
     longitude: number;
     title?: string;
-    icon?: 'pickup' | 'dropoff' | 'driver' | 'current' | 'default';
+    icon?: 'pickup' | 'dropoff' | 'driver' | 'current' | 'default' | 'pool';
   }>;
   pickupLocation?: { latitude: number; longitude: number };
   dropoffLocation?: { latitude: number; longitude: number };

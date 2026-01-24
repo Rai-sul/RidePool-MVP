@@ -30,6 +30,14 @@ export interface ScoredMatchingResult extends H3MatchingResult {
   score: number;
   scoreBreakdown: ScoreBreakdown;
   routeOverlapPercentage: number;
+  // Pool pickup location (where the pool's creator/driver is located)
+  poolPickupLocation?: {
+    lat: number;
+    lng: number;
+    address?: string;
+  };
+  // Distance from user's pickup to pool's current location
+  distanceToPoolKm?: number;
   // Google Maps enriched data (optional, only for top matches)
   exactDistance?: number; // Exact distance in km from Google Maps
   exactETA?: number; // Exact ETA in minutes from Google Maps
@@ -602,6 +610,26 @@ export class PoolMatchingService {
           continue;
         }
 
+        // Get pool pickup location from score_breakdown (creator's pickup)
+        const poolPickupInfo = pool.score_breakdown?.creator_pickup;
+        let poolPickupLocation: { lat: number; lng: number; address?: string } | undefined;
+        let distanceToPoolKm: number | undefined;
+
+        if (poolPickupInfo?.lat && poolPickupInfo?.lng) {
+          poolPickupLocation = {
+            lat: poolPickupInfo.lat,
+            lng: poolPickupInfo.lng,
+            address: poolPickupInfo.address,
+          };
+          // Calculate distance from user's pickup to pool's current location
+          distanceToPoolKm = calculateDistance(
+            pickup.latitude,
+            pickup.longitude,
+            poolPickupInfo.lat,
+            poolPickupInfo.lng
+          );
+        }
+
         matches.push({
           poolId: pool.id,
           h3Distance: h3Utils.getH3Distance(destinationH3, poolDestinationH3),
@@ -612,6 +640,8 @@ export class PoolMatchingService {
           score: scoreResult.totalScore,
           scoreBreakdown: scoreResult,
           routeOverlapPercentage: Math.round(routeOverlap * 100),
+          poolPickupLocation,
+          distanceToPoolKm,
         });
       }
 
