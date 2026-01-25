@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Pool, PoolMember } from '../types';
 import { poolService } from '../services/pool.service';
@@ -9,6 +9,8 @@ interface PoolRealtimeState {
   loading: boolean;
   error: string | null;
   lastUpdated: Date | null;
+  unreadMessageCounts: Record<string, number>; // userId -> unread count
+  isConnected: boolean;
 }
 
 interface CoRiderInfo {
@@ -18,6 +20,7 @@ interface CoRiderInfo {
   joinedAt: string;
   pickupLocation?: { latitude: number; longitude: number; address?: string };
   dropoffLocation?: { latitude: number; longitude: number; address?: string };
+  hasUnreadMessages: boolean;
 }
 
 // Extended pool member with user profile info from API
@@ -39,6 +42,7 @@ interface PoolMemberWithProfile extends PoolMember {
 /**
  * Hook for real-time pool updates using Supabase Realtime
  * Subscribes to pool and pool_members changes for live updates
+ * Also tracks unread messages from co-riders
  */
 export const usePoolRealtime = (poolId: string | null, currentUserId: string | null) => {
   const [state, setState] = useState<PoolRealtimeState>({
@@ -47,7 +51,11 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
     loading: false,
     error: null,
     lastUpdated: null,
+    unreadMessageCounts: {},
+    isConnected: false,
   });
+  
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // Fetch initial pool data
   const fetchPoolData = useCallback(async () => {
@@ -135,14 +143,14 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
 
   // Set up real-time subscriptions
   useEffect(() => {
-    if (!poolId) return;
+    if (!poolId || !currentUserId) return;
 
     // Initial fetch
     fetchPoolData();
 
-    // Subscribe to pool changes
+    // Subscribe to pool changes with improved error handling
     const poolChannel = supabase
-      .channel(`pool:${poolId}`)
+      .channel(`pool-realtime:${poolId}`)
       .on(
         'postgres_changes',
         {
@@ -152,7 +160,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           filter: `id=eq.${poolId}`,
         },
         (payload) => {
-          console.log('Pool update received:', payload.eventType);
+          console.log('[usePoolRealtime] Pool update received:', payload.eventType);
           
           if (payload.eventType === 'UPDATE' && payload.new) {
             setState(prev => ({
@@ -178,11 +186,10 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           filter: `pool_id=eq.${poolId}`,
         },
         (payload) => {
-          console.log('Pool member update received:', payload.eventType);
+          console.log('[usePoolRealtime] Pool member update received:', payload.eventType);
           
           if (payload.eventType === 'INSERT' && payload.new) {
             // Refetch full pool data to get complete member info with user profiles and ride details
-            // This ensures we have the joined user/ride data, not just the raw pool_members record
             console.log('[usePoolRealtime] New member joined, refetching pool data...');
             fetchPoolData();
           } else if (payload.eventType === 'DELETE' && payload.old) {
@@ -200,27 +207,78 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           }
         }
       )
-      .subscribe((status) => {
-        console.log('Realtime subscription status:', status);
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+        },
+        (payload) => {
+          // Listen for new messages from pool conversations
+          const newMessage = payload.new as any;
+          
+          // Only track messages from other users (not our own)
+          if (newMessage.sender_id && newMessage.sender_id !== currentUserId) {
+            console.log('[usePoolRealtime] New message from:', newMessage.sender_id);
+            
+            setState(prev => ({
+              ...prev,
+              unreadMessageCounts: {
+                ...prev.unreadMessageCounts,
+                [newMessage.sender_id]: (prev.unreadMessageCounts[newMessage.sender_id] || 0) + 1,
+              },
+              lastUpdated: new Date(),
+            }));
+          }
+        }
+      )
+      .subscribe((status, err) => {
+        console.log('[usePoolRealtime] Subscription status:', status);
+        
         if (status === 'SUBSCRIBED') {
-          console.log('Successfully subscribed to pool updates');
+          console.log('[usePoolRealtime] Successfully subscribed to pool updates');
+          setState(prev => ({ ...prev, isConnected: true }));
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[usePoolRealtime] Channel error:', err);
+          setState(prev => ({ ...prev, isConnected: false }));
+        } else if (status === 'TIMED_OUT') {
+          console.warn('[usePoolRealtime] Subscription timed out, retrying...');
+          setState(prev => ({ ...prev, isConnected: false }));
+        } else if (status === 'CLOSED') {
+          setState(prev => ({ ...prev, isConnected: false }));
         }
       });
 
+    channelRef.current = poolChannel;
+
     // Cleanup subscription on unmount
     return () => {
-      console.log('Unsubscribing from pool updates');
-      supabase.removeChannel(poolChannel);
+      console.log('[usePoolRealtime] Unsubscribing from pool updates');
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
-  }, [poolId, fetchPoolData]);
+  }, [poolId, currentUserId, fetchPoolData]);
 
-  // Derived state: co-riders (excluding current user)
+  // Clear unread messages for a specific user (call when opening chat with that user)
+  const clearUnreadMessages = useCallback((userId: string) => {
+    setState(prev => {
+      const newCounts = { ...prev.unreadMessageCounts };
+      delete newCounts[userId];
+      return { ...prev, unreadMessageCounts: newCounts };
+    });
+  }, []);
+
+  // Derived state: co-riders (excluding current user) with unread message status
   const coRiders: CoRiderInfo[] = state.members
     .filter(member => member.user_id !== currentUserId)
     .map((member, index) => {
       const memberWithProfile = member as PoolMemberWithProfile;
       const userName = memberWithProfile.user?.full_name || `Rider ${index + 1}`;
       const initial = userName.charAt(0).toUpperCase();
+      const unreadCount = state.unreadMessageCounts[member.user_id] || 0;
       
       return {
         userId: member.user_id,
@@ -237,6 +295,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           longitude: memberWithProfile.ride.dropoff_lng,
           address: memberWithProfile.ride.dropoff_address,
         } : undefined,
+        hasUnreadMessages: unreadCount > 0,
       };
     });
 
@@ -260,6 +319,8 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
     loading: state.loading,
     error: state.error,
     lastUpdated: state.lastUpdated,
+    isConnected: state.isConnected,
     refresh,
+    clearUnreadMessages,
   };
 };

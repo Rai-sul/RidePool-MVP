@@ -26,6 +26,7 @@ export default function ChatScreen({ userProfile, recipientId, recipientName, po
     loading,
     sending,
     error,
+    isConnected,
     sendMessage,
     refresh,
   } = useChatRealtime(userProfile?.id || null, recipientId, poolId);
@@ -119,12 +120,17 @@ export default function ChatScreen({ userProfile, recipientId, recipientName, po
               <View className="w-11 h-11 rounded-full items-center justify-center bg-gray-300 border-2 border-white shadow-sm">
                 <Text className="text-gray-800 font-semibold text-base">{recipientName[0]?.toUpperCase()}</Text>
               </View>
-              <View className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></View>
+              <View 
+                className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white"
+                style={{ backgroundColor: isConnected ? '#22c55e' : '#eab308' }}
+              />
             </View>
             
             <View className="flex-1">
               <Text className="text-gray-900 font-bold text-lg">{recipientName}</Text>
-              <Text className="text-xs text-green-600">Active now</Text>
+              <Text className={`text-xs ${isConnected ? 'text-green-600' : 'text-yellow-600'}`}>
+                {isConnected ? 'Live' : 'Syncing...'}
+              </Text>
             </View>
           </View>
           

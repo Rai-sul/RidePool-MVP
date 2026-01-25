@@ -30,7 +30,9 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
     loading: loadingPool,
     error: poolError,
     lastUpdated,
+    isConnected,
     refresh: refreshPool,
+    clearUnreadMessages,
   } = usePoolRealtime(selectedPool?.id || null, userProfile?.id || null);
   
   const isFemale = userProfile?.gender === 'female';

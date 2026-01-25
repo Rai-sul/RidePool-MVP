@@ -145,26 +145,40 @@ export class MessagingController {
           pool_id,
           last_message_at,
           created_at,
-          conversation_participants(user_id, users(id, phone, full_name, average_rating)),
-          messages(id, message_text, sender_id, read_at, created_at)
+          conversation_participants(user_id, users(id, phone, full_name, average_rating))
         `, { count: 'exact' })
         .in('id', conversationIds)
-        .order('last_message_at', { ascending: false })
+        .order('last_message_at', { ascending: false, nullsFirst: false })
         .range(offset, offset + limit - 1);
 
       if (error) {
+        logger.error('[MessagingController] Error fetching conversations:', { error, conversationIds });
         throw error;
       }
 
-      const formattedConversations = (conversations || []).map((conv) => {
+      // Fetch last message and unread count for each conversation separately
+      const formattedConversations = await Promise.all((conversations || []).map(async (conv) => {
         const otherParticipants = conv.conversation_participants?.filter(
           (p: any) => p.user_id !== userId
         ) || [];
 
-        const lastMessage = conv.messages?.[0];
-        const unreadCount = conv.messages?.filter(
-          (m: any) => !m.read_at && m.sender_id !== userId
-        ).length || 0;
+        // Get the last message for this conversation
+        const { data: lastMsgArray } = await supabaseAdmin
+          .from('messages')
+          .select('id, message_text, sender_id, read_at, created_at')
+          .eq('conversation_id', conv.id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        
+        const lastMsgData = lastMsgArray?.[0] || null;
+
+        // Get unread count (messages not from current user and not read)
+        const { count: unreadCount } = await supabaseAdmin
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('conversation_id', conv.id)
+          .neq('sender_id', userId)
+          .is('read_at', null);
 
         return {
           id: conv.id,
@@ -175,16 +189,16 @@ export class MessagingController {
             full_name: p.users?.full_name,
             rating: p.users?.average_rating,
           })),
-          last_message: lastMessage ? {
-            content: lastMessage.message_text,
-            sender_id: lastMessage.sender_id,
-            sent_at: lastMessage.created_at,
-            is_read: !!lastMessage.read_at,
+          last_message: lastMsgData ? {
+            content: lastMsgData.message_text,
+            sender_id: lastMsgData.sender_id,
+            sent_at: lastMsgData.created_at,
+            is_read: !!lastMsgData.read_at,
           } : null,
-          unread_count: unreadCount,
+          unread_count: unreadCount || 0,
           last_message_at: conv.last_message_at,
         };
-      });
+      }));
 
       res.json({
         success: true,

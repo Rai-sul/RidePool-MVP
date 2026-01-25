@@ -45,7 +45,9 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
     loading: loadingPool,
     error: poolError,
     lastUpdated,
+    isConnected,
     refresh: refreshPool,
+    clearUnreadMessages,
   } = usePoolRealtime(selectedPool?.id || null, userProfile?.id || null);
   
   const isFemale = userProfile?.gender === 'female';
@@ -367,8 +369,10 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
           <View className="flex-row items-center justify-between mb-4">
             <View className="flex-row items-center gap-2">
               <Text className="font-semibold">Pool Status</Text>
-              <View className="w-2 h-2 rounded-full bg-green-500" />
-              <Text className="text-xs text-green-600">Live</Text>
+              <View className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-yellow-500'}`} />
+              <Text className={`text-xs ${isConnected ? 'text-green-600' : 'text-yellow-600'}`}>
+                {isConnected ? 'Live' : 'Connecting...'}
+              </Text>
             </View>
             <View className="flex-row items-center gap-2">
               {loadingPool && <ActivityIndicator size="small" color="#2563eb" />}
@@ -434,17 +438,41 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
                     <Text className={`${isFemale ? 'text-pink-800' : 'text-blue-800'} font-semibold`}>{rider.initial}</Text>
                   </View>
                   <View className="flex-1">
-                    <Text className="text-gray-800 font-medium">{rider.name}</Text>
+                    <View className="flex-row items-center gap-2">
+                      <Text className="text-gray-800 font-medium">{rider.name}</Text>
+                      {rider.hasUnreadMessages && (
+                        <View className="w-2 h-2 rounded-full bg-red-500" />
+                      )}
+                    </View>
                     <Text className="text-xs text-gray-500">
                       Joined {new Date(rider.joinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </Text>
                   </View>
-                  {/* Chat button for co-rider */}
+                  {/* Chat button for co-rider with unread badge */}
                   <TouchableOpacity 
                     className="w-10 h-10 rounded-full bg-gray-100 items-center justify-center"
-                    onPress={() => onChatCoRider?.(rider.userId, rider.name)}
+                    onPress={() => {
+                      clearUnreadMessages(rider.userId);
+                      onChatCoRider?.(rider.userId, rider.name);
+                    }}
+                    style={{ position: 'relative' }}
                   >
-                    <MessageCircle className="w-5 h-5" color="#4b5563" />
+                    <MessageCircle className="w-5 h-5" color={rider.hasUnreadMessages ? '#2563eb' : '#4b5563'} />
+                    {rider.hasUnreadMessages && (
+                      <View 
+                        style={{
+                          position: 'absolute',
+                          top: -2,
+                          right: -2,
+                          width: 12,
+                          height: 12,
+                          borderRadius: 6,
+                          backgroundColor: '#ef4444',
+                          borderWidth: 2,
+                          borderColor: 'white',
+                        }}
+                      />
+                    )}
                   </TouchableOpacity>
                 </View>
               ))}
