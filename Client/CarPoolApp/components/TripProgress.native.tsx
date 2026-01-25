@@ -289,10 +289,25 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
             }
             return EXTENDED_LOOKUP_SECONDS;
           } else if (lookupPhase === 'extended') {
-            // Extended 10 seconds expired - no match found
-            setLookupPhase('no-match');
+            // Extended 10 seconds expired - check passenger count
             setIsExtendedSearching(false);
             clearInterval(timer);
+            
+            // If pool has 2+ passengers, complete search and go to waiting for driver
+            // If only 1 passenger (creator alone), show no-match
+            if (currentPassengers >= 2) {
+              console.log('[TripProgress] Search completed with', currentPassengers, 'passengers, transitioning to matched');
+              setLookupPhase('matched');
+              // Call API to complete search and transition pool status
+              if (selectedPool?.id && isPoolCreator) {
+                poolService.completePoolSearch(selectedPool.id).catch((err) => {
+                  console.log('[TripProgress] Complete search API call failed:', err.message);
+                });
+              }
+            } else {
+              console.log('[TripProgress] Search completed with only', currentPassengers, 'passenger(s), showing no-match');
+              setLookupPhase('no-match');
+            }
             return 0;
           }
         }

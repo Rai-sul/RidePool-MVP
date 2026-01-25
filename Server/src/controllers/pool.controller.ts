@@ -1068,6 +1068,128 @@ export class PoolController {
       next(error);
     }
   }
+
+  /**
+   * Complete pool search and transition to waiting for driver
+   * Called when client-side search timer expires and pool has 2+ passengers
+   */
+  async completeSearch(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { poolId } = req.params;
+
+      // Get the pool with member count
+      const { data: pool, error: poolError } = await supabaseAdmin
+        .from('pools')
+        .select(`
+          id, creator_user_id, status, current_passengers, max_passengers,
+          pool_members(user_id, left_at)
+        `)
+        .eq('id', poolId)
+        .single();
+
+      if (poolError || !pool) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Only pool creator or members can complete search
+      const activeMembers = pool.pool_members?.filter((m: any) => m.left_at === null) || [];
+      const isMember = activeMembers.some((m: any) => m.user_id === userId);
+      
+      if (!isMember && pool.creator_user_id !== userId) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'NOT_MEMBER', message: 'Only pool members can complete search' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Can only complete if still in WAITING_FOR_RIDERS status
+      if (pool.status !== 'WAITING_FOR_RIDERS') {
+        return res.json({
+          success: true,
+          data: {
+            completed: false,
+            reason: 'Pool already transitioned',
+            current_status: pool.status,
+          },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Check if pool has minimum passengers (2+)
+      const MIN_PASSENGERS_TO_START = 2;
+      if (activeMembers.length < MIN_PASSENGERS_TO_START) {
+        return res.json({
+          success: true,
+          data: {
+            completed: false,
+            reason: 'Not enough passengers',
+            current_passengers: activeMembers.length,
+            required_passengers: MIN_PASSENGERS_TO_START,
+          },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Cancel the lookup timer since we're manually completing
+      lookupTimeService.cancelLookupTimer(poolId);
+
+      // Transition to WAITING_FOR_DRIVER
+      await supabaseAdmin
+        .from('pools')
+        .update({
+          status: 'WAITING_FOR_DRIVER' as PoolStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', poolId);
+
+      // Update all member rides status
+      await supabaseAdmin
+        .from('rides')
+        .update({
+          status: 'WAITING_FOR_DRIVER' as RideStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('pool_id', poolId);
+
+      // Notify all members
+      for (const member of activeMembers) {
+        await notificationService.sendPushNotification(member.user_id, {
+          title: 'Pool Ready!',
+          message: 'Your pool is complete. Searching for a driver...',
+          type: 'POOL_MATCH',
+          metadata: { poolId, passengers: activeMembers.length },
+        });
+      }
+
+      logger.info(`[Pool] Pool ${poolId} search completed, transitioned to WAITING_FOR_DRIVER with ${activeMembers.length} passengers`);
+
+      res.json({
+        success: true,
+        data: {
+          completed: true,
+          new_status: 'WAITING_FOR_DRIVER',
+          passengers: activeMembers.length,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const poolController = new PoolController();
