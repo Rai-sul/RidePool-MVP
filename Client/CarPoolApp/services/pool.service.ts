@@ -203,4 +203,12 @@ export const poolService = {
   async extendPoolSearch(poolId: string): Promise<ApiResponse<{ extended: boolean; new_search_radius: number }>> {
     return apiClient.post(API_ENDPOINTS.POOL.EXTEND_SEARCH(poolId));
   },
+
+  /**
+   * Complete pool search and transition to waiting for driver
+   * Called when search timer expires and pool has 2+ passengers
+   */
+  async completePoolSearch(poolId: string): Promise<ApiResponse<{ completed: boolean; new_status?: string; passengers?: number }>> {
+    return apiClient.post(API_ENDPOINTS.POOL.COMPLETE_SEARCH(poolId));
+  },
 };
