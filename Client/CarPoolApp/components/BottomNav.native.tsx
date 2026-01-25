@@ -40,7 +40,10 @@ export default function BottomNav({ isFemale = false }: BottomNavProps) {
   ];
   
   return (
-    <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200">
+    <View 
+      className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200"
+      style={{ zIndex: 100 }}
+    >
       <View className="flex-row items-center justify-between h-16 px-2">
         {/* Left Tabs */}
         <View className="flex-row items-center flex-1 justify-around">

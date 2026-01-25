@@ -2,6 +2,7 @@ import '../styles/globals.css';
 import { Stack, usePathname } from 'expo-router';
 import { View, Text, TouchableOpacity } from 'react-native';
 import BottomNav from '../components/BottomNav';
+import ActiveTripButton from '../components/ActiveTripButton';
 import { GlobalProvider, useGlobalContext } from '../contexts/GlobalContext';
 import { AuthProvider, useAuthContext } from '../contexts/AuthContext';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
@@ -23,6 +24,13 @@ function AppLayout() {
     pathname !== '/chat' &&
     pathname !== '/support-chat' &&
     pathname !== '/driver-chat';
+
+  // Show active trip button on most pages when authenticated
+  const showActiveTripButton = 
+    isAuthenticated &&
+    pathname !== '/' &&
+    pathname !== '/login' &&
+    pathname !== '/profile-setup';
 
         return (
             <View style={{ flex: 1 }}>
@@ -57,6 +65,7 @@ function AppLayout() {
                 <Stack.Screen name="driver-chat" options={{ headerShown: false }} />
               </Stack>
               {showBottomNav && <BottomNav isFemale={userProfile?.gender === 'female'} />}
+              {showActiveTripButton && <ActiveTripButton />}
             </View>
         );
 }
