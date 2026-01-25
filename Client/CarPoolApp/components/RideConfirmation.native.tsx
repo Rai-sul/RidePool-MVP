@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MapPin, Clock, Users, Navigation, ChevronRight, ChevronLeft, Car, Taka, AlertCircle, Plus } from './Icons';
 import { Button } from './ui/button';
 import type { Destination, UserProfile, Pool, Location } from '../contexts/GlobalContext';
@@ -28,6 +28,7 @@ type PoolStop = {
 };
 
 export default function RideConfirmation({ pickupLocation, destination, userProfile, rideType, onPoolSelect, onBack }: RideConfirmationProps) {
+  const insets = useSafeAreaInsets();
   const [selectedPoolId, setSelectedPoolId] = useState<string | null>(null);
   const [activeRideType, setActiveRideType] = useState<'female-only' | 'regular'>(rideType || 'regular');
   const [selectedVehicleType, setSelectedVehicleType] = useState<'CAR' | 'CNG' | null>(null);
@@ -801,11 +802,18 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
         </View>
       </ScrollView>
 
-      {/* Fixed Confirm Button above bottom nav */}
+      {/* Fixed Confirm Button above bottom nav - accounts for system navigation bar */}
       {showConfirmButton && selectedPoolId && (
         <View
-          className="absolute bottom-16 left-0 right-0 px-4 py-4 bg-white border-t border-gray-200"
-          style={{ shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 10 }}
+          className="absolute left-0 right-0 px-4 py-4 bg-white border-t border-gray-200"
+          style={{ 
+            bottom: 64 + insets.bottom, // 64 = bottom nav height + system nav bar
+            shadowColor: '#000', 
+            shadowOffset: { width: 0, height: -2 }, 
+            shadowOpacity: 0.1, 
+            shadowRadius: 8, 
+            elevation: 10 
+          }}
         >
           <Button
             onPress={handleConfirm}

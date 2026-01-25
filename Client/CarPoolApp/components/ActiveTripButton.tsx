@@ -1,6 +1,7 @@
 import React, { Component, ErrorInfo } from 'react';
 import { View, Text, TouchableOpacity, Animated } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGlobalContext } from '../contexts/GlobalContext';
 import { Navigation, Users, ChevronRight } from './Icons';
 import { useEffect, useRef } from 'react';
@@ -45,6 +46,7 @@ export default function ActiveTripButton() {
 function ActiveTripButtonInner() {
   const router = useRouter();
   const pathname = usePathname();
+  const insets = useSafeAreaInsets();
   const { activeTrip, hasActiveTrip, userProfile } = useGlobalContext();
   
   // Always call hooks unconditionally
@@ -56,6 +58,9 @@ function ActiveTripButtonInner() {
   
   // Animation for pulsing effect
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  
+  // Calculate bottom position: above bottom nav (64px) + system nav bar inset
+  const bottomPosition = 64 + 16 + insets.bottom; // 64 = nav height, 16 = gap
   
   useEffect(() => {
     if (hasActiveTrip) {
@@ -144,7 +149,7 @@ function ActiveTripButtonInner() {
     <Animated.View
       style={{
         position: 'absolute',
-        bottom: 80, // Above bottom nav
+        bottom: bottomPosition, // Above bottom nav + system nav bar
         left: 16,
         right: 16,
         transform: [{ scale: pulseAnim }],

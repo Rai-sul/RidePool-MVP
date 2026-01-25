@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { View, TouchableOpacity, Text } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MapPin, Receipt, Wallet, User, Users } from './Icons';
 import LinearGradient from './LinearGradient';
 import { useGlobalContext } from '../contexts/GlobalContext';
@@ -13,6 +14,7 @@ export default function BottomNav({ isFemale = false }: BottomNavProps) {
   const { activeTab, setActiveTab } = useGlobalContext();
   const router = useRouter();
   const pathname = usePathname();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     const currentTab = pathname.substring(1);
@@ -42,7 +44,7 @@ export default function BottomNav({ isFemale = false }: BottomNavProps) {
   return (
     <View 
       className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200"
-      style={{ zIndex: 100 }}
+      style={{ zIndex: 100, paddingBottom: insets.bottom }}
     >
       <View className="flex-row items-center justify-between h-16 px-2">
         {/* Left Tabs */}

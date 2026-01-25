@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Animated, Keyboard, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Platform, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Send, Smile, Paperclip, MoreVertical } from './Icons';
 import type { UserProfile } from '../contexts/GlobalContext';
@@ -33,38 +33,8 @@ export default function DriverChatScreen({ userProfile, driverId = 'DRV001', dri
   ]);
   
   const scrollViewRef = useRef<ScrollView>(null);
-  const keyboardHeight = useRef(new Animated.Value(0)).current;
   const isFemale = userProfile?.gender === 'female';
   const accentColor = isFemale ? '#ec4899' : '#1f2937';
-
-  useEffect(() => {
-    const keyboardWillShow = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      (e) => {
-        Animated.timing(keyboardHeight, {
-          toValue: e.endCoordinates.height,
-          duration: Platform.OS === 'ios' ? 250 : 0,
-          useNativeDriver: false,
-        }).start();
-      }
-    );
-
-    const keyboardWillHide = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => {
-        Animated.timing(keyboardHeight, {
-          toValue: 0,
-          duration: Platform.OS === 'ios' ? 250 : 0,
-          useNativeDriver: false,
-        }).start();
-      }
-    );
-
-    return () => {
-      keyboardWillShow.remove();
-      keyboardWillHide.remove();
-    };
-  }, []);
 
   const handleSendMessage = () => {
     if (message.trim()) {
@@ -108,8 +78,12 @@ export default function DriverChatScreen({ userProfile, driverId = 'DRV001', dri
   };
 
   return (
-    <View className="flex-1 bg-white">
-      <SafeAreaView className="flex-1 bg-white" edges={['top']}>
+    <KeyboardAvoidingView 
+      className="flex-1 bg-white"
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={0}
+    >
+      <SafeAreaView className="flex-1 bg-white" edges={['top', 'bottom']}>
         {/* Header */}
         <View className="flex-row items-center justify-between px-4 py-4 bg-white border-b border-gray-200">
           <View className="flex-row items-center gap-3 flex-1">
@@ -192,11 +166,8 @@ export default function DriverChatScreen({ userProfile, driverId = 'DRV001', dri
           </View>
         </ScrollView>
 
-        {/* Input Area */}
-        <Animated.View 
-          className="px-4 py-3 bg-white border-t border-gray-200"
-          style={{ marginBottom: keyboardHeight }}
-        >
+        {/* Input Area - KeyboardAvoidingView handles keyboard, SafeAreaView handles system nav */}
+        <View className="px-4 py-3 bg-white border-t border-gray-200">
           <View className="flex-row items-end gap-2">
             <TouchableOpacity className="p-2.5 mb-0.5" activeOpacity={0.7}>
               <Paperclip className="w-6 h-6 text-gray-600" />
@@ -230,8 +201,8 @@ export default function DriverChatScreen({ userProfile, driverId = 'DRV001', dri
               <Send className="w-5 h-5" color={message.trim() ? '#ffffff' : '#9ca3af'} />
             </TouchableOpacity>
           </View>
-        </Animated.View>
+        </View>
       </SafeAreaView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
