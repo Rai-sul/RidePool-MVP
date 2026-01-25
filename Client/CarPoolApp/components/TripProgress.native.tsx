@@ -167,8 +167,11 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
       }
     }
     
-    // If pool is already matched (has multiple passengers, driver, or past waiting phase), don't start timer
-    if (currentPassengers > 1 || hasDriver || 
+    // Check if pool is FULL (currentPassengers >= maxPassengers) - stop searching immediately
+    const isPoolFull = currentPassengers >= maxPassengers;
+    
+    // If pool is full, has driver, or past waiting phase, don't start/continue timer
+    if (isPoolFull || hasDriver || 
         poolStatus === 'WAITING_FOR_DRIVER' || 
         poolStatus === 'READY_TO_START' ||
         poolStatus === 'STARTED' ||
@@ -221,7 +224,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
       setLookupPhase('matched');
       hasInitializedRef.current = true;
     }
-  }, [loadingPool, selectedPool?.id, selectedPool?.created_at, currentPassengers, hasDriver, poolStatus, isPoolCreator]);
+  }, [loadingPool, selectedPool?.id, selectedPool?.created_at, currentPassengers, maxPassengers, hasDriver, poolStatus, isPoolCreator]);
 
   // Calculate progress based on pool status
   const getProgress = () => {
@@ -246,8 +249,11 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
       return;
     }
     
-    // Skip if already matched (has other riders or driver)
-    if (currentPassengers > 1 || hasDriver || poolStatus === 'WAITING_FOR_DRIVER' || poolStatus === 'READY_TO_START') {
+    // Check if pool is FULL - only stop searching when pool reaches capacity
+    const isPoolFull = currentPassengers >= maxPassengers;
+    
+    // Skip if pool is FULL, has driver, or past waiting phase
+    if (isPoolFull || hasDriver || poolStatus === 'WAITING_FOR_DRIVER' || poolStatus === 'READY_TO_START') {
       setLookupPhase('matched');
       return;
     }
@@ -295,14 +301,16 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [lookupPhase, currentPassengers, hasDriver, poolStatus, selectedPool?.id, remainingSeconds, isPoolCreator]);
+  }, [lookupPhase, currentPassengers, maxPassengers, hasDriver, poolStatus, selectedPool?.id, remainingSeconds, isPoolCreator]);
 
-  // Watch for new riders joining
+  // Watch for pool becoming FULL - only stop searching when capacity is reached
   useEffect(() => {
-    if (currentPassengers > 1 && lookupPhase !== 'matched') {
+    const isPoolFull = currentPassengers >= maxPassengers;
+    if (isPoolFull && lookupPhase !== 'matched') {
+      console.log('[TripProgress] Pool is full, stopping search');
       setLookupPhase('matched');
     }
-  }, [currentPassengers, lookupPhase]);
+  }, [currentPassengers, maxPassengers, lookupPhase]);
 
   const handleCreateNewPool = useCallback(() => {
     if (onCreateNewPool) {
