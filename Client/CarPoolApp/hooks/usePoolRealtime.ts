@@ -242,13 +242,20 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
             console.log('[usePoolRealtime] Member left, refetching pool data...');
             fetchPoolData();
           } else if (payload.eventType === 'UPDATE' && payload.new) {
-            setState(prev => ({
-              ...prev,
-              members: prev.members.map(m => 
-                m.id === (payload.new as PoolMember).id ? payload.new as PoolMember : m
-              ),
-              lastUpdated: new Date(),
-            }));
+            // Check if left_at was set (member left the pool)
+            const updatedMember = payload.new as any;
+            if (updatedMember.left_at !== null) {
+              console.log('[usePoolRealtime] Member left_at updated, refetching pool data...');
+              fetchPoolData();
+            } else {
+              setState(prev => ({
+                ...prev,
+                members: prev.members.map(m => 
+                  m.id === (payload.new as PoolMember).id ? payload.new as PoolMember : m
+                ),
+                lastUpdated: new Date(),
+              }));
+            }
           }
         }
       )

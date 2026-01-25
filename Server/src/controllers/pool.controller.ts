@@ -444,6 +444,11 @@ export class PoolController {
         });
       }
 
+      // Filter out members who have left (left_at IS NOT NULL)
+      if (pool.pool_members) {
+        pool.pool_members = pool.pool_members.filter((m: any) => m.left_at === null);
+      }
+
       // Fetch user details for pool members separately to avoid join issues
       if (pool.pool_members && pool.pool_members.length > 0) {
         const userIds = pool.pool_members.map((m: any) => m.user_id);
@@ -553,18 +558,73 @@ export class PoolController {
         }
       }
 
-      // Recalculate fare for remaining members after someone leaves
+      // Check remaining active members (those who haven't left)
       const { data: poolWithMembers } = await supabaseAdmin
         .from('pools')
         .select(`
           *,
-          pool_members(user_id, ride_id)
+          pool_members(user_id, ride_id, left_at)
         `)
         .eq('id', poolId)
         .single();
 
-      if (poolWithMembers?.pool_members?.length > 0) {
-        const rideIds = poolWithMembers.pool_members.map((m: any) => m.ride_id).filter(Boolean);
+      // Filter to only active members (left_at IS NULL)
+      const activeMembers = poolWithMembers?.pool_members?.filter((m: any) => m.left_at === null) || [];
+      
+      // If only 1 member remains after this user left, auto-cancel the pool
+      if (activeMembers.length === 1) {
+        const lastMember = activeMembers[0];
+        
+        logger.info(`[Pool] Only 1 member left in pool ${poolId}, auto-cancelling pool`);
+        
+        // Cancel the lookup timer
+        lookupTimeService.cancelLookupTimer(poolId);
+        
+        // Update pool status to CANCELLED
+        await supabaseAdmin
+          .from('pools')
+          .update({
+            status: 'CANCELLED' as PoolStatus,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', poolId);
+        
+        // Cancel the last member's ride
+        if (lastMember.ride_id) {
+          await supabaseAdmin
+            .from('rides')
+            .update({
+              pool_id: null,
+              status: 'CANCELLED' as RideStatus,
+              cancelled_reason: 'Pool cancelled - not enough riders',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', lastMember.ride_id);
+        }
+        
+        // Notify the remaining member that pool was cancelled
+        await notificationService.sendPushNotification(lastMember.user_id, {
+          title: 'Pool Cancelled',
+          message: 'Your pool was automatically cancelled because all other riders left.',
+          type: 'POOL_CANCELLED',
+          metadata: { poolId, reason: 'not_enough_riders' },
+        });
+        
+        res.json({
+          success: true,
+          data: { 
+            message: 'Left pool successfully',
+            pool_cancelled: true,
+            reason: 'Only 1 member remaining - pool auto-cancelled',
+          },
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      // If more than 1 member remains, recalculate fare
+      if (activeMembers.length > 1) {
+        const rideIds = activeMembers.map((m: any) => m.ride_id).filter(Boolean);
         const { data: memberRides } = await supabaseAdmin
           .from('rides')
           .select('*')
@@ -594,7 +654,7 @@ export class PoolController {
             .eq('id', poolId);
 
           // Notify remaining members about fare change
-          for (const member of poolWithMembers.pool_members) {
+          for (const member of activeMembers) {
             await notificationService.sendPushNotification(member.user_id, {
               title: 'Fare Updated - Rider Left',
               message: `A rider left the pool. Your fare is now ৳${fareResult.farePerPerson} per person.`,

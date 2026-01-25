@@ -25,18 +25,20 @@ type TripProgressProps = {
   onChatCoRider?: (userId: string, userName: string) => void;
   onCreateNewPool?: () => void;
   onCancelPool?: () => void;
+  onPoolCancelled?: () => void;
 };
 
-export default function TripProgress({ userProfile, pickupLocation, destination, selectedPool, onComplete, onChatDriver, onChatCoRider, onCreateNewPool, onCancelPool }: TripProgressProps) {
+export default function TripProgress({ userProfile, pickupLocation, destination, selectedPool, onComplete, onChatDriver, onChatCoRider, onCreateNewPool, onCancelPool, onPoolCancelled }: TripProgressProps) {
   const [progress, setProgress] = useState(15);
   const [tripStatus, setTripStatus] = useState<'waiting' | 'on-the-way' | 'arrived' | 'in-progress' | 'completed'>('waiting');
   const [driverPosition, setDriverPosition] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   
-  // Lookup timer state
-  const [lookupPhase, setLookupPhase] = useState<LookupPhase>('initial');
-  const [remainingSeconds, setRemainingSeconds] = useState(INITIAL_LOOKUP_SECONDS);
+  // Lookup timer state - start as 'matched' by default, only change to 'initial' for new pool creators
+  const [lookupPhase, setLookupPhase] = useState<LookupPhase>('matched');
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [isExtendedSearching, setIsExtendedSearching] = useState(false);
+  const [hasInitializedLookup, setHasInitializedLookup] = useState(false);
   
   // Use real-time pool updates
   const {
@@ -83,6 +85,9 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   // Pool status info
   const currentPassengers = poolDetails?.current_passengers || selectedPool?.current_passengers || 1;
   const maxPassengers = poolDetails?.max_passengers || selectedPool?.max_passengers || 4;
+  
+  // Check if current user is the pool creator
+  const isPoolCreator = selectedPool?.creator_user_id === userProfile?.id;
 
   // Update trip status based on pool status from realtime updates
   useEffect(() => {
@@ -98,6 +103,95 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
       setTripStatus('completed');
     }
   }, [poolStatus]);
+  
+  // Handle pool cancellation (e.g., when all other riders left)
+  useEffect(() => {
+    if (poolStatus === 'CANCELLED' && onPoolCancelled) {
+      Alert.alert(
+        'Pool Cancelled',
+        'Your pool was cancelled because all other riders left. You will be redirected to the home screen.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              onPoolCancelled();
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+    }
+  }, [poolStatus, onPoolCancelled]);
+  
+  // Initialize lookup phase based on pool state - only runs once when pool data is loaded
+  useEffect(() => {
+    // Skip if we've already initialized or pool details aren't loaded yet
+    if (hasInitializedLookup || loadingPool || !selectedPool?.id) {
+      return;
+    }
+    
+    // If pool is already matched (has multiple passengers, driver, or past waiting phase), don't start timer
+    if (currentPassengers > 1 || hasDriver || 
+        poolStatus === 'WAITING_FOR_DRIVER' || 
+        poolStatus === 'READY_TO_START' ||
+        poolStatus === 'STARTED' ||
+        poolStatus === 'COMPLETED' ||
+        poolStatus === 'CANCELLED') {
+      setLookupPhase('matched');
+      setHasInitializedLookup(true);
+      return;
+    }
+    
+    // Only the pool creator should see the lookup timer for a new pool
+    // Non-creators (joiners) who are already in the pool shouldn't see search timer
+    if (!isPoolCreator) {
+      setLookupPhase('matched');
+      setHasInitializedLookup(true);
+      return;
+    }
+    
+    // Check if we're coming from an existing trip (not freshly created)
+    // If the pool was created more than 45 seconds ago, skip the timer
+    if (selectedPool?.created_at) {
+      const poolCreatedAt = new Date(selectedPool.created_at).getTime();
+      const now = Date.now();
+      const elapsedSeconds = (now - poolCreatedAt) / 1000;
+      
+      // If more than 45 seconds have passed since pool creation, timer already expired
+      if (elapsedSeconds > INITIAL_LOOKUP_SECONDS + EXTENDED_LOOKUP_SECONDS + 5) {
+        setLookupPhase('no-match');
+        setRemainingSeconds(0);
+        setHasInitializedLookup(true);
+        return;
+      }
+      
+      // If more than 30 seconds, we're in extended phase
+      if (elapsedSeconds > INITIAL_LOOKUP_SECONDS) {
+        const extendedRemaining = Math.max(0, INITIAL_LOOKUP_SECONDS + EXTENDED_LOOKUP_SECONDS - elapsedSeconds);
+        if (extendedRemaining <= 0) {
+          setLookupPhase('no-match');
+          setRemainingSeconds(0);
+        } else {
+          setLookupPhase('extended');
+          setRemainingSeconds(Math.ceil(extendedRemaining));
+          setIsExtendedSearching(true);
+        }
+        setHasInitializedLookup(true);
+        return;
+      }
+      
+      // We're in initial phase, calculate remaining time
+      const initialRemaining = Math.max(0, INITIAL_LOOKUP_SECONDS - elapsedSeconds);
+      setLookupPhase('initial');
+      setRemainingSeconds(Math.ceil(initialRemaining));
+      setHasInitializedLookup(true);
+    } else {
+      // No created_at timestamp, likely a freshly created pool - start full timer
+      setLookupPhase('initial');
+      setRemainingSeconds(INITIAL_LOOKUP_SECONDS);
+      setHasInitializedLookup(true);
+    }
+  }, [hasInitializedLookup, loadingPool, selectedPool?.id, selectedPool?.created_at, currentPassengers, hasDriver, poolStatus, isPoolCreator]);
 
   // Calculate progress based on pool status
   const getProgress = () => {
@@ -117,6 +211,11 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
 
   // Lookup timer - 30 seconds initial, then 10 seconds extended search
   useEffect(() => {
+    // Don't run timer until initialization is complete
+    if (!hasInitializedLookup) {
+      return;
+    }
+    
     // Skip if already matched (has other riders or driver)
     if (currentPassengers > 1 || hasDriver || poolStatus === 'WAITING_FOR_DRIVER' || poolStatus === 'READY_TO_START') {
       setLookupPhase('matched');
@@ -128,8 +227,13 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
       return;
     }
 
-    // Only run timer during waiting phase
+    // Only run timer during active search phases (initial or extended)
     if (lookupPhase === 'no-match' || lookupPhase === 'matched') {
+      return;
+    }
+    
+    // Don't run if remainingSeconds is 0
+    if (remainingSeconds <= 0) {
       return;
     }
 
@@ -141,8 +245,8 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
             setLookupPhase('extended');
             setIsExtendedSearching(true);
             // Trigger extended search with wider range (handled by server)
-            // Only call if pool is still accepting riders
-            if (selectedPool?.id && poolStatus === 'WAITING_FOR_RIDERS') {
+            // Only call if pool is still accepting riders and user is creator
+            if (selectedPool?.id && poolStatus === 'WAITING_FOR_RIDERS' && isPoolCreator) {
               poolService.extendPoolSearch(selectedPool.id).catch((err) => {
                 console.log('[TripProgress] Extended search skipped:', err.message);
               });
@@ -161,7 +265,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [lookupPhase, currentPassengers, hasDriver, poolStatus, selectedPool?.id]);
+  }, [lookupPhase, currentPassengers, hasDriver, poolStatus, selectedPool?.id, hasInitializedLookup, remainingSeconds, isPoolCreator]);
 
   // Watch for new riders joining
   useEffect(() => {
