@@ -3,6 +3,9 @@ import { supabase } from '../lib/supabase';
 import { Pool, PoolMember } from '../types';
 import { poolService } from '../services/pool.service';
 
+// Polling interval for fallback (2 seconds)
+const POLLING_INTERVAL = 2000;
+
 interface PoolRealtimeState {
   pool: Pool | null;
   members: PoolMember[];
@@ -43,6 +46,7 @@ interface PoolMemberWithProfile extends PoolMember {
  * Hook for real-time pool updates using Supabase Realtime
  * Subscribes to pool and pool_members changes for live updates
  * Also tracks unread messages from co-riders
+ * Falls back to polling if realtime fails
  */
 export const usePoolRealtime = (poolId: string | null, currentUserId: string | null) => {
   const [state, setState] = useState<PoolRealtimeState>({
@@ -56,6 +60,13 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
   });
   
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const poolIdRef = useRef<string | null>(null);
+  
+  // Keep poolId ref in sync
+  useEffect(() => {
+    poolIdRef.current = poolId;
+  }, [poolId]);
 
   // Fetch initial pool data
   const fetchPoolData = useCallback(async () => {
@@ -141,7 +152,41 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
     }
   }, [poolId]);
 
-  // Set up real-time subscriptions
+  // Polling function for fallback - uses refs to check for changes
+  const pollForUpdates = useCallback(async () => {
+    const currentPoolId = poolIdRef.current;
+    if (!currentPoolId) return;
+
+    try {
+      const response = await poolService.getPoolById(currentPoolId);
+      if (response.success && response.data?.pool) {
+        const pool = response.data.pool;
+        const newMemberCount = pool.pool_members?.length || 0;
+        
+        // Always update state with latest data - let React handle diffing
+        setState(prev => {
+          const memberCountChanged = newMemberCount !== (prev.members?.length || 0);
+          const statusChanged = prev.pool?.status !== pool.status;
+          const driverChanged = prev.pool?.driver_id !== pool.driver_id;
+          
+          if (memberCountChanged || statusChanged || driverChanged) {
+            console.log(`[usePoolRealtime] Polling detected changes: members=${memberCountChanged}, status=${statusChanged}, driver=${driverChanged}`);
+            return {
+              ...prev,
+              pool,
+              members: pool.pool_members || [],
+              lastUpdated: new Date(),
+            };
+          }
+          return prev;
+        });
+      }
+    } catch (err) {
+      console.warn('[usePoolRealtime] Polling error:', err);
+    }
+  }, []);
+
+  // Set up real-time subscriptions with polling fallback
   useEffect(() => {
     if (!poolId || !currentUserId) return;
 
@@ -239,28 +284,37 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
         if (status === 'SUBSCRIBED') {
           console.log('[usePoolRealtime] Successfully subscribed to pool updates');
           setState(prev => ({ ...prev, isConnected: true }));
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('[usePoolRealtime] Channel error:', err);
-          setState(prev => ({ ...prev, isConnected: false }));
-        } else if (status === 'TIMED_OUT') {
-          console.warn('[usePoolRealtime] Subscription timed out, retrying...');
-          setState(prev => ({ ...prev, isConnected: false }));
-        } else if (status === 'CLOSED') {
+          // NOTE: We keep polling running as a safety net even when realtime "works"
+          // because realtime might report SUBSCRIBED but not deliver events
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          console.warn('[usePoolRealtime] Realtime failed');
           setState(prev => ({ ...prev, isConnected: false }));
         }
       });
 
     channelRef.current = poolChannel;
+    
+    // Start polling and KEEP IT RUNNING as the primary update mechanism
+    // This ensures pool updates always happen even if realtime is unreliable
+    const pollInterval = setInterval(pollForUpdates, POLLING_INTERVAL);
+    pollingRef.current = pollInterval;
+    
+    // Also do an immediate poll after initial fetch
+    setTimeout(pollForUpdates, 1000);
 
-    // Cleanup subscription on unmount
+    // Cleanup subscription and polling on unmount
     return () => {
       console.log('[usePoolRealtime] Unsubscribing from pool updates');
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
     };
-  }, [poolId, currentUserId, fetchPoolData]);
+  }, [poolId, currentUserId, fetchPoolData, pollForUpdates]);
 
   // Clear unread messages for a specific user (call when opening chat with that user)
   const clearUnreadMessages = useCallback((userId: string) => {

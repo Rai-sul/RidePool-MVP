@@ -20,8 +20,8 @@ interface ChatState {
   isConnected: boolean;
 }
 
-// Polling interval when realtime fails (in ms)
-const POLLING_INTERVAL = 3000;
+// Polling interval when realtime fails (in ms) - 2 seconds for responsive updates
+const POLLING_INTERVAL = 2000;
 
 /**
  * Hook for real-time chat using Supabase Realtime
@@ -45,6 +45,17 @@ export const useChatRealtime = (
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastMessageIdRef = useRef<string | null>(null);
+  const conversationIdRef = useRef<string | null>(null);
+  const currentUserIdRef = useRef<string | null>(null);
+  
+  // Keep refs in sync with state
+  useEffect(() => {
+    conversationIdRef.current = state.conversationId;
+  }, [state.conversationId]);
+  
+  useEffect(() => {
+    currentUserIdRef.current = currentUserId;
+  }, [currentUserId]);
 
   // Find or create conversation and load messages
   const initializeChat = useCallback(async () => {
@@ -105,37 +116,49 @@ export const useChatRealtime = (
     }
   }, [currentUserId, otherUserId]);
 
-  // Fetch new messages (for polling fallback)
+  // Fetch new messages (for polling fallback) - uses refs to avoid dependency issues
   const fetchNewMessages = useCallback(async () => {
-    if (!state.conversationId || !currentUserId) return;
+    const convId = conversationIdRef.current;
+    const userId = currentUserIdRef.current;
+    
+    if (!convId || !userId) return;
 
     try {
-      const response = await messagingService.getMessages(state.conversationId);
+      const response = await messagingService.getMessages(convId);
       if (response.success && response.data) {
         const serverMessages = response.data.messages || [];
         
-        // Check if there are new messages
+        // Always update state with latest messages - compare by last message ID
         const lastServerMsg = serverMessages[serverMessages.length - 1];
-        if (lastServerMsg && lastServerMsg.id !== lastMessageIdRef.current) {
-          console.log('[useChatRealtime] New messages detected via polling');
+        const lastMessageId = lastServerMsg?.id || null;
+        
+        // Update if we have new messages or message count changed
+        setState(prev => {
+          const hasNewMessages = lastMessageId && lastMessageId !== lastMessageIdRef.current;
+          const countChanged = serverMessages.length !== prev.messages.length;
           
-          const formattedMessages: ChatMessage[] = serverMessages.map((msg: MessageWithDetails) => ({
-            id: msg.id,
-            content: msg.content,
-            sender_id: msg.sender_id,
-            is_read: msg.is_read,
-            created_at: msg.created_at,
-            is_mine: msg.sender_id === currentUserId,
-          }));
-          
-          setState(prev => ({ ...prev, messages: formattedMessages }));
-          lastMessageIdRef.current = lastServerMsg.id;
-        }
+          if (hasNewMessages || countChanged) {
+            console.log(`[useChatRealtime] Polling detected message changes: new=${hasNewMessages}, countChanged=${countChanged}`);
+            
+            const formattedMessages: ChatMessage[] = serverMessages.map((msg: MessageWithDetails) => ({
+              id: msg.id,
+              content: msg.content,
+              sender_id: msg.sender_id,
+              is_read: msg.is_read,
+              created_at: msg.created_at,
+              is_mine: msg.sender_id === userId,
+            }));
+            
+            lastMessageIdRef.current = lastMessageId;
+            return { ...prev, messages: formattedMessages };
+          }
+          return prev;
+        });
       }
     } catch (err) {
       console.warn('[useChatRealtime] Polling error:', err);
     }
-  }, [state.conversationId, currentUserId]);
+  }, []); // No dependencies - uses refs
 
   // Set up real-time subscription for messages with fallback polling
   useEffect(() => {
@@ -176,7 +199,7 @@ export const useChatRealtime = (
               sender_id: newMsg.sender_id,
               is_read: !!newMsg.read_at,
               created_at: newMsg.created_at,
-              is_mine: newMsg.sender_id === currentUserId,
+              is_mine: newMsg.sender_id === currentUserIdRef.current,
             };
             
             lastMessageIdRef.current = newMsg.id;
@@ -194,27 +217,23 @@ export const useChatRealtime = (
         if (status === 'SUBSCRIBED') {
           console.log('[useChatRealtime] Realtime connected successfully');
           setState(prev => ({ ...prev, isConnected: true }));
-          
-          // Stop polling if realtime is working
-          if (pollingRef.current) {
-            clearInterval(pollingRef.current);
-            pollingRef.current = null;
-          }
+          // NOTE: We keep polling running as a safety net even when realtime "works"
+          // because realtime might report SUBSCRIBED but not deliver events
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          console.warn('[useChatRealtime] Realtime connection failed, starting polling fallback');
+          console.warn('[useChatRealtime] Realtime connection failed');
           setState(prev => ({ ...prev, isConnected: false }));
-          
-          // Start polling as fallback
-          if (!pollingRef.current) {
-            pollingRef.current = setInterval(fetchNewMessages, POLLING_INTERVAL);
-          }
         }
       });
 
     channelRef.current = channel;
 
-    // Start polling immediately as a safety net (will be stopped if realtime connects)
-    pollingRef.current = setInterval(fetchNewMessages, POLLING_INTERVAL);
+    // Start polling and KEEP IT RUNNING as the primary update mechanism
+    // This ensures messages always update even if realtime is unreliable
+    const pollInterval = setInterval(fetchNewMessages, POLLING_INTERVAL);
+    pollingRef.current = pollInterval;
+    
+    // Also do an immediate poll
+    fetchNewMessages();
 
     return () => {
       console.log('[useChatRealtime] Cleaning up subscription and polling');
@@ -227,7 +246,7 @@ export const useChatRealtime = (
         pollingRef.current = null;
       }
     };
-  }, [state.conversationId, currentUserId, fetchNewMessages]);
+  }, [state.conversationId, currentUserId]);
 
   // Initialize chat on mount
   useEffect(() => {
