@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Platform, ActivityIndicator, KeyboardAvoidingView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Platform, ActivityIndicator, Keyboard, Animated } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Send, Smile, Paperclip, RefreshCw } from './Icons';
 import type { UserProfile } from '../contexts/GlobalContext';
 import { useChatRealtime } from '../hooks/useChatRealtime';
@@ -15,7 +15,10 @@ type ChatScreenProps = {
 
 export default function ChatScreen({ userProfile, recipientId, recipientName, poolId, onBack }: ChatScreenProps) {
   const [messageText, setMessageText] = useState('');
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const keyboardHeight = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
   const isFemale = userProfile?.gender === 'female';
   const accentColor = isFemale ? '#ec4899' : '#1f2937';
 
@@ -29,6 +32,42 @@ export default function ChatScreen({ userProfile, recipientId, recipientName, po
     sendMessage,
     refresh,
   } = useChatRealtime(userProfile?.id || null, recipientId, poolId);
+
+  // Handle keyboard show/hide
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardVisible(true);
+        Animated.timing(keyboardHeight, {
+          toValue: e.endCoordinates.height,
+          duration: Platform.OS === 'ios' ? 250 : 100,
+          useNativeDriver: false,
+        }).start();
+        // Scroll to bottom when keyboard appears
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    );
+
+    const keyboardWillHide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardVisible(false);
+        Animated.timing(keyboardHeight, {
+          toValue: 0,
+          duration: Platform.OS === 'ios' ? 250 : 100,
+          useNativeDriver: false,
+        }).start();
+      }
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
+    };
+  }, [keyboardHeight]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -77,12 +116,8 @@ export default function ChatScreen({ userProfile, recipientId, recipientName, po
   };
 
   return (
-    <KeyboardAvoidingView 
-      className="flex-1 bg-white"
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
-    >
-      <SafeAreaView className="flex-1 bg-white" edges={['top', 'bottom']}>
+    <View className="flex-1 bg-white">
+      <SafeAreaView className="flex-1 bg-white" edges={['top']}>
         {/* Header */}
         <View className="flex-row items-center justify-between px-4 py-4 bg-white border-b border-gray-200">
           <View className="flex-row items-center gap-3 flex-1">
@@ -202,8 +237,14 @@ export default function ChatScreen({ userProfile, recipientId, recipientName, po
           </ScrollView>
         )}
 
-        {/* Input Area - KeyboardAvoidingView handles keyboard, SafeAreaView handles system nav */}
-        <View className="px-4 py-3 bg-white border-t border-gray-200">
+        {/* Input Area - with animated bottom margin for keyboard */}
+        <Animated.View 
+          className="px-4 py-3 bg-white border-t border-gray-200"
+          style={{ 
+            paddingBottom: keyboardVisible ? 8 : Math.max(8, insets.bottom),
+            marginBottom: keyboardHeight,
+          }}
+        >
           <View className="flex-row items-end gap-2">
             <TouchableOpacity className="p-2.5 mb-0.5" activeOpacity={0.7}>
               <Paperclip className="w-6 h-6 text-gray-600" />
@@ -242,8 +283,8 @@ export default function ChatScreen({ userProfile, recipientId, recipientName, po
               )}
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
       </SafeAreaView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }

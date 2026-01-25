@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, Phone, MessageCircle, User, Navigation, Clock, Star, Users, AlertCircle, RefreshCw, Plus } from './Icons';
+import { MapPin, Phone, MessageCircle, User, Navigation, Clock, Star, Users, AlertCircle, RefreshCw, Plus, X } from './Icons';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Progress } from './ui/progress';
@@ -24,12 +24,14 @@ type TripProgressProps = {
   onChatDriver?: () => void;
   onChatCoRider?: (userId: string, userName: string) => void;
   onCreateNewPool?: () => void;
+  onCancelPool?: () => void;
 };
 
-export default function TripProgress({ userProfile, pickupLocation, destination, selectedPool, onComplete, onChatDriver, onChatCoRider, onCreateNewPool }: TripProgressProps) {
+export default function TripProgress({ userProfile, pickupLocation, destination, selectedPool, onComplete, onChatDriver, onChatCoRider, onCreateNewPool, onCancelPool }: TripProgressProps) {
   const [progress, setProgress] = useState(15);
   const [tripStatus, setTripStatus] = useState<'waiting' | 'on-the-way' | 'arrived' | 'in-progress' | 'completed'>('waiting');
   const [driverPosition, setDriverPosition] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
   
   // Lookup timer state
   const [lookupPhase, setLookupPhase] = useState<LookupPhase>('initial');
@@ -173,6 +175,27 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
       onCreateNewPool();
     }
   }, [onCreateNewPool]);
+
+  const handleCancelPool = useCallback(() => {
+    Alert.alert(
+      'Cancel Pool',
+      'Are you sure you want to cancel and leave this pool?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            if (onCancelPool) {
+              setIsCancelling(true);
+              await onCancelPool();
+              setIsCancelling(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [onCancelPool]);
 
   const getStatusText = () => {
     switch (tripStatus) {
@@ -554,6 +577,29 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
             </View>
           </View>
         </View>
+
+        {/* Cancel Pool Button - Only show during waiting phase (before trip starts) */}
+        {(tripStatus === 'waiting' || tripStatus === 'on-the-way') && poolStatus !== 'STARTED' && (
+          <View className="mx-6 mt-4">
+            <TouchableOpacity
+              onPress={handleCancelPool}
+              disabled={isCancelling}
+              className="w-full py-4 rounded-xl border-2 border-gray-300 bg-white flex-row items-center justify-center"
+              style={{
+                opacity: isCancelling ? 0.6 : 1,
+              }}
+            >
+              {isCancelling ? (
+                <ActivityIndicator size="small" color="#6b7280" />
+              ) : (
+                <>
+                  <X className="w-5 h-5 mr-2" color="#6b7280" />
+                  <Text className="text-gray-600 font-semibold">Cancel & Leave Pool</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* SOS Button */}
         {tripStatus !== 'completed' && (

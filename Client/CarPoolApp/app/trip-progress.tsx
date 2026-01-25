@@ -13,6 +13,7 @@ export default function TripProgressScreen() {
     activeTrip,
     updateTripStatus,
     endTrip,
+    cancelTrip,
   } = useGlobalContext();
   
   const handleComplete = () => {
@@ -49,6 +50,14 @@ export default function TripProgressScreen() {
     setSelectedPool(null);
     router.replace('/ride-confirmation');
   };
+
+  const handleCancelPool = async () => {
+    // Cancel the trip and leave the pool
+    const success = await cancelTrip();
+    if (success) {
+      router.replace('/');
+    }
+  };
   
   return (
     <TripProgress 
@@ -60,6 +69,7 @@ export default function TripProgressScreen() {
       onChatDriver={handleChatDriver}
       onChatCoRider={handleChatCoRider}
       onCreateNewPool={handleCreateNewPool}
+      onCancelPool={handleCancelPool}
     />
   );
 }

@@ -47,20 +47,38 @@ function ActiveTripButtonInner() {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const { activeTrip, hasActiveTrip, userProfile } = useGlobalContext();
+  const { activeTrip, hasActiveTrip, userProfile, endTrip } = useGlobalContext();
   
   // Always call hooks unconditionally
   const poolId = activeTrip?.poolId || null;
   const userId = userProfile?.id || null;
   
   // Get real-time pool updates - hook is always called but with null values when no trip
-  const { pool: realtimePool, poolStatus } = usePoolRealtime(poolId, userId);
+  const { pool: realtimePool, poolStatus, error: poolError } = usePoolRealtime(poolId, userId);
   
   // Animation for pulsing effect
   const pulseAnim = useRef(new Animated.Value(1)).current;
   
   // Calculate bottom position: above bottom nav (64px) + system nav bar inset
   const bottomPosition = 64 + 16 + insets.bottom; // 64 = nav height, 16 = gap
+  
+  // Clear active trip if pool is cancelled, completed, or no longer exists
+  useEffect(() => {
+    if (hasActiveTrip && poolId) {
+      // Pool was cancelled or completed
+      if (poolStatus === 'CANCELLED' || poolStatus === 'COMPLETED') {
+        console.log('[ActiveTripButton] Pool status changed to', poolStatus, '- clearing trip');
+        endTrip();
+        return;
+      }
+      // Pool no longer exists (error from realtime hook)
+      if (poolError && (poolError.includes('no longer available') || poolError.includes('cancelled'))) {
+        console.log('[ActiveTripButton] Pool no longer available - clearing trip');
+        endTrip();
+        return;
+      }
+    }
+  }, [hasActiveTrip, poolId, poolStatus, poolError, endTrip]);
   
   useEffect(() => {
     if (hasActiveTrip) {

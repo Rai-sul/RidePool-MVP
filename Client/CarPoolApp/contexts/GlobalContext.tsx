@@ -1,7 +1,8 @@
-import { createContext, useState, useContext, useEffect } from 'react';
+import { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { useAuthContext } from './AuthContext';
 import { Pool as ApiPool, PoolStatus, VehicleType, GenderPreference } from '../types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { poolService } from '../services/pool.service';
 
 // Storage key for persisting active trip
 const ACTIVE_TRIP_STORAGE_KEY = '@carpool_active_trip';
@@ -90,6 +91,7 @@ type GlobalContextType = {
   startTrip: (pool: Pool) => void;
   updateTripStatus: (status: ActiveTripState['status']) => void;
   endTrip: () => void;
+  cancelTrip: () => Promise<boolean>;
 };
 
 const GlobalContext = createContext<GlobalContextType>({
@@ -111,6 +113,7 @@ const GlobalContext = createContext<GlobalContextType>({
   startTrip: () => {},
   updateTripStatus: () => {},
   endTrip: () => {},
+  cancelTrip: async () => false,
 });
 
 export function GlobalProvider({ children }: { children: React.ReactNode }) {
@@ -125,7 +128,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   // Sync with AuthContext
   const { user: authUser } = useAuthContext();
   
-  // Load persisted active trip on mount
+  // Load persisted active trip on mount and validate against database
   useEffect(() => {
     const loadActiveTrip = async () => {
       try {
@@ -134,12 +137,62 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
           const trip = JSON.parse(stored) as ActiveTripState;
           // Only restore if trip is not completed
           if (trip.status !== 'completed') {
-            console.log('[GlobalContext] Restored active trip:', trip.poolId);
-            setActiveTrip(trip);
-            setSelectedPool(trip.pool);
-            setPickupLocation(trip.pickupLocation);
-            setSelectedDestination(trip.destination);
-            setSelectedRideType(trip.rideType);
+            // Validate that the pool still exists in the database
+            try {
+              const response = await poolService.getPoolById(trip.poolId);
+              if (response.success && response.data?.pool) {
+                const pool = response.data.pool;
+                // Check if pool is still active (not cancelled or completed)
+                if (pool.status === 'CANCELLED' || pool.status === 'COMPLETED') {
+                  console.log('[GlobalContext] Pool is no longer active, clearing stored trip');
+                  await AsyncStorage.removeItem(ACTIVE_TRIP_STORAGE_KEY);
+                  return;
+                }
+                console.log('[GlobalContext] Restored active trip:', trip.poolId);
+                setActiveTrip(trip);
+                setSelectedPool(trip.pool);
+                setPickupLocation(trip.pickupLocation);
+                setSelectedDestination(trip.destination);
+                setSelectedRideType(trip.rideType);
+              } else {
+                // API returned success=false - check if pool is genuinely not found
+                const errorMessage = response.message || '';
+                const isNotFound = errorMessage.toLowerCase().includes('not found');
+                const isCancelled = errorMessage.toLowerCase().includes('cancelled');
+                
+                if (isNotFound || isCancelled) {
+                  console.log('[GlobalContext] Pool not found in database, clearing stored trip');
+                  await AsyncStorage.removeItem(ACTIVE_TRIP_STORAGE_KEY);
+                } else {
+                  // Other API error - restore trip anyway (server might be temporarily unavailable)
+                  console.log('[GlobalContext] API returned error but restoring trip anyway:', errorMessage);
+                  setActiveTrip(trip);
+                  setSelectedPool(trip.pool);
+                  setPickupLocation(trip.pickupLocation);
+                  setSelectedDestination(trip.destination);
+                  setSelectedRideType(trip.rideType);
+                }
+              }
+            } catch (err: any) {
+              // Network error or server unavailable - restore trip anyway
+              // Only clear if it's a definitive "not found" error (HTTP 404)
+              const errorMessage = err.message || '';
+              const isNotFound = errorMessage.toLowerCase().includes('not found') || err.status === 404;
+              const isCancelled = errorMessage.toLowerCase().includes('cancelled');
+              
+              if (isNotFound || isCancelled) {
+                console.log('[GlobalContext] Pool not found, clearing stored trip:', errorMessage);
+                await AsyncStorage.removeItem(ACTIVE_TRIP_STORAGE_KEY);
+              } else {
+                // Network error - restore trip anyway (server might be temporarily down)
+                console.log('[GlobalContext] Network error, restoring trip anyway:', errorMessage);
+                setActiveTrip(trip);
+                setSelectedPool(trip.pool);
+                setPickupLocation(trip.pickupLocation);
+                setSelectedDestination(trip.destination);
+                setSelectedRideType(trip.rideType);
+              }
+            }
           } else {
             // Clear completed trips
             await AsyncStorage.removeItem(ACTIVE_TRIP_STORAGE_KEY);
@@ -230,6 +283,45 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Cancel trip and leave pool - removes user from pool in database
+  const cancelTrip = useCallback(async (): Promise<boolean> => {
+    if (!activeTrip) return false;
+    
+    try {
+      // Call API to leave the pool
+      const response = await poolService.leavePool(activeTrip.poolId);
+      
+      if (response.success) {
+        console.log('[GlobalContext] Successfully left pool:', activeTrip.poolId);
+        // Clear local state
+        setActiveTrip(null);
+        setSelectedPool(null);
+        await AsyncStorage.removeItem(ACTIVE_TRIP_STORAGE_KEY);
+        return true;
+      } else {
+        console.warn('[GlobalContext] Failed to leave pool:', response.message);
+        // Still clear local state if pool doesn't exist or is already cancelled
+        if (response.message?.includes('not found') || response.message?.includes('cancelled')) {
+          setActiveTrip(null);
+          setSelectedPool(null);
+          await AsyncStorage.removeItem(ACTIVE_TRIP_STORAGE_KEY);
+          return true;
+        }
+        return false;
+      }
+    } catch (err: any) {
+      console.warn('[GlobalContext] Error leaving pool:', err.message);
+      // If pool doesn't exist, clear local state anyway
+      if (err.message?.includes('not found') || err.message?.includes('404')) {
+        setActiveTrip(null);
+        setSelectedPool(null);
+        await AsyncStorage.removeItem(ACTIVE_TRIP_STORAGE_KEY);
+        return true;
+      }
+      return false;
+    }
+  }, [activeTrip]);
+
   // Computed: whether there's an active trip
   const hasActiveTrip = activeTrip !== null && activeTrip.status !== 'completed';
 
@@ -253,6 +345,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
       startTrip,
       updateTripStatus,
       endTrip,
+      cancelTrip,
     }}>
       {children}
     </GlobalContext.Provider>
