@@ -59,6 +59,13 @@ export default function TripProgressScreen() {
     }
   };
   
+  const handlePoolCancelled = () => {
+    // Pool was auto-cancelled (e.g., not enough riders)
+    endTrip();
+    setSelectedPool(null);
+    router.replace('/');
+  };
+  
   return (
     <TripProgress 
       userProfile={userProfile} 
@@ -70,6 +77,7 @@ export default function TripProgressScreen() {
       onChatCoRider={handleChatCoRider}
       onCreateNewPool={handleCreateNewPool}
       onCancelPool={handleCancelPool}
+      onPoolCancelled={handlePoolCancelled}
     />
   );
 }
