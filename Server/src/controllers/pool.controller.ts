@@ -571,11 +571,9 @@ export class PoolController {
       // Filter to only active members (left_at IS NULL)
       const activeMembers = poolWithMembers?.pool_members?.filter((m: any) => m.left_at === null) || [];
       
-      // If only 1 member remains after this user left, auto-cancel the pool
-      if (activeMembers.length === 1) {
-        const lastMember = activeMembers[0];
-        
-        logger.info(`[Pool] Only 1 member left in pool ${poolId}, auto-cancelling pool`);
+      // If no members remain (user was alone) or only 1 member remains, auto-cancel the pool
+      if (activeMembers.length <= 1) {
+        logger.info(`[Pool] ${activeMembers.length} member(s) left in pool ${poolId}, auto-cancelling pool`);
         
         // Cancel the lookup timer
         lookupTimeService.cancelLookupTimer(poolId);
@@ -589,33 +587,38 @@ export class PoolController {
           })
           .eq('id', poolId);
         
-        // Cancel the last member's ride
-        if (lastMember.ride_id) {
-          await supabaseAdmin
-            .from('rides')
-            .update({
-              pool_id: null,
-              status: 'CANCELLED' as RideStatus,
-              cancelled_reason: 'Pool cancelled - not enough riders',
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', lastMember.ride_id);
+        // If there's 1 remaining member (not the user who left), cancel their ride and notify them
+        if (activeMembers.length === 1) {
+          const lastMember = activeMembers[0];
+          
+          // Cancel the last member's ride
+          if (lastMember.ride_id) {
+            await supabaseAdmin
+              .from('rides')
+              .update({
+                pool_id: null,
+                status: 'CANCELLED' as RideStatus,
+                cancelled_reason: 'Pool cancelled - not enough riders',
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', lastMember.ride_id);
+          }
+          
+          // Notify the remaining member that pool was cancelled
+          await notificationService.sendPushNotification(lastMember.user_id, {
+            title: 'Pool Cancelled',
+            message: 'Your pool was automatically cancelled because all other riders left.',
+            type: 'POOL_CANCELLED',
+            metadata: { poolId, reason: 'not_enough_riders' },
+          });
         }
-        
-        // Notify the remaining member that pool was cancelled
-        await notificationService.sendPushNotification(lastMember.user_id, {
-          title: 'Pool Cancelled',
-          message: 'Your pool was automatically cancelled because all other riders left.',
-          type: 'POOL_CANCELLED',
-          metadata: { poolId, reason: 'not_enough_riders' },
-        });
         
         res.json({
           success: true,
           data: { 
             message: 'Left pool successfully',
             pool_cancelled: true,
-            reason: 'Only 1 member remaining - pool auto-cancelled',
+            reason: activeMembers.length === 0 ? 'You were the only member - pool cancelled' : 'Only 1 member remaining - pool auto-cancelled',
           },
           timestamp: new Date().toISOString(),
         });
