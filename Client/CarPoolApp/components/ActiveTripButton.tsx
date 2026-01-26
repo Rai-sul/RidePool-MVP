@@ -62,17 +62,20 @@ function ActiveTripButtonInner() {
   // Calculate bottom position: above bottom nav (64px) + system nav bar inset
   const bottomPosition = 64 + 16 + insets.bottom; // 64 = nav height, 16 = gap
 
-  // Clear active trip if pool is cancelled, completed, or no longer exists
+  // Clear active trip if pool is completed, or if there's an unrecoverable error
+  // Note: We don't auto-clear on CANCELLED status because the SearchingDriver component
+  // handles the "search expired" scenario and shows appropriate UI
   useEffect(() => {
     if (hasActiveTrip && poolId) {
-      // Pool was cancelled or completed
-      if (poolStatus === 'CANCELLED' || poolStatus === 'COMPLETED') {
-        console.log('[ActiveTripButton] Pool status changed to', poolStatus, '- clearing trip');
+      // Pool was completed - trip is done
+      if (poolStatus === 'COMPLETED') {
+        console.log('[ActiveTripButton] Pool completed - clearing trip');
         endTrip();
         return;
       }
-      // Pool no longer exists (error from realtime hook)
-      if (poolError && (poolError.includes('no longer available') || poolError.includes('cancelled'))) {
+      // Pool no longer exists (severe error from realtime hook)
+      // Only clear if it's a "not found" error, not just "cancelled"
+      if (poolError && poolError.includes('no longer available')) {
         console.log('[ActiveTripButton] Pool no longer available - clearing trip');
         endTrip();
         return;

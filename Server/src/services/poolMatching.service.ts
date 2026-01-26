@@ -175,6 +175,22 @@ export class PoolMatchingService {
       // Filter pools where current_passengers < max_passengers (can't do column comparison in Supabase)
       let pools = rawPools?.filter((pool: any) => pool.current_passengers < pool.max_passengers) || [];
 
+      // Filter out pools whose search time has expired (still in WAITING_FOR_RIDERS but older than lookup time)
+      // This ensures users don't see stale pools where the creator hasn't acted yet
+      const LOOKUP_TIME_MS = parseInt(process.env.LOOKUP_TIME_MS || '300000', 10); // 5 minutes default
+      const now = Date.now();
+      pools = pools.filter((pool: any) => {
+        // Only filter WAITING_FOR_RIDERS pools - WAITING_FOR_DRIVER pools are valid
+        if (pool.status !== 'WAITING_FOR_RIDERS') {
+          return true;
+        }
+        // Check if pool search time has expired
+        const poolCreatedAt = new Date(pool.created_at).getTime();
+        const poolAge = now - poolCreatedAt;
+        // Only show pools that are still within their lookup time window
+        return poolAge < LOOKUP_TIME_MS;
+      });
+
       // Filter pools by pickup H3 - pools should have similar pickup location
       // The pickup H3 is stored in score_breakdown.creator_pickup.h3_index
       // First try exact pickup area match
@@ -467,6 +483,22 @@ export class PoolMatchingService {
 
       // Filter pools where current_passengers < max_passengers (can't do column comparison in Supabase)
       let pools = rawPools?.filter((pool: any) => pool.current_passengers < pool.max_passengers) || [];
+
+      // Filter out pools whose search time has expired (still in WAITING_FOR_RIDERS but older than lookup time)
+      // This ensures users don't see stale pools where the creator hasn't acted yet
+      const LOOKUP_TIME_MS = parseInt(process.env.LOOKUP_TIME_MS || '300000', 10); // 5 minutes default
+      const now = Date.now();
+      pools = pools.filter((pool: any) => {
+        // Only filter WAITING_FOR_RIDERS pools - WAITING_FOR_DRIVER pools are valid
+        if (pool.status !== 'WAITING_FOR_RIDERS') {
+          return true;
+        }
+        // Check if pool search time has expired
+        const poolCreatedAt = new Date(pool.created_at).getTime();
+        const poolAge = now - poolCreatedAt;
+        // Only show pools that are still within their lookup time window
+        return poolAge < LOOKUP_TIME_MS;
+      });
 
       // Filter pools by pickup H3 - pools should have similar pickup location
       // The pickup H3 is stored in score_breakdown.creator_pickup.h3_index

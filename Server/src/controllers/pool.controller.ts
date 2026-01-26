@@ -1081,7 +1081,9 @@ export class PoolController {
 
   /**
    * Complete pool search and transition to waiting for driver
-   * Called when client-side search timer expires and pool has 2+ passengers
+   * Called when client-side search timer expires
+   * - If 2+ passengers: transition to WAITING_FOR_DRIVER
+   * - If only 1 passenger (no one joined): cancel the pool so others don't see it
    */
   async completeSearch(req: AuthRequest, res: Response, next: NextFunction) {
     try {
@@ -1101,7 +1103,7 @@ export class PoolController {
         .from('pools')
         .select(`
           id, creator_user_id, status, current_passengers, max_passengers,
-          pool_members(user_id, left_at)
+          pool_members(user_id, ride_id, left_at)
         `)
         .eq('id', poolId)
         .single();
@@ -1139,23 +1141,51 @@ export class PoolController {
         });
       }
 
+      // Cancel the lookup timer since we're manually completing
+      lookupTimeService.cancelLookupTimer(poolId);
+
       // Check if pool has minimum passengers (2+)
       const MIN_PASSENGERS_TO_START = 2;
       if (activeMembers.length < MIN_PASSENGERS_TO_START) {
+        // Not enough passengers - cancel the pool so it's no longer visible to others
+        logger.info(`[Pool] Pool ${poolId} search expired with only ${activeMembers.length} passenger(s), cancelling pool`);
+        
+        // Update pool status to CANCELLED
+        await supabaseAdmin
+          .from('pools')
+          .update({
+            status: 'CANCELLED' as PoolStatus,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', poolId);
+
+        // Update all member rides status to CANCELLED
+        const rideIds = activeMembers.map((m: any) => m.ride_id).filter(Boolean);
+        if (rideIds.length > 0) {
+          await supabaseAdmin
+            .from('rides')
+            .update({
+              status: 'CANCELLED' as RideStatus,
+              cancelled_reason: 'Pool search expired - no other riders joined',
+              pool_id: null,
+              updated_at: new Date().toISOString(),
+            })
+            .in('id', rideIds);
+        }
+
         return res.json({
           success: true,
           data: {
             completed: false,
-            reason: 'Not enough passengers',
+            expired: true,
+            reason: 'Search expired with no other riders',
             current_passengers: activeMembers.length,
             required_passengers: MIN_PASSENGERS_TO_START,
+            pool_cancelled: true,
           },
           timestamp: new Date().toISOString(),
         });
       }
-
-      // Cancel the lookup timer since we're manually completing
-      lookupTimeService.cancelLookupTimer(poolId);
 
       // Transition to WAITING_FOR_DRIVER
       await supabaseAdmin
