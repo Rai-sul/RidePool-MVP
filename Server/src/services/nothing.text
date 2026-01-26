@@ -1,2 +1,8 @@
-#hi
-#worked
+Have to do:
+1. cooldown
+2. After searching time not showing that rider not found and not suggesting craete new pool
+
+
+
+1. When a user crates a pool then in rides table status in the database for that user is update as MATCHED. Which is not supposed to happen. The status in the rider table should update as Matched when a user joins in that pool and after searching time finish if anyone join it should update to confirm. otherwise canceled. And when searching time finish, then pool cancle and leave button will be vanished. User can not cancle the ride. 
+2. The floating pool tracking button is making a huge issue and that is When a user creates a pool and doesn't tap on the floating pool tracking button then after the searching for rider ends it showed no rider found and create new pool option appears. But when user tap on the floating pool tracking button the pool status never update and also when no one joins then the create pool option doesn't appear. It seems like it stuck for waiting for rider. And also in the floating pool tracking button, it should see the waiting for riders, waiting for drivers, no one joins these updates. The floating pool tracking button will only takes users to that page and show those single status. Nothing else.
