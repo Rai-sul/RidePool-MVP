@@ -75,21 +75,10 @@ export class LookupTimeService {
         // Pool has enough passengers, transition to waiting for driver
         await this.transitionToWaitingForDriver(poolId);
       } else {
-        // Pool doesn't have enough passengers yet
-        // Instead of cancelling immediately, extend the timer once more
-        // If already extended, then cancel
-        logger.info(`[LookupTime] Pool ${poolId} has ${pool.current_passengers} passengers, extending lookup time`);
-        
-        // Start a new extended timer (another 5 minutes)
-        this.startLookupTimer(poolId, LOOKUP_TIME_MS);
-        
-        // Notify the creator that pool is still searching
-        await notificationService.sendPushNotification(pool.creator_user_id, {
-          title: 'Still Searching...',
-          message: 'Looking for more riders to join your pool. Extended search time.',
-          type: 'SYSTEM',
-          metadata: { poolId, currentPassengers: pool.current_passengers },
-        });
+        // Pool doesn't have enough passengers - cancel the pool
+        // No more extensions - the client-side timer controls the search window
+        logger.info(`[LookupTime] Pool ${poolId} has only ${pool.current_passengers} passenger(s), cancelling`);
+        await this.cancelPool(poolId, pool.creator_user_id);
       }
     } catch (error) {
       logger.error(`[LookupTime] Error handling timeout for pool ${poolId}:`, error);
@@ -158,10 +147,11 @@ export class LookupTimeService {
       .select('user_id, ride_id')
       .eq('pool_id', poolId);
 
+    // Update ride status to CONFIRMED (search complete with riders) then WAITING_FOR_DRIVER
     await supabaseAdmin
       .from('rides')
       .update({
-        status: 'WAITING_FOR_DRIVER' as RideStatus,
+        status: 'CONFIRMED' as RideStatus,
         updated_at: new Date().toISOString(),
       })
       .eq('pool_id', poolId);

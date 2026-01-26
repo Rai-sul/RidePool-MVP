@@ -121,12 +121,29 @@ function ActiveTripButtonInner() {
     router.push('/trip-progress');
   };
   
+  // Use realtime passenger count if available
+  const passengerCount = realtimePool?.current_passengers || activeTrip.pool.current_passengers || 1;
+  
+  // Calculate if search time has expired for this pool
+  const TOTAL_SEARCH_SECONDS = 40; // 30 initial + 10 extended
+  const isSearchExpired = (() => {
+    if (!realtimePool?.created_at && !activeTrip.pool.created_at) return false;
+    const createdAt = realtimePool?.created_at || activeTrip.pool.created_at;
+    const poolCreatedAt = new Date(createdAt).getTime();
+    const elapsedSeconds = (Date.now() - poolCreatedAt) / 1000;
+    return elapsedSeconds >= TOTAL_SEARCH_SECONDS;
+  })();
+  
   // Get status text based on realtime pool status
   const getStatusText = () => {
     // Use realtime pool status if available
     if (poolStatus) {
       switch (poolStatus) {
         case 'WAITING_FOR_RIDERS':
+          // Check if search time expired with no riders
+          if (isSearchExpired && passengerCount < 2) {
+            return 'No riders joined';
+          }
           return 'Waiting for riders...';
         case 'WAITING_FOR_DRIVER':
           return 'Waiting for driver';
@@ -136,6 +153,8 @@ function ActiveTripButtonInner() {
           return 'Trip in progress';
         case 'COMPLETED':
           return 'Trip completed';
+        case 'CANCELLED':
+          return 'Pool cancelled';
         default:
           return 'Active trip';
       }
@@ -159,9 +178,6 @@ function ActiveTripButtonInner() {
   const truncatedDestination = destinationName.length > 20 
     ? destinationName.substring(0, 20) + '...' 
     : destinationName;
-  
-  // Use realtime passenger count if available
-  const passengerCount = realtimePool?.current_passengers || activeTrip.pool.current_passengers || 1;
   
   return (
     <Animated.View

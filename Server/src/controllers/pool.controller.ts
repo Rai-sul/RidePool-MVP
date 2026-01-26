@@ -182,10 +182,11 @@ export class PoolController {
         throw error;
       }
 
-      // Update the ride with pool_id
+      // Update the ride with pool_id - status stays as SEARCHING until riders join
+      // The ride status should only become MATCHED when another rider joins the pool
       await supabaseAdmin
         .from('rides')
-        .update({ pool_id: pool.id, status: 'MATCHED' })
+        .update({ pool_id: pool.id, status: 'SEARCHING' })
         .eq('id', creatorRide.id);
 
       // Add the creator as the first pool member with ride_id
@@ -360,6 +361,15 @@ export class PoolController {
               updated_at: new Date().toISOString(),
             })
             .eq('id', poolId);
+
+          // Update all pool members' ride status to MATCHED since someone joined
+          await supabaseAdmin
+            .from('rides')
+            .update({
+              status: 'MATCHED' as RideStatus,
+              updated_at: new Date().toISOString(),
+            })
+            .in('id', rideIds);
 
           // Notify existing members about fare change
           for (const member of poolWithMembers.pool_members) {
