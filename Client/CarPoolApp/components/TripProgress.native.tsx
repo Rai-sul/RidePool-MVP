@@ -34,11 +34,11 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   const [tripStatus, setTripStatus] = useState<'waiting' | 'on-the-way' | 'arrived' | 'in-progress' | 'completed'>('waiting');
   const [driverPosition, setDriverPosition] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
-  
+
   // Timer state - calculated based on pool creation time
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [isExtendedSearching, setIsExtendedSearching] = useState(false);
-  
+
   // Use real-time pool updates
   const {
     pool: poolDetails,
@@ -52,7 +52,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
     refresh: refreshPool,
     clearUnreadMessages,
   } = usePoolRealtime(selectedPool?.id || null, userProfile?.id || null);
-  
+
   const isFemale = userProfile?.gender === 'female';
   const accentColor = isFemale ? 'pink' : 'blue';
   const accentBg = isFemale ? 'bg-pink-500' : 'bg-blue-600';
@@ -60,10 +60,10 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   const accentBorder = isFemale ? 'border-pink-500' : 'border-blue-600';
 
   // Use actual pickup location or default
-  const pickupCoords = pickupLocation 
+  const pickupCoords = pickupLocation
     ? { latitude: pickupLocation.latitude, longitude: pickupLocation.longitude }
     : { latitude: 23.8103, longitude: 90.4125 };
-  
+
   // Use actual destination or default
   const dropoffCoords = destination?.latitude && destination?.longitude
     ? { latitude: destination.latitude, longitude: destination.longitude }
@@ -84,7 +84,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   // Pool status info
   const currentPassengers = poolDetails?.current_passengers || selectedPool?.current_passengers || 1;
   const maxPassengers = poolDetails?.max_passengers || selectedPool?.max_passengers || 4;
-  
+
   // Check if current user is the pool creator
   const isPoolCreator = selectedPool?.creator_user_id === userProfile?.id;
 
@@ -99,30 +99,30 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
       }
       return 'matched';
     }
-    
+
     // Only pool creator should see the search timer
     if (!isPoolCreator) {
       return 'matched';
     }
-    
+
     // Check if pool is full
     if (currentPassengers >= maxPassengers) {
       return 'matched';
     }
-    
+
     // Has driver assigned
     if (hasDriver) {
       return 'matched';
     }
-    
+
     // Calculate elapsed time since pool creation
     if (!selectedPool?.created_at) {
       return 'matched';
     }
-    
+
     const poolCreatedAt = new Date(selectedPool.created_at).getTime();
     const elapsedSeconds = (Date.now() - poolCreatedAt) / 1000;
-    
+
     // Search time is over
     if (elapsedSeconds >= TOTAL_SEARCH_SECONDS) {
       // If no other riders joined, show no-match
@@ -131,19 +131,19 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
       }
       return 'matched';
     }
-    
+
     // In extended phase (30-40 seconds)
     if (elapsedSeconds >= INITIAL_LOOKUP_SECONDS) {
       return 'extended';
     }
-    
+
     // In initial phase (0-30 seconds)
     return 'initial';
   }, [poolStatus, isPoolCreator, currentPassengers, maxPassengers, hasDriver, selectedPool?.created_at]);
-  
+
   // Get the current lookup phase
   const [lookupPhase, setLookupPhase] = useState<LookupPhase>('matched');
-  
+
   // Update lookup phase when dependencies change
   useEffect(() => {
     if (!loadingPool && selectedPool?.id) {
@@ -166,7 +166,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
       setTripStatus('completed');
     }
   }, [poolStatus]);
-  
+
   // Handle pool cancellation (e.g., when all other riders left)
   useEffect(() => {
     if (poolStatus === 'CANCELLED' && onPoolCancelled) {
@@ -209,38 +209,38 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
     if (lookupPhase !== 'initial' && lookupPhase !== 'extended') {
       return;
     }
-    
+
     // Need pool creation time to calculate remaining seconds
     if (!selectedPool?.created_at) {
       return;
     }
-    
+
     const poolCreatedAt = new Date(selectedPool.created_at).getTime();
-    
+
     // Calculate remaining seconds based on current time and pool creation time
     const calculateRemaining = () => {
       const elapsedSeconds = (Date.now() - poolCreatedAt) / 1000;
-      
+
       if (lookupPhase === 'initial') {
         return Math.max(0, Math.ceil(INITIAL_LOOKUP_SECONDS - elapsedSeconds));
       } else {
         return Math.max(0, Math.ceil(TOTAL_SEARCH_SECONDS - elapsedSeconds));
       }
     };
-    
+
     // Initial calculation
     setRemainingSeconds(calculateRemaining());
     setIsExtendedSearching(lookupPhase === 'extended');
-    
+
     const timer = setInterval(() => {
       const remaining = calculateRemaining();
       setRemainingSeconds(remaining);
-      
+
       if (remaining <= 0) {
         clearInterval(timer);
-        
+
         const elapsedSeconds = (Date.now() - poolCreatedAt) / 1000;
-        
+
         // Check if we just finished initial phase
         if (elapsedSeconds >= INITIAL_LOOKUP_SECONDS && elapsedSeconds < TOTAL_SEARCH_SECONDS) {
           // Transition to extended phase
@@ -255,7 +255,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
         } else if (elapsedSeconds >= TOTAL_SEARCH_SECONDS) {
           // Search time is over
           setIsExtendedSearching(false);
-          
+
           if (currentPassengers >= 2) {
             console.log('[TripProgress] Search completed with', currentPassengers, 'passengers');
             setLookupPhase('matched');
@@ -268,6 +268,12 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
           } else {
             console.log('[TripProgress] Search completed with no riders, showing no-match');
             setLookupPhase('no-match');
+            // Cancel pool on server since no one joined
+            if (selectedPool?.id && isPoolCreator) {
+              poolService.cancelPool(selectedPool.id).catch((err) => {
+                console.log('[TripProgress] Cancel pool API call failed:', err.message);
+              });
+            }
           }
         }
       }
@@ -279,8 +285,8 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   // Watch for pool status changes to update lookup phase
   useEffect(() => {
     // If pool is full, has driver, or moved past waiting phase, stop searching
-    if (currentPassengers >= maxPassengers || hasDriver || 
-        poolStatus === 'WAITING_FOR_DRIVER' || poolStatus === 'READY_TO_START') {
+    if (currentPassengers >= maxPassengers || hasDriver ||
+      poolStatus === 'WAITING_FOR_DRIVER' || poolStatus === 'READY_TO_START') {
       if (lookupPhase !== 'matched') {
         console.log('[TripProgress] Pool status changed, stopping search');
         setLookupPhase('matched');
@@ -352,9 +358,9 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
             showDirections={true}
             markers={[]}
           />
-          
+
           {/* Status Badge */}
-          <View 
+          <View
             style={{
               position: 'absolute',
               top: 16,
@@ -370,7 +376,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
 
           {/* ETA Badge */}
           {tripStatus !== 'completed' && (
-            <View 
+            <View
               style={{
                 position: 'absolute',
                 top: 16,
@@ -415,13 +421,13 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
                 <Text className="text-white font-bold">{remainingSeconds}s</Text>
               </View>
             </View>
-            
+
             <Text className="text-blue-700 text-sm">
-              {lookupPhase === 'initial' 
+              {lookupPhase === 'initial'
                 ? 'Your pool is visible to nearby users with similar routes...'
                 : 'Searching in wider area for potential riders...'}
             </Text>
-            
+
             {isExtendedSearching && (
               <View className="flex-row items-center gap-2 mt-2">
                 <ActivityIndicator size="small" color="#2563eb" />
@@ -440,7 +446,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
               <Text className="text-yellow-700 text-sm text-center mt-2">
                 No one joined your pool within the search time. You can try creating a new pool or wait for a driver.
               </Text>
-              
+
               <TouchableOpacity
                 onPress={handleCreateNewPool}
                 className="mt-4 bg-blue-600 rounded-xl px-6 py-3 flex-row items-center gap-2"
@@ -462,13 +468,13 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
         {/* Driver Card */}
         <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
           <Text className="font-semibold mb-4">Your Driver</Text>
-          
+
           {hasDriver ? (
             <View className="flex-row items-center gap-4">
               <View className={`w-16 h-16 rounded-full items-center justify-center ${isFemale ? 'bg-pink-100' : 'bg-blue-100'} border-2 border-white shadow-md`}>
                 <Text className={`${isFemale ? 'text-pink-800' : 'text-blue-800'} text-xl font-semibold`}>{driver.initial}</Text>
               </View>
-              
+
               <View className="flex-1">
                 <Text className="text-lg font-semibold">{driver.name}</Text>
                 <View className="flex-row items-center gap-2 mt-1">
@@ -484,7 +490,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
                 <TouchableOpacity className={`w-12 h-12 rounded-full ${accentBg} items-center justify-center`}>
                   <Phone className="w-5 h-5" color="white" />
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   className="w-12 h-12 rounded-full bg-gray-100 items-center justify-center"
                   onPress={onChatDriver}
                 >
@@ -522,7 +528,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
               </TouchableOpacity>
             </View>
           </View>
-          
+
           {poolError ? (
             <View className="flex-row items-center gap-2">
               <AlertCircle className="w-5 h-5 text-red-500" />
@@ -565,7 +571,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
           <Text className="font-semibold mb-4">
             Co-Riders {coRiders.length > 0 ? `(${coRiders.length})` : ''}
           </Text>
-          
+
           {loadingPool ? (
             <View className="items-center py-4">
               <ActivityIndicator size="small" color="#2563eb" />
@@ -590,7 +596,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
                     </Text>
                   </View>
                   {/* Chat button for co-rider with unread badge */}
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     className="w-10 h-10 rounded-full bg-gray-100 items-center justify-center"
                     onPress={() => {
                       clearUnreadMessages(rider.userId);
@@ -600,7 +606,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
                   >
                     <MessageCircle className="w-5 h-5" color={rider.hasUnreadMessages ? '#2563eb' : '#4b5563'} />
                     {rider.hasUnreadMessages && (
-                      <View 
+                      <View
                         style={{
                           position: 'absolute',
                           top: -2,
@@ -632,7 +638,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
         {/* Route Info */}
         <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
           <Text className="font-semibold mb-4">Route</Text>
-          
+
           <View className="gap-4">
             <View className="flex-row items-start gap-3">
               <View className="w-3 h-3 rounded-full bg-green-500 mt-1" />
@@ -661,7 +667,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
         {/* Trip Details */}
         <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
           <Text className="font-semibold mb-4">Trip Details</Text>
-          
+
           <View className="gap-3">
             <View className="flex-row justify-between">
               <Text className="text-gray-600">Vehicle Type</Text>
@@ -670,19 +676,19 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
             <View className="flex-row justify-between">
               <Text className="text-gray-600">Estimated Time</Text>
               <Text className="font-medium">
-                {poolDetails?.score_breakdown?.base_duration_minutes 
+                {poolDetails?.score_breakdown?.base_duration_minutes
                   ? `${Math.round(poolDetails.score_breakdown.base_duration_minutes)} mins`
-                  : selectedPool?.eta 
-                    ? `${selectedPool.eta} mins` 
+                  : selectedPool?.eta
+                    ? `${selectedPool.eta} mins`
                     : 'Calculating...'}
               </Text>
             </View>
             <View className="flex-row justify-between">
               <Text className="text-gray-600">Fare per Person</Text>
               <Text className={`font-semibold ${accentText}`}>
-                ৳ {poolDetails?.fare_per_person 
-                  ? Math.round(poolDetails.fare_per_person) 
-                  : selectedPool?.fare_per_person 
+                ৳ {poolDetails?.fare_per_person
+                  ? Math.round(poolDetails.fare_per_person)
+                  : selectedPool?.fare_per_person
                     ? Math.round(selectedPool.fare_per_person as number)
                     : 'Calculating...'}
               </Text>
@@ -696,9 +702,9 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
           </View>
         </View>
 
-        {/* Cancel Pool Button - Only show during search phase (initial or extended) */}
-        {/* After search time finishes, users cannot cancel the ride */}
-        {(lookupPhase === 'initial' || lookupPhase === 'extended') && poolStatus === 'WAITING_FOR_RIDERS' && (
+        {/* Cancel Pool Button - Show until ride starts */}
+        {/* Users can leave pool at any time before the ride starts */}
+        {['WAITING_FOR_RIDERS', 'WAITING_FOR_DRIVER', 'READY_TO_START'].includes(poolStatus) && (
           <View className="mx-6 mt-4">
             <TouchableOpacity
               onPress={handleCancelPool}
@@ -713,7 +719,9 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
               ) : (
                 <>
                   <X className="w-5 h-5 mr-2" color="#6b7280" />
-                  <Text className="text-gray-600 font-semibold">Cancel & Leave Pool</Text>
+                  <Text className="text-gray-600 font-semibold">
+                    {lookupPhase === 'no-match' ? 'Cancel Pool' : 'Cancel & Leave Pool'}
+                  </Text>
                 </>
               )}
             </TouchableOpacity>
