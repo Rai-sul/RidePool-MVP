@@ -48,20 +48,20 @@ function ActiveTripButtonInner() {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { activeTrip, hasActiveTrip, userProfile, endTrip } = useGlobalContext();
-  
+
   // Always call hooks unconditionally
   const poolId = activeTrip?.poolId || null;
   const userId = userProfile?.id || null;
-  
+
   // Get real-time pool updates - hook is always called but with null values when no trip
-  const { pool: realtimePool, poolStatus, error: poolError } = usePoolRealtime(poolId, userId);
-  
+  const { pool: realtimePool, poolStatus, members, error: poolError, isConnected } = usePoolRealtime(poolId, userId);
+
   // Animation for pulsing effect
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  
+
   // Calculate bottom position: above bottom nav (64px) + system nav bar inset
   const bottomPosition = 64 + 16 + insets.bottom; // 64 = nav height, 16 = gap
-  
+
   // Clear active trip if pool is cancelled, completed, or no longer exists
   useEffect(() => {
     if (hasActiveTrip && poolId) {
@@ -79,7 +79,7 @@ function ActiveTripButtonInner() {
       }
     }
   }, [hasActiveTrip, poolId, poolStatus, poolError, endTrip]);
-  
+
   useEffect(() => {
     if (hasActiveTrip) {
       // Create pulsing animation
@@ -98,32 +98,34 @@ function ActiveTripButtonInner() {
         ])
       );
       pulse.start();
-      
+
       return () => pulse.stop();
     }
   }, [hasActiveTrip, pulseAnim]);
-  
+
   // Don't show if no active trip
   if (!hasActiveTrip || !activeTrip) {
     return null;
   }
-  
+
   // Don't show on certain pages
-  if (pathname === '/trip-progress' || pathname === '/searching' || 
-      pathname === '/chat' || pathname === '/driver-chat' || pathname === '/support-chat') {
+  if (pathname === '/trip-progress' || pathname === '/searching' ||
+    pathname === '/chat' || pathname === '/driver-chat' || pathname === '/support-chat') {
     return null;
   }
-  
+
   const isFemale = userProfile?.gender === 'female';
   const bgColor = isFemale ? '#ec4899' : '#2563eb';
-  
+
   const handlePress = () => {
     router.push('/trip-progress');
   };
-  
-  // Use realtime passenger count if available
-  const passengerCount = realtimePool?.current_passengers || activeTrip.pool.current_passengers || 1;
-  
+
+  // Use realtime passenger count if available, with members array as fallback
+  const passengerCount = realtimePool?.current_passengers ||
+    (members && members.length > 0 ? members.length : null) ||
+    activeTrip.pool.current_passengers || 1;
+
   // Calculate if search time has expired for this pool
   const TOTAL_SEARCH_SECONDS = 40; // 30 initial + 10 extended
   const isSearchExpired = (() => {
@@ -133,7 +135,7 @@ function ActiveTripButtonInner() {
     const elapsedSeconds = (Date.now() - poolCreatedAt) / 1000;
     return elapsedSeconds >= TOTAL_SEARCH_SECONDS;
   })();
-  
+
   // Get status text based on realtime pool status
   const getStatusText = () => {
     // Use realtime pool status if available
@@ -159,7 +161,7 @@ function ActiveTripButtonInner() {
           return 'Active trip';
       }
     }
-    
+
     // Fallback to stored status
     switch (activeTrip.status) {
       case 'searching':
@@ -172,13 +174,13 @@ function ActiveTripButtonInner() {
         return 'Active trip';
     }
   };
-  
+
   // Get destination name (truncated)
   const destinationName = activeTrip.destination?.name || 'Your destination';
-  const truncatedDestination = destinationName.length > 20 
-    ? destinationName.substring(0, 20) + '...' 
+  const truncatedDestination = destinationName.length > 20
+    ? destinationName.substring(0, 20) + '...'
     : destinationName;
-  
+
   return (
     <Animated.View
       style={{
@@ -221,7 +223,7 @@ function ActiveTripButtonInner() {
         >
           <Navigation color="#ffffff" size={24} />
         </View>
-        
+
         {/* Center: Trip info */}
         <View style={{ flex: 1 }}>
           <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 15 }}>
@@ -241,7 +243,7 @@ function ActiveTripButtonInner() {
             )}
           </View>
         </View>
-        
+
         {/* Right: Arrow */}
         <View
           style={{
