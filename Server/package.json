@@ -1,0 +1,54 @@
+{
+  "name": "ride-pool-backend",
+  "version": "1.0.0",
+  "description": "Ride Pool Backend API",
+  "main": "dist/app.js",
+  "scripts": {
+    "dev": "nodemon src/app.ts",
+    "build": "tsc",
+    "start": "node dist/app.js",
+    "migrate": "cd ../supabase && supabase db push",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration"
+  },
+  "keywords": [
+    "ride-pooling",
+    "transport"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.90.1",
+    "bullmq": "^5.66.5",
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.2.1",
+    "express-validator": "^7.3.1",
+    "h3-js": "^4.3.0",
+    "helmet": "^8.1.0",
+    "ioredis": "^5.9.2",
+    "morgan": "^1.10.1",
+    "opossum": "^9.0.0",
+    "redis": "^5.10.0",
+    "winston": "^3.19.0",
+    "zod": "^4.3.5"
+  },
+  "devDependencies": {
+    "@types/compression": "^1.8.1",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.5",
+    "@types/express-validator": "^2.20.33",
+    "@types/morgan": "^1.9.10",
+    "@types/node": "^24.10.1",
+    "@types/opossum": "^8.1.9",
+    "nodemon": "^3.1.11",
+    "supabase": "^2.58.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  }
+}
