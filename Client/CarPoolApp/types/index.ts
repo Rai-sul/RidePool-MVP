@@ -69,6 +69,9 @@ export interface Location {
 
 export type RideStatus = 
   | 'CREATING_POOL'
+  | 'SEARCHING'      // Pool creator is searching for other riders
+  | 'MATCHED'        // Another rider has joined the pool
+  | 'CONFIRMED'      // Search time finished with riders joined
   | 'WAITING_FOR_DRIVER'
   | 'DRIVER_ASSIGNED'
   | 'STARTED'
