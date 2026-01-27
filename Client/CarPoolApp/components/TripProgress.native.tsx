@@ -87,7 +87,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
 
   // Pool status info
   const currentPassengers = poolDetails?.current_passengers || selectedPool?.current_passengers || 1;
-  const maxPassengers = poolDetails?.max_passengers || selectedPool?.max_passengers || 4;
+  const maxPassengers = poolDetails?.max_passengers || selectedPool?.max_passengers || 3;
 
   // Check if current user is the pool creator
   const isPoolCreator = selectedPool?.creator_user_id === userProfile?.id;
@@ -172,17 +172,23 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   }, [poolStatus]);
 
   // Handle pool cancellation (e.g., when all other riders left)
-  // ONLY show alert when pool was cancelled due to OTHER users leaving
-  // Do NOT auto-redirect - user must explicitly tap cancel/leave button to go home
-  // Pool creator will see the "No Riders Found" card with create new pool option
+  // Do NOT redirect when pool creator's timer expired with no riders (creatorTimerExpiredNoRiders is true)
+  // In that case, user stays on the page with "No Riders Found" card and can create a new pool
   useEffect(() => {
-    // Pool was cancelled by server (e.g., other riders left)
-    // Show informational alert but do NOT auto-redirect
-    // User can tap cancel/leave button or create new pool button to proceed
-    if (poolStatus === 'CANCELLED' && !isPoolCreator && !creatorTimerExpiredNoRiders) {
-      // Only show alert for non-creators when pool is cancelled
-      // Pool creator will see "No Riders Found" card with create new pool option
-      const message = 'Your pool was cancelled. You can create a new pool or go back to home.';
+    // Skip if the pool creator's timer expired with no riders joining
+    // This means they should stay on this page to see the "No Riders Found" card
+    // instead of being redirected to home
+    if (creatorTimerExpiredNoRiders) {
+      return;
+    }
+
+    // Pool was cancelled by server (e.g., other riders left and only 1 member remains)
+    // In this case, redirect the remaining user to home screen
+    if (poolStatus === 'CANCELLED' && onPoolCancelled) {
+      // Different message based on context
+      const message = isPoolCreator
+        ? 'Your pool was automatically cancelled because other riders left and you are the only one remaining.'
+        : 'Your pool was cancelled. You will be redirected to the home screen.';
 
       Alert.alert(
         'Pool Cancelled',
@@ -190,12 +196,15 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
         [
           {
             text: 'OK',
+            onPress: () => {
+              onPoolCancelled();
+            },
           },
         ],
-        { cancelable: true }
+        { cancelable: false }
       );
     }
-  }, [poolStatus, isPoolCreator, creatorTimerExpiredNoRiders]);
+  }, [poolStatus, onPoolCancelled, creatorTimerExpiredNoRiders, isPoolCreator]);
 
   // Calculate progress based on pool status
   const getProgress = () => {
