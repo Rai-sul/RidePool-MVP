@@ -62,10 +62,9 @@ function ActiveTripButtonInner() {
   // Calculate bottom position: above bottom nav (64px) + system nav bar inset
   const bottomPosition = 64 + 16 + insets.bottom; // 64 = nav height, 16 = gap
 
-  // Clear active trip if pool is completed or no longer exists
-  // Note: We don't auto-clear on CANCELLED status because the TripProgress component
-  // handles the "search expired" scenario and shows appropriate UI first
-  // Only clear when pool is genuinely completed or no longer available
+  // Clear active trip ONLY when pool is genuinely completed
+  // NEVER auto-clear on CANCELLED status or pool errors - let user stay on trip-progress page
+  // User can only leave via explicit cancel/leave button tap in TripProgress component
   useEffect(() => {
     if (hasActiveTrip && poolId) {
       // Pool was completed - trip is done
@@ -74,16 +73,11 @@ function ActiveTripButtonInner() {
         endTrip();
         return;
       }
-      // Pool no longer exists (severe error from realtime hook)
-      // Only clear if it's a "not found" error - NOT for cancelled pools
-      // Let TripProgress handle CANCELLED status with proper UI
-      if (poolError && poolError.includes('no longer available')) {
-        console.log('[ActiveTripButton] Pool no longer available - clearing trip');
-        endTrip();
-        return;
-      }
+      // Do NOT clear on CANCELLED status or pool errors
+      // Let user navigate to trip-progress and see the "No Riders Found" card
+      // or decide to create a new pool or leave explicitly
     }
-  }, [hasActiveTrip, poolId, poolStatus, poolError, endTrip]);
+  }, [hasActiveTrip, poolId, poolStatus, endTrip]);
 
   useEffect(() => {
     if (hasActiveTrip) {
