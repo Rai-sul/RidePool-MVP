@@ -15,3 +15,5 @@ The floating pool tracking button is not updating and showing in real time statu
 hmm
 
 1. raisul is sexy
+
+Make sure if no of users in pool == 1 still pool will be waiting for riders until searching time finish. Pool will be canceled iff no of number ==0 instead of 1.
