@@ -13,12 +13,14 @@ export default function RideConfirmationScreen() {
     const displayPool = toDisplayPool(pool);
     setSelectedPool(displayPool);
     startTrip(displayPool);
-    
-    // WORKAROUND for Expo Router bug #38423: Use static router import
-    // Static router doesn't rely on React context, avoiding the navigation context error
-    requestAnimationFrame(() => {
-      staticRouter.replace('/searching');
-    });
+
+    // Wait 2 seconds to show brief confirmation, then go directly to trip-progress
+    // All countdown and search logic is handled on the trip-progress page
+    setTimeout(() => {
+      // WORKAROUND for Expo Router bug #38423: Use static router import
+      // Static router doesn't rely on React context, avoiding the navigation context error
+      staticRouter.replace('/trip-progress');
+    }, 2000);
   };
 
   const handleBack = () => {

@@ -96,23 +96,23 @@ type GlobalContextType = {
 
 const GlobalContext = createContext<GlobalContextType>({
   userProfile: null,
-  setUserProfile: () => {},
+  setUserProfile: () => { },
   activeTab: 'home',
-  setActiveTab: () => {},
+  setActiveTab: () => { },
   pickupLocation: null,
-  setPickupLocation: () => {},
+  setPickupLocation: () => { },
   selectedDestination: null,
-  setSelectedDestination: () => {},
+  setSelectedDestination: () => { },
   selectedPool: null,
-  setSelectedPool: () => {},
+  setSelectedPool: () => { },
   selectedRideType: null,
-  setSelectedRideType: () => {},
+  setSelectedRideType: () => { },
   // New: Active trip defaults
   activeTrip: null,
   hasActiveTrip: false,
-  startTrip: () => {},
-  updateTripStatus: () => {},
-  endTrip: () => {},
+  startTrip: () => { },
+  updateTripStatus: () => { },
+  endTrip: () => { },
   cancelTrip: async () => false,
 });
 
@@ -127,7 +127,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
 
   // Sync with AuthContext
   const { user: authUser } = useAuthContext();
-  
+
   // Load persisted active trip on mount and validate against database
   useEffect(() => {
     const loadActiveTrip = async () => {
@@ -159,7 +159,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
                 const errorMessage = response.message || '';
                 const isNotFound = errorMessage.toLowerCase().includes('not found');
                 const isCancelled = errorMessage.toLowerCase().includes('cancelled');
-                
+
                 if (isNotFound || isCancelled) {
                   console.log('[GlobalContext] Pool not found in database, clearing stored trip');
                   await AsyncStorage.removeItem(ACTIVE_TRIP_STORAGE_KEY);
@@ -179,7 +179,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
               const errorMessage = err.message || '';
               const isNotFound = errorMessage.toLowerCase().includes('not found') || err.status === 404;
               const isCancelled = errorMessage.toLowerCase().includes('cancelled');
-              
+
               if (isNotFound || isCancelled) {
                 console.log('[GlobalContext] Pool not found, clearing stored trip:', errorMessage);
                 await AsyncStorage.removeItem(ACTIVE_TRIP_STORAGE_KEY);
@@ -202,22 +202,22 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         console.warn('[GlobalContext] Failed to load active trip:', err);
       }
     };
-    
+
     loadActiveTrip();
   }, []);
-  
+
   useEffect(() => {
     if (authUser) {
       // Parse full_name into firstName and lastName
       let firstName = '';
       let lastName = '';
-      
+
       if (authUser.full_name) {
         const nameParts = authUser.full_name.trim().split(' ');
         firstName = nameParts[0] || '';
         lastName = nameParts.slice(1).join(' ') || '';
       }
-      
+
       setUserProfile({
         firstName,
         lastName,
@@ -243,10 +243,10 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString(),
       status: 'waiting',
     };
-    
+
     setActiveTrip(trip);
     setSelectedPool(pool);
-    
+
     // Persist to storage
     try {
       await AsyncStorage.setItem(ACTIVE_TRIP_STORAGE_KEY, JSON.stringify(trip));
@@ -259,10 +259,10 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   // Update trip status
   const updateTripStatus = async (status: ActiveTripState['status']) => {
     if (!activeTrip) return;
-    
+
     const updatedTrip = { ...activeTrip, status };
     setActiveTrip(updatedTrip);
-    
+
     try {
       await AsyncStorage.setItem(ACTIVE_TRIP_STORAGE_KEY, JSON.stringify(updatedTrip));
     } catch (err) {
@@ -274,7 +274,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   const endTrip = async () => {
     setActiveTrip(null);
     setSelectedPool(null);
-    
+
     try {
       await AsyncStorage.removeItem(ACTIVE_TRIP_STORAGE_KEY);
       console.log('[GlobalContext] Active trip cleared');
@@ -286,11 +286,11 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   // Cancel trip and leave pool - removes user from pool in database
   const cancelTrip = useCallback(async (): Promise<boolean> => {
     if (!activeTrip) return false;
-    
+
     try {
       // Call API to leave the pool
       const response = await poolService.leavePool(activeTrip.poolId);
-      
+
       if (response.success) {
         console.log('[GlobalContext] Successfully left pool:', activeTrip.poolId);
         // Clear local state
@@ -302,6 +302,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         console.warn('[GlobalContext] Failed to leave pool:', response.message);
         // Still clear local state if pool doesn't exist or is already cancelled
         if (response.message?.includes('not found') || response.message?.includes('cancelled')) {
+          console.log('[GlobalContext] Pool already gone, clearing local state anyway');
           setActiveTrip(null);
           setSelectedPool(null);
           await AsyncStorage.removeItem(ACTIVE_TRIP_STORAGE_KEY);
@@ -313,6 +314,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
       console.warn('[GlobalContext] Error leaving pool:', err.message);
       // If pool doesn't exist, clear local state anyway
       if (err.message?.includes('not found') || err.message?.includes('404')) {
+        console.log('[GlobalContext] Pool not found in API, clearing local state anyway');
         setActiveTrip(null);
         setSelectedPool(null);
         await AsyncStorage.removeItem(ACTIVE_TRIP_STORAGE_KEY);

@@ -702,9 +702,10 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
           </View>
         </View>
 
-        {/* Cancel Pool Button - Show until ride starts */}
+        {/* Cancel Pool Button - Show until ride starts or is completed */}
         {/* Users can leave pool at any time before the ride starts */}
-        {['WAITING_FOR_RIDERS', 'WAITING_FOR_DRIVER', 'READY_TO_START'].includes(poolStatus) && (
+        {/* Use exclusion logic to ensure button is visible even during no-match state */}
+        {!['STARTED', 'COMPLETED'].includes(poolStatus) && (
           <View className="mx-6 mt-4">
             <TouchableOpacity
               onPress={handleCancelPool}
