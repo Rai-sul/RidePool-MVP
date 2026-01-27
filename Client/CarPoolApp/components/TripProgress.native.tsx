@@ -39,6 +39,10 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [isExtendedSearching, setIsExtendedSearching] = useState(false);
 
+  // Flag to track if the pool creator's timer expired with no riders
+  // This is used to distinguish between "timer expired" vs "riders left"
+  const [creatorTimerExpiredNoRiders, setCreatorTimerExpiredNoRiders] = useState(false);
+
   // Use real-time pool updates
   const {
     pool: poolDetails,
@@ -168,11 +172,27 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   }, [poolStatus]);
 
   // Handle pool cancellation (e.g., when all other riders left)
+  // Do NOT redirect when pool creator's timer expired with no riders (creatorTimerExpiredNoRiders is true)
+  // In that case, user stays on the page with "No Riders Found" card and can create a new pool
   useEffect(() => {
+    // Skip if the pool creator's timer expired with no riders joining
+    // This means they should stay on this page to see the "No Riders Found" card
+    // instead of being redirected to home
+    if (creatorTimerExpiredNoRiders) {
+      return;
+    }
+
+    // Pool was cancelled by server (e.g., other riders left and only 1 member remains)
+    // In this case, redirect the remaining user to home screen
     if (poolStatus === 'CANCELLED' && onPoolCancelled) {
+      // Different message based on context
+      const message = isPoolCreator
+        ? 'Your pool was automatically cancelled because other riders left and you are the only one remaining.'
+        : 'Your pool was cancelled. You will be redirected to the home screen.';
+
       Alert.alert(
         'Pool Cancelled',
-        'Your pool was cancelled because all other riders left. You will be redirected to the home screen.',
+        message,
         [
           {
             text: 'OK',
@@ -184,7 +204,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
         { cancelable: false }
       );
     }
-  }, [poolStatus, onPoolCancelled]);
+  }, [poolStatus, onPoolCancelled, creatorTimerExpiredNoRiders, isPoolCreator]);
 
   // Calculate progress based on pool status
   const getProgress = () => {
@@ -268,6 +288,8 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
           } else {
             console.log('[TripProgress] Search completed with no riders, showing no-match');
             setLookupPhase('no-match');
+            // Set flag to prevent auto-redirect when pool is cancelled
+            setCreatorTimerExpiredNoRiders(true);
             // Cancel pool on server since no one joined
             if (selectedPool?.id && isPoolCreator) {
               poolService.cancelPool(selectedPool.id).catch((err) => {
