@@ -46,6 +46,8 @@ export const API_ENDPOINTS = {
     FARE: (poolId: string) => `/pools/${poolId}/fare`,
     EXTEND_SEARCH: (poolId: string) => `/pools/${poolId}/extend-search`,
     COMPLETE_SEARCH: (poolId: string) => `/pools/${poolId}/complete-search`,
+    // FREE Google Maps navigation - no API cost, uses native app
+    NAVIGATION_LINK: (poolId: string) => `/pools/${poolId}/navigation-link`,
   },
   DRIVER: {
     GO_ONLINE: '/driver/go-online',

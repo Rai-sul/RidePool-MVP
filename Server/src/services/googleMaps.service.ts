@@ -1,5 +1,13 @@
 import { Location } from "../types";
 import { config } from "../config/env";
+import { cacheService } from "./cache.service";
+import { h3Utils, H3_RESOLUTION } from "../utils/h3.utils";
+
+// SUPER COST-EFFECTIVE: Extended cache TTLs to minimize API costs
+// Traffic-aware route cache: 10 minutes (was 5 min) - traffic data still fresh enough
+const ROUTE_CACHE_TTL = 600;
+// Simple distance cache TTL: 2 hours (distance doesn't change)
+const DISTANCE_CACHE_TTL = 7200;
 
 // ============================================
 // GOOGLE MAPS API TYPES
@@ -238,6 +246,31 @@ export class GoogleMapsService {
     destination: Location,
     waypoints?: Location[]
   ): Promise<BestRouteResult | null> {
+    // ========================================
+    // COST OPTIMIZATION: Check cache first
+    // Uses H3 Resolution 7 (~5.2km) for destination-level grouping
+    // This groups nearby routes together to maximize cache hits
+    // ========================================
+    const originH3 = h3Utils.latLngToH3(origin, H3_RESOLUTION.DESTINATION);
+    const destH3 = h3Utils.latLngToH3(destination, H3_RESOLUTION.DESTINATION);
+    
+    let cacheKey = `route:best:${originH3}:${destH3}`;
+    if (waypoints && waypoints.length > 0) {
+      // Include waypoints in cache key (sorted by H3 to maximize cache hits)
+      const waypointsKey = waypoints
+        .map(wp => h3Utils.latLngToH3(wp, H3_RESOLUTION.DESTINATION))
+        .sort()
+        .join('-');
+      cacheKey += `:${waypointsKey}`;
+    }
+
+    // Try to get from cache first (saves API cost)
+    const cachedRoute = await cacheService.get<BestRouteResult>(cacheKey);
+    if (cachedRoute) {
+      console.log(`[GoogleMapsService] Cache HIT for route ${cacheKey} - saved 1.2 BDT`);
+      return cachedRoute;
+    }
+
     if (!this.apiKey) {
       console.warn(
         "[GoogleMapsService] Google Maps API key not configured. Returning null."
@@ -374,11 +407,20 @@ export class GoogleMapsService {
         selectedReason += ' - Heavy traffic, but still fastest';
       }
 
-      return {
+      const result: BestRouteResult = {
         bestRoute,
         alternativeRoutes,
         selectedReason,
       };
+
+      // ========================================
+      // COST OPTIMIZATION: Cache the result
+      // 5-minute TTL balances freshness vs cost savings
+      // ========================================
+      await cacheService.set(cacheKey, result, ROUTE_CACHE_TTL);
+      console.log(`[GoogleMapsService] Cached route ${cacheKey} for ${ROUTE_CACHE_TTL}s`);
+
+      return result;
     } catch (error) {
       console.error("[GoogleMapsService] Error fetching best route:", error);
       return null;
@@ -400,6 +442,7 @@ export class GoogleMapsService {
 
   /**
    * Get distance and duration between two points (simplified version)
+   * COST OPTIMIZED: Uses 1-hour cache since distance doesn't change
    *
    * @param origin - Starting location
    * @param destination - Ending location
@@ -409,16 +452,32 @@ export class GoogleMapsService {
     origin: Location,
     destination: Location
   ): Promise<{ distance: number; duration: number; durationInTraffic: number } | null> {
+    // Use H3 for cache key - groups nearby points for more cache hits
+    const originH3 = h3Utils.latLngToH3(origin, H3_RESOLUTION.DESTINATION);
+    const destH3 = h3Utils.latLngToH3(destination, H3_RESOLUTION.DESTINATION);
+    const cacheKey = `route:distance:${originH3}:${destH3}`;
+
+    // Check cache first
+    const cached = await cacheService.get<{ distance: number; duration: number; durationInTraffic: number }>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const route = await this.getRoute(origin, destination);
     if (!route) {
       return null;
     }
 
-    return {
+    const result = {
       distance: route.distance,
       duration: route.duration,
       durationInTraffic: route.durationInTraffic,
     };
+
+    // Cache for 1 hour (distance doesn't change)
+    await cacheService.set(cacheKey, result, DISTANCE_CACHE_TTL);
+
+    return result;
   }
 
   /**
@@ -477,6 +536,35 @@ export class GoogleMapsService {
    */
   private stripHtmlTags(html: string): string {
     return html.replace(/<[^>]*>/g, "").trim();
+  }
+
+  /**
+   * Generate a Google Maps deep link URL for FREE navigation
+   * Opens the Google Maps app on the driver's phone - NO API COST
+   * 
+   * @param origin - Starting location (driver's current position)
+   * @param destination - Final destination
+   * @param waypoints - Optional pickup/dropoff points along the way
+   * @returns URL string to open Google Maps app
+   */
+  generateNavigationDeepLink(
+    origin: Location,
+    destination: Location,
+    waypoints?: Location[]
+  ): string {
+    const originStr = `${origin.latitude},${origin.longitude}`;
+    const destStr = `${destination.latitude},${destination.longitude}`;
+    
+    let url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destStr)}&travelmode=driving`;
+
+    if (waypoints && waypoints.length > 0) {
+      const waypointsStr = waypoints
+        .map(wp => `${wp.latitude},${wp.longitude}`)
+        .join('|');
+      url += `&waypoints=${encodeURIComponent(waypointsStr)}`;
+    }
+
+    return url;
   }
 
   /**

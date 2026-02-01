@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MapPin, Phone, MessageCircle, User, Navigation, Clock, Star, Users, AlertCircle, RefreshCw, Plus, X, Route } from './Icons';
 import { Button } from './ui/button';
@@ -8,7 +8,7 @@ import { Progress } from './ui/progress';
 import GoogleMapView from './GoogleMapView';
 import type { UserProfile, Location, Destination, Pool } from '../contexts/GlobalContext';
 import { usePoolRealtime } from '../hooks/usePoolRealtime';
-import { poolService, CombinedRouteResponse, CombinedRouteWaypoint } from '../services/pool.service';
+import { poolService, CombinedRouteResponse, CombinedRouteWaypoint, NavigationLinkResponse } from '../services/pool.service';
 
 const INITIAL_LOOKUP_SECONDS = 30;
 const EXTENDED_LOOKUP_SECONDS = 10;
@@ -47,6 +47,10 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   const [combinedRoute, setCombinedRoute] = useState<CombinedRouteResponse | null>(null);
   const [loadingCombinedRoute, setLoadingCombinedRoute] = useState(false);
   const [combinedRouteError, setCombinedRouteError] = useState<string | null>(null);
+
+  // Navigation link state - FREE Google Maps navigation
+  const [navigationLink, setNavigationLink] = useState<NavigationLinkResponse | null>(null);
+  const [loadingNavLink, setLoadingNavLink] = useState(false);
 
   // Use real-time pool updates
   const {
@@ -213,6 +217,90 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
 
     fetchCombinedRoute();
   }, [selectedPool?.id, poolStatus, driverPosition]);
+
+  // Fetch FREE Google Maps navigation link when ride is ready (has driver or ready to start)
+  useEffect(() => {
+    const validStatuses = ['READY_TO_START', 'STARTED'];
+    if (!selectedPool?.id || !validStatuses.includes(poolStatus)) {
+      return;
+    }
+
+    // Don't refetch if we already have a navigation link
+    if (navigationLink) {
+      return;
+    }
+
+    const fetchNavigationLink = async () => {
+      setLoadingNavLink(true);
+      try {
+        const response = await poolService.getNavigationLink(selectedPool.id);
+        if (response.success && response.data) {
+          setNavigationLink(response.data);
+          console.log('[TripProgress] Navigation link loaded (FREE):', {
+            waypointCount: response.data.meta.waypointCount,
+            costSavings: response.data.meta.costSavings,
+          });
+        }
+      } catch (error) {
+        console.error('[TripProgress] Error fetching navigation link:', error);
+      } finally {
+        setLoadingNavLink(false);
+      }
+    };
+
+    fetchNavigationLink();
+  }, [selectedPool?.id, poolStatus, navigationLink]);
+
+  // Open Google Maps for FREE navigation
+  const handleStartNavigation = useCallback(async () => {
+    if (!navigationLink?.navigationUrl) {
+      // Fetch navigation link if not available
+      if (selectedPool?.id) {
+        setLoadingNavLink(true);
+        try {
+          const response = await poolService.getNavigationLink(selectedPool.id);
+          if (response.success && response.data?.navigationUrl) {
+            await Linking.openURL(response.data.navigationUrl);
+          } else {
+            Alert.alert('Error', 'Could not generate navigation link');
+          }
+        } catch (error) {
+          console.error('[TripProgress] Error opening navigation:', error);
+          Alert.alert('Error', 'Failed to open Google Maps');
+        } finally {
+          setLoadingNavLink(false);
+        }
+      }
+      return;
+    }
+
+    try {
+      const canOpen = await Linking.canOpenURL(navigationLink.navigationUrl);
+      if (canOpen) {
+        await Linking.openURL(navigationLink.navigationUrl);
+      } else {
+        Alert.alert('Error', 'Google Maps is not installed on this device');
+      }
+    } catch (error) {
+      console.error('[TripProgress] Error opening Google Maps:', error);
+      Alert.alert('Error', 'Failed to open Google Maps');
+    }
+  }, [navigationLink, selectedPool?.id]);
+
+  // Open a specific location in Google Maps
+  const handleOpenLocation = useCallback(async (mapLink: string, label: string) => {
+    try {
+      const canOpen = await Linking.canOpenURL(mapLink);
+      if (canOpen) {
+        await Linking.openURL(mapLink);
+      } else {
+        Alert.alert('Error', 'Could not open location in Google Maps');
+      }
+    } catch (error) {
+      console.error(`[TripProgress] Error opening ${label}:`, error);
+      Alert.alert('Error', `Failed to open ${label}`);
+    }
+  }, []);
 
   // Handle pool cancellation (e.g., when all other riders left)
   // Do NOT redirect when pool creator's timer expired with no riders (creatorTimerExpiredNoRiders is true)
@@ -632,6 +720,80 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
             </View>
           )}
         </View>
+
+        {/* START NAVIGATION BUTTON - FREE Google Maps Navigation */}
+        {/* Shows when pool is ready (has driver or ride started) */}
+        {hasDriver && ['READY_TO_START', 'STARTED'].includes(poolStatus) && (
+          <View className="mx-6 mt-4">
+            <TouchableOpacity
+              onPress={handleStartNavigation}
+              disabled={loadingNavLink}
+              className={`w-full py-4 rounded-xl flex-row items-center justify-center gap-3 ${accentBg}`}
+              style={{
+                shadowColor: isFemale ? '#ec4899' : '#2563eb',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                elevation: 6,
+                opacity: loadingNavLink ? 0.7 : 1,
+              }}
+            >
+              {loadingNavLink ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <>
+                  <Navigation className="w-6 h-6" color="white" />
+                  <View>
+                    <Text className="text-white font-bold text-lg">Start Navigation</Text>
+                    <Text className="text-white text-xs opacity-80">Opens Google Maps • FREE</Text>
+                  </View>
+                </>
+              )}
+            </TouchableOpacity>
+            <Text className="text-center text-gray-500 text-xs mt-2">
+              Turn-by-turn navigation with real-time traffic
+            </Text>
+          </View>
+        )}
+
+        {/* View Locations - Individual pickup/dropoff links */}
+        {navigationLink && ['READY_TO_START', 'STARTED'].includes(poolStatus) && (
+          <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
+            <Text className="font-semibold mb-4">View Locations in Google Maps</Text>
+            <View className="gap-3">
+              {navigationLink.waypoints.map((waypoint, idx) => (
+                <View key={waypoint.userId} className="gap-2">
+                  <View className="flex-row items-center gap-2">
+                    <View className={`w-2 h-2 rounded-full ${waypoint.isCurrentUser ? 'bg-blue-500' : 'bg-gray-400'}`} />
+                    <Text className={`text-sm font-medium ${waypoint.isCurrentUser ? 'text-blue-600' : 'text-gray-600'}`}>
+                      {waypoint.isCurrentUser ? 'Your Locations' : `Rider ${idx + 1}`}
+                    </Text>
+                  </View>
+                  <View className="flex-row gap-2 ml-4">
+                    <TouchableOpacity
+                      onPress={() => handleOpenLocation(waypoint.pickup.mapLink, 'pickup')}
+                      className="flex-1 py-2 px-3 bg-green-50 rounded-lg flex-row items-center gap-2"
+                    >
+                      <MapPin className="w-4 h-4" color="#22c55e" />
+                      <Text className="text-green-700 text-xs" numberOfLines={1}>
+                        {waypoint.pickup.address || 'Pickup'}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleOpenLocation(waypoint.dropoff.mapLink, 'dropoff')}
+                      className="flex-1 py-2 px-3 bg-red-50 rounded-lg flex-row items-center gap-2"
+                    >
+                      <MapPin className="w-4 h-4" color="#ef4444" />
+                      <Text className="text-red-700 text-xs" numberOfLines={1}>
+                        {waypoint.dropoff.address || 'Drop-off'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
 
         {/* Pool Status Card */}
         <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">

@@ -109,14 +109,17 @@ export default function GoogleMapView({
   useEffect(() => {
     if (isExpoGo || !NativeMapView) return;
 
-    // If pre-calculated polyline is provided, decode and use it
-    if (routePolyline) {
+    // If pre-calculated polyline is provided AND not empty, decode and use it
+    if (routePolyline && routePolyline.length > 0) {
       const points = decodePolyline(routePolyline);
-      setRouteCoords(points);
-      return;
+      if (points.length > 0) {
+        setRouteCoords(points);
+        return;
+      }
     }
 
     // If pre-calculated coordinates are provided, use them directly
+    // This handles both the "fallback route" (straight lines) and real coordinates
     if (routeCoordinates && routeCoordinates.length > 0) {
       const points = routeCoordinates.map(coord => ({
         latitude: coord.lat,

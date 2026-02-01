@@ -19,4 +19,7 @@ router.post('/:poolId/cancel', authenticate, validate(PoolIdParamSchema, 'params
 router.post('/:poolId/extend-search', authenticate, validate(PoolIdParamSchema, 'params'), (req, res, next) => poolController.extendSearch(req, res, next));
 router.post('/:poolId/complete-search', authenticate, validate(PoolIdParamSchema, 'params'), (req, res, next) => poolController.completeSearch(req, res, next));
 
+// FREE Google Maps navigation - Opens native app with all waypoints (no API cost)
+router.get('/:poolId/navigation-link', authenticate, validate(PoolIdParamSchema, 'params'), (req, res, next) => poolController.getNavigationDeepLink(req, res, next));
+
 export default router;

@@ -8,6 +8,7 @@ import { lookupTimeService } from '../services/lookupTime.service';
 import { penaltyService } from '../services/penalty.service';
 import { notificationService } from '../services/notification.service';
 import { smartRouteService, PoolMemberRoute } from '../services/smartRoute.service';
+import { googleMapsService } from '../services/googleMaps.service';
 import { CreatePoolRequest, Pool, PoolStatus, Ride, RideStatus, Location, VehicleType } from '../types';
 import { h3Utils } from '../utils/h3.utils';
 import { logger } from '../utils/logger';
@@ -386,6 +387,10 @@ export class PoolController {
         }
       }
 
+      // Clear cached route when membership changes (so next request recalculates)
+      // This ensures all users see the updated route with new member
+      await smartRouteService.clearPoolRoute(poolId);
+
       await notificationService.sendPoolFoundNotification(pool.creator_user_id, poolId);
 
       res.json({
@@ -679,6 +684,9 @@ export class PoolController {
         }
       }
 
+      // Clear cached route when membership changes (so next request recalculates)
+      await smartRouteService.clearPoolRoute(poolId);
+
       res.json({
         success: true,
         data: { message: 'Left pool successfully' },
@@ -768,6 +776,9 @@ export class PoolController {
           }
         }
       }
+
+      // Clear cached route for cancelled pool
+      await smartRouteService.clearPoolRoute(poolId);
 
       res.json({
         success: true,
@@ -1332,39 +1343,53 @@ export class PoolController {
 
       // Parse driver location if provided
       let driverLocation: Location | undefined;
-      if (driver_lat && driver_lng) {
-        driverLocation = {
-          latitude: parseFloat(driver_lat as string),
-          longitude: parseFloat(driver_lng as string),
-        };
-      } else if (pool.driver_id) {
-        // Try to get driver's last known location from vehicle_locations
-        const { data: vehicleLocation } = await supabaseAdmin
-          .from('vehicle_locations')
-          .select('lat, lng')
-          .eq('driver_id', pool.driver_id)
-          .eq('is_active', true)
-          .order('recorded_at', { ascending: false })
-          .limit(1)
-          .single();
 
-        if (vehicleLocation) {
+      // COST OPTIMIZATION: Only include driver location for route calculation if:
+      // 1. We are waiting for driver (need to show path to pickup)
+      // 2. The trip hasn't started yet
+      // Once STARTED, we use a static route (Pickup 1 -> Destination) to save costs/cache efficiently
+      // The client will still show the driver's real-time position on the map, but the blue line won't redraw
+      const shouldIncludeDriverInRoute = ['WAITING_FOR_DRIVER', 'READY_TO_START'].includes(pool.status);
+
+      if (shouldIncludeDriverInRoute) {
+        if (driver_lat && driver_lng) {
           driverLocation = {
-            latitude: vehicleLocation.lat,
-            longitude: vehicleLocation.lng,
+            latitude: parseFloat(driver_lat as string),
+            longitude: parseFloat(driver_lng as string),
           };
+        } else if (pool.driver_id) {
+          // Try to get driver's last known location from vehicle_locations
+          const { data: vehicleLocation } = await supabaseAdmin
+            .from('vehicle_locations')
+            .select('lat, lng')
+            .eq('driver_id', pool.driver_id)
+            .eq('is_active', true)
+            .order('recorded_at', { ascending: false })
+            .limit(1)
+            .single();
+
+          if (vehicleLocation) {
+            driverLocation = {
+              latitude: vehicleLocation.lat,
+              longitude: vehicleLocation.lng,
+            };
+          }
         }
       }
 
-      // Calculate combined smart route
+      // Calculate combined smart route using "ONE-SHOT OPTIMIZATION" strategy
+      // - First request: Calls Google Maps API ONCE (~$0.01)
+      // - All subsequent requests: Returns cached route (FREE)
+      // - Cache duration: 2 hours (covers entire trip)
       const combinedRoute = await smartRouteService.calculateCombinedRoute(
         memberRoutes,
         {
           driverLocation,
           optimizeFor: 'balanced',
           trafficModel: 'best_guess',
-          useCoarseDriverLocation: pool.status === 'STARTED',
-        }
+          useCoarseDriverLocation: true, // Maximizes cache hits by rounding driver location
+        },
+        poolId // Pass poolId for stable cache key across the entire trip
       );
 
       if (!combinedRoute) {
@@ -1375,7 +1400,7 @@ export class PoolController {
         });
       }
 
-      logger.info(`[Pool] Combined route calculated for pool ${poolId}: ${combinedRoute.waypoints.length} waypoints, ${combinedRoute.totalDistanceKm}km, cached=${combinedRoute.fromCache}`);
+      logger.info(`[Pool] Combined route for pool ${poolId}: ${combinedRoute.waypoints.length} waypoints, ${combinedRoute.totalDistanceKm}km, fromCache=${combinedRoute.fromCache}`);
 
       res.json({
         success: true,
@@ -1481,6 +1506,196 @@ export class PoolController {
         data: {
           needsRecalculation: false,
           message: 'Driver is on route',
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get Google Maps app navigation deep link for a pool
+   * Opens Google Maps app with all waypoints - FREE navigation with real-time traffic
+   * Both users and drivers can use this to see all pickup/dropoff points
+   * This is SUPER COST EFFECTIVE - no API calls, uses native Google Maps app
+   */
+  async getNavigationDeepLink(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { poolId } = req.params;
+
+      // Get pool with members and their rides
+      const { data: pool, error: poolError } = await supabaseAdmin
+        .from('pools')
+        .select(`
+          *,
+          pool_members(user_id, ride_id, left_at)
+        `)
+        .eq('id', poolId)
+        .single();
+
+      if (poolError || !pool) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Check if user is a member of the pool or driver
+      const activeMembers = pool.pool_members?.filter((m: any) => m.left_at === null) || [];
+      const isMember = activeMembers.some((m: any) => m.user_id === userId);
+      const isDriver = pool.driver_id === userId;
+
+      if (!isMember && !isDriver) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'NOT_MEMBER', message: 'You are not a member of this pool' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Get all rides for active pool members
+      const rideIds = activeMembers.map((m: any) => m.ride_id).filter(Boolean);
+
+      if (rideIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'NO_MEMBERS', message: 'Pool has no active members with rides' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { data: rides, error: ridesError } = await supabaseAdmin
+        .from('rides')
+        .select('*')
+        .in('id', rideIds);
+
+      if (ridesError || !rides || rides.length === 0) {
+        return res.status(500).json({
+          success: false,
+          error: { code: 'RIDES_FETCH_ERROR', message: 'Failed to fetch member rides' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Build member routes
+      const memberRoutes: PoolMemberRoute[] = rides.map((ride: any) => ({
+        userId: ride.user_id,
+        pickup: { latitude: ride.pickup_lat, longitude: ride.pickup_lng },
+        dropoff: { latitude: ride.dropoff_lat, longitude: ride.dropoff_lng },
+        pickupAddress: ride.pickup_address,
+        dropoffAddress: ride.dropoff_address,
+      }));
+
+      // Get driver location if available
+      let driverLocation: Location | undefined;
+      if (pool.driver_id) {
+        const { data: vehicleLocation } = await supabaseAdmin
+          .from('vehicle_locations')
+          .select('lat, lng')
+          .eq('driver_id', pool.driver_id)
+          .eq('is_active', true)
+          .order('recorded_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (vehicleLocation) {
+          driverLocation = {
+            latitude: vehicleLocation.lat,
+            longitude: vehicleLocation.lng,
+          };
+        }
+      }
+
+      // Use user's pickup as origin if not driver, otherwise use driver location
+      const userRide = rides.find((r: any) => r.user_id === userId);
+      const origin = isDriver && driverLocation
+        ? driverLocation
+        : userRide
+          ? { latitude: userRide.pickup_lat, longitude: userRide.pickup_lng }
+          : memberRoutes[0].pickup;
+
+      // Final destination is the pool's destination
+      const destination: Location = {
+        latitude: pool.destination_lat,
+        longitude: pool.destination_lng,
+      };
+
+      // Build waypoints: all pickups first, then dropoffs (in optimized order)
+      // For cost efficiency, calculate order locally using H3/haversine instead of Google API
+      const pickupWaypoints = memberRoutes
+        .filter(m => m.userId !== userId || isDriver) // Include user's own pickup only if they're the driver
+        .map(m => m.pickup);
+
+      const dropoffWaypoints = memberRoutes
+        .filter(m => {
+          // Exclude final destination (pool destination) from waypoints
+          const isFinalDest = 
+            Math.abs(m.dropoff.latitude - destination.latitude) < 0.001 &&
+            Math.abs(m.dropoff.longitude - destination.longitude) < 0.001;
+          return !isFinalDest;
+        })
+        .map(m => m.dropoff);
+
+      const allWaypoints = [...pickupWaypoints, ...dropoffWaypoints];
+
+      // Generate the FREE Google Maps deep link
+      const navigationUrl = googleMapsService.generateNavigationDeepLink(
+        origin,
+        destination,
+        allWaypoints.length > 0 ? allWaypoints : undefined
+      );
+
+      // Also generate individual deep links for each point (for viewing specific locations)
+      const waypointLinks = memberRoutes.map((member, idx) => ({
+        userId: member.userId,
+        isCurrentUser: member.userId === userId,
+        pickup: {
+          location: member.pickup,
+          address: member.pickupAddress,
+          mapLink: `https://www.google.com/maps/search/?api=1&query=${member.pickup.latitude},${member.pickup.longitude}`,
+        },
+        dropoff: {
+          location: member.dropoff,
+          address: member.dropoffAddress,
+          mapLink: `https://www.google.com/maps/search/?api=1&query=${member.dropoff.latitude},${member.dropoff.longitude}`,
+        },
+      }));
+
+      logger.info(`[Pool] Generated navigation deep link for pool ${poolId}, ${allWaypoints.length} waypoints`);
+
+      res.json({
+        success: true,
+        data: {
+          poolId,
+          navigationUrl,
+          instructions: 'Tap to open Google Maps for FREE turn-by-turn navigation with real-time traffic',
+          origin: {
+            location: origin,
+            type: isDriver ? 'driver_location' : 'your_pickup',
+          },
+          destination: {
+            location: destination,
+            address: pool.destination_address,
+          },
+          waypoints: waypointLinks,
+          meta: {
+            waypointCount: allWaypoints.length,
+            isDriver,
+            isMember,
+            freeNavigation: true,
+            costSavings: '100% - No API cost, uses Google Maps app',
+          },
         },
         timestamp: new Date().toISOString(),
       });

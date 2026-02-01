@@ -6,6 +6,7 @@ import { calculateDistance } from '../utils/helper';
 import { Pool, PoolStatus, Location } from '../types';
 import { CONSTANTS } from '../config/constants';
 import { config } from '../config/env';
+import { smartRouteService } from '../services/smartRoute.service';
 
 interface DriverSession {
   id: string;
@@ -315,9 +316,34 @@ export class DriverController {
 
       const h3IndexRes9 = h3Utils.latLngToH3({ latitude: lat, longitude: lng }, 9);
 
+      // Check if driver is on an active pool and if they're off-route
+      // This syncs the route when Google Maps App reroutes the driver
+      let routeRecalculated = false;
+      const { data: activePool } = await supabaseAdmin
+        .from('pools')
+        .select('id, status')
+        .eq('driver_id', userId)
+        .in('status', ['READY_TO_START', 'STARTED'])
+        .single();
+
+      if (activePool) {
+        const driverLocation = { latitude: lat, longitude: lng };
+        const recalcResult = await smartRouteService.checkAndRecalculateIfOffRoute(
+          activePool.id,
+          driverLocation,
+          0.3 // 300 meters threshold - if driver is more than 300m off route, recalculate
+        );
+        routeRecalculated = recalcResult.recalculated;
+      }
+
       res.json({
         success: true,
-        data: { lat, lng, h3_index: h3IndexRes9 },
+        data: { 
+          lat, 
+          lng, 
+          h3_index: h3IndexRes9,
+          route_recalculated: routeRecalculated,
+        },
         timestamp: new Date().toISOString(),
       });
     } catch (error) {

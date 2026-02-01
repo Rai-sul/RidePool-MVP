@@ -184,6 +184,42 @@ export interface CombinedRouteResponse {
   };
 }
 
+// Navigation Link Response - FREE Google Maps navigation
+export interface NavigationLinkResponse {
+  poolId: string;
+  navigationUrl: string;
+  instructions: string;
+  origin: {
+    location: { latitude: number; longitude: number };
+    type: 'driver_location' | 'your_pickup';
+  };
+  destination: {
+    location: { latitude: number; longitude: number };
+    address?: string;
+  };
+  waypoints: Array<{
+    userId: string;
+    isCurrentUser: boolean;
+    pickup: {
+      location: { latitude: number; longitude: number };
+      address?: string;
+      mapLink: string;
+    };
+    dropoff: {
+      location: { latitude: number; longitude: number };
+      address?: string;
+      mapLink: string;
+    };
+  }>;
+  meta: {
+    waypointCount: number;
+    isDriver: boolean;
+    isMember: boolean;
+    freeNavigation: boolean;
+    costSavings: string;
+  };
+}
+
 export const poolService = {
   /**
    * Create a new pool as the first rider
@@ -286,5 +322,14 @@ export const poolService = {
    */
   async completePoolSearch(poolId: string): Promise<ApiResponse<{ completed: boolean; new_status?: string; passengers?: number }>> {
     return apiClient.post(API_ENDPOINTS.POOL.COMPLETE_SEARCH(poolId));
+  },
+
+  /**
+   * Get FREE Google Maps navigation deep link
+   * Opens Google Maps app with all waypoints - no API cost, uses native app
+   * Both users and drivers can see all pickup/dropoff points
+   */
+  async getNavigationLink(poolId: string): Promise<ApiResponse<NavigationLinkResponse>> {
+    return apiClient.get(API_ENDPOINTS.POOL.NAVIGATION_LINK(poolId));
   },
 };

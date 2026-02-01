@@ -175,4 +175,59 @@ function decodePolyline(encoded: string): Array<{ lat: number; lng: number }> {
   return coordinates;
 }
 
+/**
+ * Generate a Google Maps app deep link for FREE real-time navigation
+ * Opens the user's Google Maps app with the route pre-loaded
+ * This is 100% FREE - no API cost!
+ * 
+ * @param origin - Starting location (driver's current position)
+ * @param destination - Final destination
+ * @param waypoints - Optional pickup/dropoff points along the way
+ * @returns URL string that opens Google Maps app
+ */
+export function generateNavigationDeepLink(
+  origin: { latitude: number; longitude: number },
+  destination: { latitude: number; longitude: number },
+  waypoints?: Array<{ latitude: number; longitude: number }>
+): string {
+  const originStr = `${origin.latitude},${origin.longitude}`;
+  const destStr = `${destination.latitude},${destination.longitude}`;
+  
+  let url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destStr)}&travelmode=driving`;
+
+  if (waypoints && waypoints.length > 0) {
+    const waypointsStr = waypoints
+      .map(wp => `${wp.latitude},${wp.longitude}`)
+      .join('|');
+    url += `&waypoints=${encodeURIComponent(waypointsStr)}`;
+  }
+
+  return url;
+}
+
+/**
+ * Open Google Maps app for navigation (React Native / Expo)
+ * Call this when the driver taps "Start Navigation"
+ * 
+ * @param origin - Driver's current location
+ * @param destination - Final destination
+ * @param waypoints - Pickup points along the way
+ */
+export async function openGoogleMapsNavigation(
+  origin: { latitude: number; longitude: number },
+  destination: { latitude: number; longitude: number },
+  waypoints?: Array<{ latitude: number; longitude: number }>
+): Promise<void> {
+  const url = generateNavigationDeepLink(origin, destination, waypoints);
+  
+  // For React Native / Expo, use Linking
+  // Import { Linking } from 'react-native'; at the top of your component
+  // await Linking.openURL(url);
+  
+  // For web, use window.open
+  if (typeof window !== 'undefined') {
+    window.open(url, '_blank');
+  }
+}
+
 export { GOOGLE_MAPS_API_KEY };
