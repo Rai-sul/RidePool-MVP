@@ -16,6 +16,9 @@ interface StaticMapViewProps {
   showDirections?: boolean;
   style?: any;
   children?: React.ReactNode;
+  // Props for combined route display
+  routePolyline?: string;
+  routeCoordinates?: Array<{ lat: number; lng: number }>;
 }
 
 const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
@@ -29,13 +32,29 @@ export default function StaticMapView({
   showDirections = true,
   style,
   children,
+  routePolyline,
+  routeCoordinates,
 }: StaticMapViewProps) {
   const [imageLoading, setImageLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
   const [routePath, setRoutePath] = useState<string | null>(null);
 
-  // Fetch route from Google Directions API for encoded polyline
+  // Use provided polyline OR fetch route from Google Directions API
   useEffect(() => {
+    // If a pre-calculated polyline is provided, use it directly
+    if (routePolyline) {
+      setRoutePath(routePolyline);
+      return;
+    }
+
+    // If route coordinates are provided but no polyline, skip fetching
+    if (routeCoordinates && routeCoordinates.length > 0) {
+      // We can't use coordinates directly with Static Maps API path encoding
+      // So we'll just show markers without a path
+      setRoutePath(null);
+      return;
+    }
+
     if (!showDirections || !pickupLocation || !dropoffLocation || !GOOGLE_MAPS_API_KEY) {
       setRoutePath(null);
       return;
@@ -60,30 +79,50 @@ export default function StaticMapView({
     };
 
     fetchRoute();
-  }, [pickupLocation, dropoffLocation, showDirections]);
+  }, [pickupLocation, dropoffLocation, showDirections, routePolyline, routeCoordinates]);
 
   const getStaticMapUrl = (): string => {
     const params = new URLSearchParams();
     
-    // If we have both pickup and dropoff, let Google auto-center based on path
-    if (pickupLocation && dropoffLocation) {
-      // Calculate center between two points
+    // Calculate bounds from all markers and route
+    const allPoints: Array<{ lat: number; lng: number }> = [];
+    
+    if (pickupLocation) {
+      allPoints.push({ lat: pickupLocation.latitude, lng: pickupLocation.longitude });
+    }
+    if (dropoffLocation) {
+      allPoints.push({ lat: dropoffLocation.latitude, lng: dropoffLocation.longitude });
+    }
+    markers.forEach(m => allPoints.push({ lat: m.latitude, lng: m.longitude }));
+    if (routeCoordinates) {
+      allPoints.push(...routeCoordinates);
+    }
+
+    if (allPoints.length > 1) {
+      // Calculate center from all points
+      const avgLat = allPoints.reduce((sum, p) => sum + p.lat, 0) / allPoints.length;
+      const avgLng = allPoints.reduce((sum, p) => sum + p.lng, 0) / allPoints.length;
+      params.append('center', `${avgLat},${avgLng}`);
+      
+      // Calculate zoom based on extent
+      const latMin = Math.min(...allPoints.map(p => p.lat));
+      const latMax = Math.max(...allPoints.map(p => p.lat));
+      const lngMin = Math.min(...allPoints.map(p => p.lng));
+      const lngMax = Math.max(...allPoints.map(p => p.lng));
+      const maxDiff = Math.max(latMax - latMin, lngMax - lngMin);
+      
+      let calculatedZoom = 14;
+      if (maxDiff > 0.15) calculatedZoom = 10;
+      else if (maxDiff > 0.1) calculatedZoom = 11;
+      else if (maxDiff > 0.05) calculatedZoom = 12;
+      else if (maxDiff > 0.02) calculatedZoom = 13;
+      
+      params.append('zoom', String(calculatedZoom));
+    } else if (pickupLocation && dropoffLocation) {
       const centerLat = (pickupLocation.latitude + dropoffLocation.latitude) / 2;
       const centerLng = (pickupLocation.longitude + dropoffLocation.longitude) / 2;
       params.append('center', `${centerLat},${centerLng}`);
-      
-      // Calculate appropriate zoom based on distance
-      const latDiff = Math.abs(pickupLocation.latitude - dropoffLocation.latitude);
-      const lngDiff = Math.abs(pickupLocation.longitude - dropoffLocation.longitude);
-      const maxDiff = Math.max(latDiff, lngDiff);
-      
-      let calculatedZoom = 14;
-      if (maxDiff > 0.1) calculatedZoom = 11;
-      else if (maxDiff > 0.05) calculatedZoom = 12;
-      else if (maxDiff > 0.02) calculatedZoom = 13;
-      else calculatedZoom = 14;
-      
-      params.append('zoom', String(calculatedZoom));
+      params.append('zoom', String(zoom));
     } else {
       params.append('center', `${center.latitude},${center.longitude}`);
       params.append('zoom', String(zoom));
@@ -93,27 +132,27 @@ export default function StaticMapView({
     params.append('scale', '2');
     params.append('maptype', 'roadmap');
 
-    if (pickupLocation) {
+    // Add pickup/dropoff markers if not using combined route
+    if (pickupLocation && !routePolyline && !routeCoordinates) {
       params.append('markers', `color:green|label:P|${pickupLocation.latitude},${pickupLocation.longitude}`);
     }
-    if (dropoffLocation) {
+    if (dropoffLocation && !routePolyline && !routeCoordinates) {
       params.append('markers', `color:red|label:D|${dropoffLocation.latitude},${dropoffLocation.longitude}`);
     }
 
-    markers.forEach((marker) => {
-      const color = marker.icon === 'driver' ? 'blue' : 'orange';
-      params.append('markers', `color:${color}|${marker.latitude},${marker.longitude}`);
+    // Add all custom markers with numbered labels
+    markers.forEach((marker, idx) => {
+      const color = marker.icon === 'driver' ? 'blue' : marker.icon === 'pickup' ? 'green' : marker.icon === 'dropoff' ? 'red' : 'orange';
+      const label = String(idx + 1);
+      params.append('markers', `color:${color}|label:${label}|${marker.latitude},${marker.longitude}`);
     });
 
     // Use encoded polyline path if available for accurate road route
-    if (showDirections && pickupLocation && dropoffLocation) {
-      if (routePath) {
-        // Use encoded polyline for accurate road-following route
-        params.append('path', `color:0x4285F4FF|weight:5|enc:${routePath}`);
-      } else {
-        // Fallback to straight line
-        params.append('path', `color:0x4285F4FF|weight:5|${pickupLocation.latitude},${pickupLocation.longitude}|${dropoffLocation.latitude},${dropoffLocation.longitude}`);
-      }
+    if (routePath) {
+      params.append('path', `color:0x4285F4FF|weight:5|enc:${routePath}`);
+    } else if (showDirections && pickupLocation && dropoffLocation && !routeCoordinates) {
+      // Fallback to straight line only if no combined route
+      params.append('path', `color:0x4285F4FF|weight:5|${pickupLocation.latitude},${pickupLocation.longitude}|${dropoffLocation.latitude},${dropoffLocation.longitude}`);
     }
 
     if (GOOGLE_MAPS_API_KEY) {

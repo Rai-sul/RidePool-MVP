@@ -109,3 +109,4 @@ export const Vibrate = createIcon(LucideIcons.Vibrate);
 export const Moon = createIcon(LucideIcons.Moon);
 export const Wifi = createIcon(LucideIcons.Wifi);
 export const Bot = createIcon(LucideIcons.Bot);
+export const Route = createIcon(LucideIcons.Route);

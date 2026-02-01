@@ -139,6 +139,51 @@ export interface PoolFareResponse {
   message: string;
 }
 
+// Combined Smart Route Types
+export interface CombinedRouteWaypoint {
+  id: string;
+  type: 'pickup' | 'dropoff' | 'driver';
+  userId: string;
+  location: { latitude: number; longitude: number };
+  address?: string;
+  order: number;
+  estimatedArrivalMinutes: number;
+}
+
+export interface CombinedRouteLeg {
+  fromId: string;
+  toId: string;
+  distanceKm: number;
+  durationMinutes: number;
+  instruction: string;
+}
+
+export interface CombinedRouteResponse {
+  poolId: string;
+  poolStatus: string;
+  route: {
+    polyline: string;
+    coordinates: Array<{ lat: number; lng: number }>;
+    totalDistanceKm: number;
+    totalDurationMinutes: number;
+    durationInTraffic: number;
+    trafficLevel: 'low' | 'moderate' | 'high';
+    routeSummary: string;
+  };
+  waypoints: CombinedRouteWaypoint[];
+  legs: CombinedRouteLeg[];
+  optimization: {
+    score: number;
+    savingsPercent: number;
+  };
+  meta: {
+    fromCache: boolean;
+    calculatedAt: string;
+    memberCount: number;
+    hasDriverLocation: boolean;
+  };
+}
+
 export const poolService = {
   /**
    * Create a new pool as the first rider
@@ -187,6 +232,37 @@ export const poolService = {
    */
   async getOptimizedRoute(poolId: string): Promise<ApiResponse<PoolRouteResponse>> {
     return apiClient.get(API_ENDPOINTS.POOL.ROUTE(poolId));
+  },
+
+  /**
+   * Get combined smart route for a pool (available when status is WAITING_FOR_DRIVER or beyond)
+   * Returns optimized route with all pickup/dropoff points and driver location
+   */
+  async getCombinedRoute(
+    poolId: string,
+    driverLocation?: { latitude: number; longitude: number }
+  ): Promise<ApiResponse<CombinedRouteResponse>> {
+    const params: Record<string, string> = {};
+    if (driverLocation) {
+      params.driver_lat = driverLocation.latitude.toString();
+      params.driver_lng = driverLocation.longitude.toString();
+    }
+    return apiClient.get(API_ENDPOINTS.POOL.COMBINED_ROUTE(poolId), params);
+  },
+
+  /**
+   * Update combined route with driver's real-time location (driver only)
+   */
+  async updateCombinedRoute(
+    poolId: string,
+    driverLocation: { latitude: number; longitude: number },
+    currentRouteCacheKey?: string
+  ): Promise<ApiResponse<{ needsRecalculation: boolean; updatedRoute?: CombinedRouteResponse }>> {
+    return apiClient.post(API_ENDPOINTS.POOL.UPDATE_COMBINED_ROUTE(poolId), {
+      driver_lat: driverLocation.latitude,
+      driver_lng: driverLocation.longitude,
+      current_route_cache_key: currentRouteCacheKey,
+    });
   },
 
   /**

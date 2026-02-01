@@ -211,3 +211,51 @@ export interface PoolFareResponse {
   memberFares: MemberFare[];
   message: string;
 }
+
+// ============================================
+// COMBINED SMART ROUTE TYPES
+// ============================================
+
+export interface CombinedRouteWaypoint {
+  id: string;
+  type: 'pickup' | 'dropoff' | 'driver';
+  userId: string;
+  location: Location;
+  address?: string;
+  order: number;
+  estimatedArrivalMinutes: number;
+}
+
+export interface CombinedRouteLeg {
+  fromId: string;
+  toId: string;
+  distanceKm: number;
+  durationMinutes: number;
+  instruction: string;
+}
+
+export interface CombinedRouteResponse {
+  poolId: string;
+  poolStatus: string;
+  route: {
+    polyline: string;
+    coordinates: Array<{ lat: number; lng: number }>;
+    totalDistanceKm: number;
+    totalDurationMinutes: number;
+    durationInTraffic: number;
+    trafficLevel: 'low' | 'moderate' | 'high';
+    routeSummary: string;
+  };
+  waypoints: CombinedRouteWaypoint[];
+  legs: CombinedRouteLeg[];
+  optimization: {
+    score: number;
+    savingsPercent: number;
+  };
+  meta: {
+    fromCache: boolean;
+    calculatedAt: string;
+    memberCount: number;
+    hasDriverLocation: boolean;
+  };
+}

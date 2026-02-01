@@ -20,6 +20,9 @@ interface GoogleMapViewProps {
   style?: any;
   children?: React.ReactNode;
   showUserLocation?: boolean;
+  // Props for combined route display
+  routePolyline?: string;
+  routeCoordinates?: Array<{ lat: number; lng: number }>;
 }
 
 export default function GoogleMapView(props: GoogleMapViewProps) {

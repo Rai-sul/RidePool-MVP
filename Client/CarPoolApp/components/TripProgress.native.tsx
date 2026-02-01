@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, Phone, MessageCircle, User, Navigation, Clock, Star, Users, AlertCircle, RefreshCw, Plus, X } from './Icons';
+import { MapPin, Phone, MessageCircle, User, Navigation, Clock, Star, Users, AlertCircle, RefreshCw, Plus, X, Route } from './Icons';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Progress } from './ui/progress';
 import GoogleMapView from './GoogleMapView';
 import type { UserProfile, Location, Destination, Pool } from '../contexts/GlobalContext';
 import { usePoolRealtime } from '../hooks/usePoolRealtime';
-import { poolService } from '../services/pool.service';
+import { poolService, CombinedRouteResponse, CombinedRouteWaypoint } from '../services/pool.service';
 
 const INITIAL_LOOKUP_SECONDS = 30;
 const EXTENDED_LOOKUP_SECONDS = 10;
@@ -42,6 +42,11 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   // Flag to track if the pool creator's timer expired with no riders
   // This is used to distinguish between "timer expired" vs "riders left"
   const [creatorTimerExpiredNoRiders, setCreatorTimerExpiredNoRiders] = useState(false);
+
+  // Combined smart route state - fetched when pool status is WAITING_FOR_DRIVER or beyond
+  const [combinedRoute, setCombinedRoute] = useState<CombinedRouteResponse | null>(null);
+  const [loadingCombinedRoute, setLoadingCombinedRoute] = useState(false);
+  const [combinedRouteError, setCombinedRouteError] = useState<string | null>(null);
 
   // Use real-time pool updates
   const {
@@ -170,6 +175,44 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
       setTripStatus('completed');
     }
   }, [poolStatus]);
+
+  // Fetch combined smart route when pool status changes to WAITING_FOR_DRIVER or beyond
+  useEffect(() => {
+    const validStatuses = ['WAITING_FOR_DRIVER', 'READY_TO_START', 'STARTED'];
+    if (!selectedPool?.id || !validStatuses.includes(poolStatus)) {
+      return;
+    }
+
+    // Don't refetch if we already have a route and pool status hasn't changed
+    if (combinedRoute && combinedRoute.poolStatus === poolStatus) {
+      return;
+    }
+
+    const fetchCombinedRoute = async () => {
+      setLoadingCombinedRoute(true);
+      setCombinedRouteError(null);
+      try {
+        const response = await poolService.getCombinedRoute(selectedPool.id, driverPosition || undefined);
+        if (response.success && response.data) {
+          setCombinedRoute(response.data);
+          console.log('[TripProgress] Combined route loaded:', {
+            waypoints: response.data.waypoints.length,
+            totalDistance: response.data.route.totalDistanceKm,
+            fromCache: response.data.meta.fromCache,
+          });
+        } else {
+          setCombinedRouteError('Failed to load combined route');
+        }
+      } catch (error) {
+        console.error('[TripProgress] Error fetching combined route:', error);
+        setCombinedRouteError('Error loading combined route');
+      } finally {
+        setLoadingCombinedRoute(false);
+      }
+    };
+
+    fetchCombinedRoute();
+  }, [selectedPool?.id, poolStatus, driverPosition]);
 
   // Handle pool cancellation (e.g., when all other riders left)
   // Do NOT redirect when pool creator's timer expired with no riders (creatorTimerExpiredNoRiders is true)
@@ -370,15 +413,23 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 100 }}>
-        {/* Google Map - Shows real locations only, no simulation */}
-        <View style={{ height: 256, position: 'relative' }}>
+        {/* Google Map - Shows combined route when available, otherwise individual route */}
+        <View style={{ height: 300, position: 'relative' }}>
           <GoogleMapView
-            center={pickupCoords}
-            zoom={14}
-            pickupLocation={pickupCoords}
-            dropoffLocation={dropoffCoords}
-            showDirections={true}
-            markers={[]}
+            center={combinedRoute?.waypoints?.[0]?.location || pickupCoords}
+            zoom={combinedRoute ? 12 : 14}
+            pickupLocation={!combinedRoute ? pickupCoords : undefined}
+            dropoffLocation={!combinedRoute ? dropoffCoords : undefined}
+            showDirections={!combinedRoute}
+            routePolyline={combinedRoute?.route?.polyline}
+            routeCoordinates={combinedRoute?.route?.coordinates}
+            markers={combinedRoute ? combinedRoute.waypoints.map((wp, idx) => ({
+              id: wp.id,
+              latitude: wp.location.latitude,
+              longitude: wp.location.longitude,
+              title: wp.type === 'driver' ? 'Driver' : `${wp.type === 'pickup' ? 'Pick up' : 'Drop off'} ${idx + 1}`,
+              icon: wp.type === 'driver' ? 'driver' : wp.type === 'pickup' ? 'pickup' : 'dropoff',
+            })) : []}
           />
 
           {/* Status Badge */}
@@ -395,6 +446,53 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
           >
             <Text style={{ color: 'white', fontWeight: '600' }}>{getStatusText()}</Text>
           </View>
+
+          {/* Combined Route Badge */}
+          {combinedRoute && (
+            <View
+              style={{
+                position: 'absolute',
+                bottom: 16,
+                left: 16,
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <Route className="w-4 h-4" color="#10b981" />
+              <Text style={{ color: 'white', fontSize: 12 }}>
+                {combinedRoute.route.totalDistanceKm}km • {combinedRoute.route.totalDurationMinutes}min
+              </Text>
+              {combinedRoute.meta.fromCache && (
+                <Text style={{ color: '#9ca3af', fontSize: 10 }}>(cached)</Text>
+              )}
+            </View>
+          )}
+
+          {/* Loading Combined Route */}
+          {loadingCombinedRoute && (
+            <View
+              style={{
+                position: 'absolute',
+                bottom: 16,
+                left: 16,
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <ActivityIndicator size="small" color="#10b981" />
+              <Text style={{ color: 'white', fontSize: 12 }}>Loading smart route...</Text>
+            </View>
+          )}
 
           {/* ETA Badge */}
           {tripStatus !== 'completed' && (
@@ -415,7 +513,9 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
               }}
             >
               <Clock className="w-4 h-4" color="#4b5563" />
-              <Text style={{ fontWeight: '600' }}>{getETA()}</Text>
+              <Text style={{ fontWeight: '600' }}>
+                {combinedRoute ? `${combinedRoute.route.durationInTraffic} mins` : getETA()}
+              </Text>
             </View>
           )}
         </View>
@@ -657,33 +757,107 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
           )}
         </View>
 
-        {/* Route Info */}
+        {/* Route Info - Shows combined smart route when available */}
         <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
-          <Text className="font-semibold mb-4">Route</Text>
-
-          <View className="gap-4">
-            <View className="flex-row items-start gap-3">
-              <View className="w-3 h-3 rounded-full bg-green-500 mt-1" />
-              <View className="flex-1">
-                <Text className="text-sm text-gray-500">Pickup</Text>
-                <Text className="font-medium">{pickupLocation?.name || 'Current Location'}</Text>
-                {pickupLocation?.address && (
-                  <Text className="text-xs text-gray-400" numberOfLines={1}>{pickupLocation.address}</Text>
-                )}
+          <View className="flex-row items-center justify-between mb-4">
+            <Text className="font-semibold">
+              {combinedRoute ? 'Smart Route' : 'Route'}
+            </Text>
+            {combinedRoute && (
+              <View className="flex-row items-center gap-2">
+                <View className={`px-2 py-1 rounded ${combinedRoute.route.trafficLevel === 'low' ? 'bg-green-100' : combinedRoute.route.trafficLevel === 'moderate' ? 'bg-yellow-100' : 'bg-red-100'}`}>
+                  <Text className={`text-xs font-medium ${combinedRoute.route.trafficLevel === 'low' ? 'text-green-700' : combinedRoute.route.trafficLevel === 'moderate' ? 'text-yellow-700' : 'text-red-700'}`}>
+                    {combinedRoute.route.trafficLevel.charAt(0).toUpperCase() + combinedRoute.route.trafficLevel.slice(1)} traffic
+                  </Text>
+                </View>
               </View>
-            </View>
-
-            <View className="flex-row items-start gap-3">
-              <View className="w-3 h-3 rounded-full bg-red-500 mt-1" />
-              <View className="flex-1">
-                <Text className="text-sm text-gray-500">Drop-off</Text>
-                <Text className="font-medium">{destination?.name || 'Destination'}</Text>
-                {destination?.address && (
-                  <Text className="text-xs text-gray-400" numberOfLines={1}>{destination.address}</Text>
-                )}
-              </View>
-            </View>
+            )}
           </View>
+
+          {/* Combined Route Waypoints */}
+          {combinedRoute ? (
+            <View className="gap-3">
+              {combinedRoute.waypoints.map((waypoint, idx) => {
+                const isUserWaypoint = waypoint.userId === userProfile?.id;
+                const waypointColor = waypoint.type === 'driver' ? '#3B82F6' : waypoint.type === 'pickup' ? '#22C55E' : '#EF4444';
+                const waypointLabel = waypoint.type === 'driver' ? 'Driver' : waypoint.type === 'pickup' ? 'Pick up' : 'Drop off';
+                
+                return (
+                  <View key={waypoint.id} className="flex-row items-start gap-3">
+                    <View className="items-center">
+                      <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: waypointColor, justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ color: 'white', fontSize: 12, fontWeight: '600' }}>{idx + 1}</Text>
+                      </View>
+                      {idx < combinedRoute.waypoints.length - 1 && (
+                        <View style={{ width: 2, height: 20, backgroundColor: '#e5e7eb', marginTop: 4 }} />
+                      )}
+                    </View>
+                    <View className="flex-1">
+                      <View className="flex-row items-center gap-2">
+                        <Text className="text-sm text-gray-500">{waypointLabel}</Text>
+                        {isUserWaypoint && (
+                          <View className="bg-blue-100 px-2 py-0.5 rounded">
+                            <Text className="text-xs text-blue-700">You</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text className="font-medium" numberOfLines={1}>
+                        {waypoint.address || `Waypoint ${idx + 1}`}
+                      </Text>
+                      <Text className="text-xs text-gray-400">
+                        ETA: {waypoint.estimatedArrivalMinutes === 0 ? 'Start' : `+${waypoint.estimatedArrivalMinutes} min`}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+
+              {/* Route Summary */}
+              <View className="mt-3 pt-3 border-t border-gray-100">
+                <View className="flex-row justify-between">
+                  <Text className="text-gray-600">Total Distance</Text>
+                  <Text className="font-medium">{combinedRoute.route.totalDistanceKm} km</Text>
+                </View>
+                <View className="flex-row justify-between mt-1">
+                  <Text className="text-gray-600">Total Duration</Text>
+                  <Text className="font-medium">{combinedRoute.route.durationInTraffic} mins</Text>
+                </View>
+                {combinedRoute.optimization.savingsPercent > 0 && (
+                  <View className="flex-row justify-between mt-1">
+                    <Text className="text-gray-600">Route Savings</Text>
+                    <Text className="font-medium text-green-600">
+                      {combinedRoute.optimization.savingsPercent}% more efficient
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          ) : (
+            /* Fallback to simple pickup/dropoff display */
+            <View className="gap-4">
+              <View className="flex-row items-start gap-3">
+                <View className="w-3 h-3 rounded-full bg-green-500 mt-1" />
+                <View className="flex-1">
+                  <Text className="text-sm text-gray-500">Pickup</Text>
+                  <Text className="font-medium">{pickupLocation?.name || 'Current Location'}</Text>
+                  {pickupLocation?.address && (
+                    <Text className="text-xs text-gray-400" numberOfLines={1}>{pickupLocation.address}</Text>
+                  )}
+                </View>
+              </View>
+
+              <View className="flex-row items-start gap-3">
+                <View className="w-3 h-3 rounded-full bg-red-500 mt-1" />
+                <View className="flex-1">
+                  <Text className="text-sm text-gray-500">Drop-off</Text>
+                  <Text className="font-medium">{destination?.name || 'Destination'}</Text>
+                  {destination?.address && (
+                    <Text className="text-xs text-gray-400" numberOfLines={1}>{destination.address}</Text>
+                  )}
+                </View>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Trip Details */}

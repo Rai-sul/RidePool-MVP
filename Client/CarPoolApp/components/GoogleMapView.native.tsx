@@ -41,6 +41,9 @@ interface GoogleMapViewProps {
   style?: any;
   children?: React.ReactNode;
   showUserLocation?: boolean;
+  // New props for combined route display
+  routePolyline?: string; // Pre-calculated encoded polyline
+  routeCoordinates?: Array<{ lat: number; lng: number }>; // Pre-calculated coordinates
 }
 
 const markerColors: Record<string, string> = {
@@ -62,6 +65,8 @@ export default function GoogleMapView({
   style,
   children,
   showUserLocation = true,
+  routePolyline,
+  routeCoordinates,
 }: GoogleMapViewProps) {
   const mapRef = useRef<any>(null);
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(
@@ -100,9 +105,32 @@ export default function GoogleMapView({
     })();
   }, [center]);
 
+  // Use provided route coordinates/polyline OR fetch from Google Maps
   useEffect(() => {
     if (isExpoGo || !NativeMapView) return;
-    if (!showDirections || !pickupLocation || !dropoffLocation) return;
+
+    // If pre-calculated polyline is provided, decode and use it
+    if (routePolyline) {
+      const points = decodePolyline(routePolyline);
+      setRouteCoords(points);
+      return;
+    }
+
+    // If pre-calculated coordinates are provided, use them directly
+    if (routeCoordinates && routeCoordinates.length > 0) {
+      const points = routeCoordinates.map(coord => ({
+        latitude: coord.lat,
+        longitude: coord.lng,
+      }));
+      setRouteCoords(points);
+      return;
+    }
+
+    // Fallback: fetch route from Google Maps if showDirections is enabled
+    if (!showDirections || !pickupLocation || !dropoffLocation) {
+      setRouteCoords([]);
+      return;
+    }
 
     const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
     if (!GOOGLE_MAPS_API_KEY) {
@@ -130,17 +158,46 @@ export default function GoogleMapView({
     };
 
     fetchRoute();
-  }, [pickupLocation, dropoffLocation, showDirections]);
+  }, [pickupLocation, dropoffLocation, showDirections, routePolyline, routeCoordinates]);
 
+  // Fit map to show all markers and route
   useEffect(() => {
     if (isExpoGo || !NativeMapView) return;
-    if (mapRef.current && pickupLocation && dropoffLocation) {
-      mapRef.current.fitToCoordinates([pickupLocation, dropoffLocation], {
-        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+    if (!mapRef.current) return;
+
+    // Collect all coordinates to fit
+    const allCoords: Array<{ latitude: number; longitude: number }> = [];
+
+    // Add route coordinates
+    if (routeCoords.length > 0) {
+      allCoords.push(...routeCoords);
+    }
+
+    // Add pickup and dropoff
+    if (pickupLocation) allCoords.push(pickupLocation);
+    if (dropoffLocation) allCoords.push(dropoffLocation);
+
+    // Add marker locations
+    markers.forEach(marker => {
+      allCoords.push({ latitude: marker.latitude, longitude: marker.longitude });
+    });
+
+    // Fit to all coordinates if we have any
+    if (allCoords.length > 1) {
+      mapRef.current.fitToCoordinates(allCoords, {
+        edgePadding: { top: 60, right: 60, bottom: 60, left: 60 },
         animated: true,
       });
+    } else if (allCoords.length === 1) {
+      // Single point, just center on it
+      mapRef.current.animateToRegion({
+        latitude: allCoords[0].latitude,
+        longitude: allCoords[0].longitude,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
+      }, 500);
     }
-  }, [pickupLocation, dropoffLocation]);
+  }, [pickupLocation, dropoffLocation, routeCoords, markers]);
 
   if (isExpoGo || !NativeMapView) {
     return (
