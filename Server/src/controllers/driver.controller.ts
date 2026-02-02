@@ -527,6 +527,10 @@ export class DriverController {
         })
         .eq('driver_id', userId);
 
+      // Clear cached route so it gets recalculated with driver's location
+      // This ensures the navigation shows the route starting from driver's current position
+      await smartRouteService.clearPoolRoute(poolId);
+
       const { data: pool } = await supabaseAdmin
         .from('pools')
         .select(`

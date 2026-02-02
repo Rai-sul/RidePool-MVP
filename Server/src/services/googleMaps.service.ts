@@ -540,12 +540,15 @@ export class GoogleMapsService {
 
   /**
    * Generate a Google Maps deep link URL for FREE navigation
-   * Opens the Google Maps app on the driver's phone - NO API COST
+   * Opens the Google Maps app with full route showing ALL pickup and dropoff points
    * 
-   * @param origin - Starting location (driver's current position)
-   * @param destination - Final destination
-   * @param waypoints - Optional pickup/dropoff points along the way
-   * @returns URL string to open Google Maps app
+   * IMPORTANT: To show ALL stops on the map (including first pickup and last dropoff),
+   * we include all stops in the route. The user can see the complete optimal route.
+   * 
+   * @param origin - Starting location (first pickup point)
+   * @param destination - Final destination (last dropoff)
+   * @param waypoints - Intermediate stops in OPTIMAL ORDER (already sorted by smartRouteService)
+   * @returns URL string to open Google Maps with the complete route
    */
   generateNavigationDeepLink(
     origin: Location,
@@ -555,16 +558,110 @@ export class GoogleMapsService {
     const originStr = `${origin.latitude},${origin.longitude}`;
     const destStr = `${destination.latitude},${destination.longitude}`;
     
-    let url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destStr)}&travelmode=driving`;
-
+    // Log the waypoints order for debugging
+    console.log(`[GoogleMaps] Generating deep link:`);
+    console.log(`  Origin (first pickup): ${originStr}`);
+    
     if (waypoints && waypoints.length > 0) {
-      const waypointsStr = waypoints
-        .map(wp => `${wp.latitude},${wp.longitude}`)
-        .join('|');
-      url += `&waypoints=${encodeURIComponent(waypointsStr)}`;
+      waypoints.forEach((wp, idx) => {
+        console.log(`  Waypoint ${idx + 1}: ${wp.latitude},${wp.longitude}`);
+      });
+      console.log(`  Destination (last dropoff): ${destStr}`);
+      
+      // Build waypoints string - these are the INTERMEDIATE stops
+      // Google Maps will show: Origin (A) → Waypoint 1 → Waypoint 2 → Destination (B)
+      const waypointsStr = waypoints.map(wp => `${wp.latitude},${wp.longitude}`).join('|');
+      
+      // Use the standard directions URL format
+      // This shows the complete route with all markers visible
+      const webUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destStr)}&waypoints=${encodeURIComponent(waypointsStr)}&travelmode=driving`;
+      
+      console.log(`  Generated URL: ${webUrl}`);
+      return webUrl;
+    } else {
+      console.log(`  Destination (last dropoff): ${destStr}`);
+      // No intermediate waypoints - just origin to destination
+      return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destStr)}&travelmode=driving`;
+    }
+  }
+
+  /**
+   * Generate a Google Maps deep link that shows the COMPLETE route with ALL stops visible
+   * This is better for passengers who want to SEE the entire route, not navigate it
+   * 
+   * Format: Uses multiple destinations so ALL points show as markers on the map
+   */
+  generateViewRouteDeepLink(
+    allStops: Location[]
+  ): string {
+    if (allStops.length < 2) {
+      return '';
     }
 
-    return url;
+    // For viewing the complete route, we use the origin as first stop
+    // and include ALL other stops either as waypoints or destination
+    const origin = allStops[0];
+    const destination = allStops[allStops.length - 1];
+    const waypoints = allStops.slice(1, -1);
+
+    const originStr = `${origin.latitude},${origin.longitude}`;
+    const destStr = `${destination.latitude},${destination.longitude}`;
+
+    console.log(`[GoogleMaps] Generating view route link with ${allStops.length} stops`);
+
+    if (waypoints.length > 0) {
+      const waypointsStr = waypoints.map(wp => `${wp.latitude},${wp.longitude}`).join('|');
+      return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destStr)}&waypoints=${encodeURIComponent(waypointsStr)}&travelmode=driving`;
+    } else {
+      return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destStr)}&travelmode=driving`;
+    }
+  }
+
+  /**
+   * Generate platform-specific navigation URLs
+   * Returns different formats optimized for Android, iOS, and web
+   */
+  generatePlatformNavigationLinks(
+    origin: Location,
+    destination: Location,
+    waypoints?: Location[]
+  ): { universal: string; android: string; ios: string } {
+    const originStr = `${origin.latitude},${origin.longitude}`;
+    const destStr = `${destination.latitude},${destination.longitude}`;
+
+    // Universal web URL (works everywhere, opens Google Maps app if installed)
+    let universal: string;
+    
+    if (waypoints && waypoints.length > 0) {
+      const waypointsStr = waypoints.map(wp => `${wp.latitude},${wp.longitude}`).join('|');
+      universal = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destStr)}&waypoints=${encodeURIComponent(waypointsStr)}&travelmode=driving`;
+    } else {
+      universal = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destStr)}&travelmode=driving`;
+    }
+
+    // Android: Use google.navigation intent for direct navigation (no waypoints support)
+    // If waypoints exist, fall back to directions URL
+    let android: string;
+    if (waypoints && waypoints.length > 0) {
+      // Android with waypoints - use intent with multiple destinations
+      const allStops = [...waypoints.map(wp => `${wp.latitude},${wp.longitude}`), destStr];
+      android = `google.navigation:q=${allStops[allStops.length - 1]}&waypoints=${waypoints.map(wp => `${wp.latitude},${wp.longitude}`).join('|')}&mode=d`;
+    } else {
+      // Android without waypoints - direct navigation
+      android = `google.navigation:q=${destStr}&mode=d`;
+    }
+
+    // iOS: Use comgooglemaps:// scheme
+    let ios: string;
+    if (waypoints && waypoints.length > 0) {
+      const allStops = [...waypoints.map(wp => `${wp.latitude},${wp.longitude}`), destStr];
+      const daddrStr = allStops.join('+to:');
+      ios = `comgooglemaps://?saddr=${originStr}&daddr=${daddrStr}&directionsmode=driving`;
+    } else {
+      ios = `comgooglemaps://?saddr=${originStr}&daddr=${destStr}&directionsmode=driving`;
+    }
+
+    return { universal, android, ios };
   }
 
   /**

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MapPin, Phone, MessageCircle, User, Navigation, Clock, Star, Users, AlertCircle, RefreshCw, Plus, X, Route } from './Icons';
@@ -51,6 +51,11 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   // Navigation link state - FREE Google Maps navigation
   const [navigationLink, setNavigationLink] = useState<NavigationLinkResponse | null>(null);
   const [loadingNavLink, setLoadingNavLink] = useState(false);
+  
+  // Track previous pool status to detect changes
+  const prevPoolStatusRef = useRef<string | null>(null);
+  // Track the last fetched status to know when to refetch
+  const lastFetchedStatusRef = useRef<string | null>(null);
 
   // Use real-time pool updates
   const {
@@ -65,6 +70,84 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
     refresh: refreshPool,
     clearUnreadMessages,
   } = usePoolRealtime(selectedPool?.id || null, userProfile?.id || null);
+
+  // Reset fetch status when pool status changes (forces refetch)
+  // This MUST run before the fetch effect
+  useEffect(() => {
+    if (prevPoolStatusRef.current !== poolStatus) {
+      console.log(`[TripProgress] Pool status changed: ${prevPoolStatusRef.current} -> ${poolStatus}`);
+      lastFetchedStatusRef.current = null; // Reset to force refetch
+      prevPoolStatusRef.current = poolStatus;
+    }
+  }, [poolStatus]);
+
+  // Fetch combined route and navigation link when pool status is valid
+  // This effect handles BOTH initial fetch and refetch on status change
+  useEffect(() => {
+    const validStatuses = ['WAITING_FOR_DRIVER', 'READY_TO_START', 'STARTED'];
+    
+    // Skip if no pool or invalid status
+    if (!selectedPool?.id || !validStatuses.includes(poolStatus)) {
+      return;
+    }
+
+    // Skip if we already fetched for this status AND have the data
+    if (lastFetchedStatusRef.current === poolStatus && combinedRoute && navigationLink) {
+      return;
+    }
+
+    // Skip if already loading
+    if (loadingCombinedRoute || loadingNavLink) {
+      return;
+    }
+
+    console.log(`[TripProgress] Status is ${poolStatus}, last fetched: ${lastFetchedStatusRef.current} - fetching fresh data`);
+
+    // Fetch both combined route and navigation link
+    const fetchData = async () => {
+      setLoadingCombinedRoute(true);
+      setLoadingNavLink(true);
+      setCombinedRouteError(null);
+
+      try {
+        // Fetch combined route
+        console.log(`[TripProgress] Fetching combined route for pool ${selectedPool.id}`);
+        const routeResponse = await poolService.getCombinedRoute(selectedPool.id, driverPosition || undefined);
+        if (routeResponse.success && routeResponse.data) {
+          setCombinedRoute(routeResponse.data);
+          console.log('[TripProgress] Combined route loaded:', {
+            waypoints: routeResponse.data.waypoints?.length,
+            totalDistance: routeResponse.data.route?.totalDistanceKm,
+          });
+        } else {
+          setCombinedRouteError('Failed to load route');
+        }
+
+        // Fetch navigation link
+        console.log(`[TripProgress] Fetching navigation link for pool ${selectedPool.id}`);
+        const navResponse = await poolService.getNavigationLink(selectedPool.id);
+        if (navResponse.success && navResponse.data) {
+          setNavigationLink(navResponse.data);
+          console.log('[TripProgress] Navigation link loaded:', {
+            totalStops: navResponse.data.orderedStops?.length,
+            url: navResponse.data.navigationUrl?.substring(0, 80) + '...',
+          });
+        }
+
+        // Mark this status as fetched
+        lastFetchedStatusRef.current = poolStatus;
+
+      } catch (error) {
+        console.error('[TripProgress] Error fetching route data:', error);
+        setCombinedRouteError('Error loading route');
+      } finally {
+        setLoadingCombinedRoute(false);
+        setLoadingNavLink(false);
+      }
+    };
+
+    fetchData();
+  }, [selectedPool?.id, poolStatus, driverPosition, combinedRoute, navigationLink, loadingCombinedRoute, loadingNavLink]);
 
   const isFemale = userProfile?.gender === 'female';
   const accentColor = isFemale ? 'pink' : 'blue';
@@ -180,76 +263,29 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
     }
   }, [poolStatus]);
 
-  // Fetch combined smart route when pool status changes to WAITING_FOR_DRIVER or beyond
-  useEffect(() => {
-    const validStatuses = ['WAITING_FOR_DRIVER', 'READY_TO_START', 'STARTED'];
-    if (!selectedPool?.id || !validStatuses.includes(poolStatus)) {
-      return;
-    }
-
-    // Don't refetch if we already have a route and pool status hasn't changed
-    if (combinedRoute && combinedRoute.poolStatus === poolStatus) {
-      return;
-    }
-
-    const fetchCombinedRoute = async () => {
-      setLoadingCombinedRoute(true);
-      setCombinedRouteError(null);
-      try {
-        const response = await poolService.getCombinedRoute(selectedPool.id, driverPosition || undefined);
-        if (response.success && response.data) {
-          setCombinedRoute(response.data);
-          console.log('[TripProgress] Combined route loaded:', {
-            waypoints: response.data.waypoints.length,
-            totalDistance: response.data.route.totalDistanceKm,
-            fromCache: response.data.meta.fromCache,
-          });
-        } else {
-          setCombinedRouteError('Failed to load combined route');
-        }
-      } catch (error) {
-        console.error('[TripProgress] Error fetching combined route:', error);
-        setCombinedRouteError('Error loading combined route');
-      } finally {
-        setLoadingCombinedRoute(false);
+  // Get the best navigation URL for the current platform
+  const getBestNavigationUrl = useCallback((navLink: typeof navigationLink): string => {
+    if (!navLink) return '';
+    
+    // Try platform-specific URLs first for better navigation experience
+    if (navLink.platformLinks) {
+      // For React Native, we can detect platform
+      const { Platform } = require('react-native');
+      if (Platform.OS === 'android' && navLink.platformLinks.android) {
+        return navLink.platformLinks.android;
       }
-    };
-
-    fetchCombinedRoute();
-  }, [selectedPool?.id, poolStatus, driverPosition]);
-
-  // Fetch FREE Google Maps navigation link when ride is ready (has driver or ready to start)
-  useEffect(() => {
-    const validStatuses = ['READY_TO_START', 'STARTED'];
-    if (!selectedPool?.id || !validStatuses.includes(poolStatus)) {
-      return;
-    }
-
-    // Don't refetch if we already have a navigation link
-    if (navigationLink) {
-      return;
-    }
-
-    const fetchNavigationLink = async () => {
-      setLoadingNavLink(true);
-      try {
-        const response = await poolService.getNavigationLink(selectedPool.id);
-        if (response.success && response.data) {
-          setNavigationLink(response.data);
-          console.log('[TripProgress] Navigation link loaded (FREE):', {
-            waypointCount: response.data.meta.waypointCount,
-            costSavings: response.data.meta.costSavings,
-          });
-        }
-      } catch (error) {
-        console.error('[TripProgress] Error fetching navigation link:', error);
-      } finally {
-        setLoadingNavLink(false);
+      if (Platform.OS === 'ios' && navLink.platformLinks.ios) {
+        return navLink.platformLinks.ios;
       }
-    };
-
-    fetchNavigationLink();
-  }, [selectedPool?.id, poolStatus, navigationLink]);
+      // Fallback to universal
+      if (navLink.platformLinks.universal) {
+        return navLink.platformLinks.universal;
+      }
+    }
+    
+    // Final fallback to basic navigationUrl
+    return navLink.navigationUrl;
+  }, []);
 
   // Open Google Maps for FREE navigation
   const handleStartNavigation = useCallback(async () => {
@@ -260,7 +296,8 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
         try {
           const response = await poolService.getNavigationLink(selectedPool.id);
           if (response.success && response.data?.navigationUrl) {
-            await Linking.openURL(response.data.navigationUrl);
+            const url = getBestNavigationUrl(response.data);
+            await Linking.openURL(url);
           } else {
             Alert.alert('Error', 'Could not generate navigation link');
           }
@@ -275,17 +312,25 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
     }
 
     try {
-      const canOpen = await Linking.canOpenURL(navigationLink.navigationUrl);
+      const url = getBestNavigationUrl(navigationLink);
+      const canOpen = await Linking.canOpenURL(url);
       if (canOpen) {
-        await Linking.openURL(navigationLink.navigationUrl);
+        await Linking.openURL(url);
       } else {
-        Alert.alert('Error', 'Google Maps is not installed on this device');
+        // Fallback to universal URL if platform-specific fails
+        const fallbackUrl = navigationLink.platformLinks?.universal || navigationLink.navigationUrl;
+        const canOpenFallback = await Linking.canOpenURL(fallbackUrl);
+        if (canOpenFallback) {
+          await Linking.openURL(fallbackUrl);
+        } else {
+          Alert.alert('Error', 'Google Maps is not installed on this device');
+        }
       }
     } catch (error) {
       console.error('[TripProgress] Error opening Google Maps:', error);
       Alert.alert('Error', 'Failed to open Google Maps');
     }
-  }, [navigationLink, selectedPool?.id]);
+  }, [navigationLink, selectedPool?.id, getBestNavigationUrl]);
 
   // Open a specific location in Google Maps
   const handleOpenLocation = useCallback(async (mapLink: string, label: string) => {
@@ -722,8 +767,8 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
         </View>
 
         {/* START NAVIGATION BUTTON - FREE Google Maps Navigation */}
-        {/* Shows when pool is ready (has driver or ride started) */}
-        {hasDriver && ['READY_TO_START', 'STARTED'].includes(poolStatus) && (
+        {/* Shows when pool is formed (waiting for driver or beyond) - users can see all pickup/dropoff points */}
+        {['WAITING_FOR_DRIVER', 'READY_TO_START', 'STARTED'].includes(poolStatus) && (
           <View className="mx-6 mt-4">
             <TouchableOpacity
               onPress={handleStartNavigation}
@@ -744,22 +789,86 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
                 <>
                   <Navigation className="w-6 h-6" color="white" />
                   <View>
-                    <Text className="text-white font-bold text-lg">Start Navigation</Text>
-                    <Text className="text-white text-xs opacity-80">Opens Google Maps • FREE</Text>
+                    <Text className="text-white font-bold text-lg">View Route in Google Maps</Text>
+                    <Text className="text-white text-xs opacity-80">See all pickup & dropoff points • FREE</Text>
                   </View>
                 </>
               )}
             </TouchableOpacity>
             <Text className="text-center text-gray-500 text-xs mt-2">
-              Turn-by-turn navigation with real-time traffic
+              Opens Google Maps app with the full route and all stops
             </Text>
           </View>
         )}
 
-        {/* View Locations - Individual pickup/dropoff links */}
-        {navigationLink && ['READY_TO_START', 'STARTED'].includes(poolStatus) && (
+        {/* Optimized Route Stops - Shows the full route in optimal order */}
+        {navigationLink?.orderedStops && ['WAITING_FOR_DRIVER', 'READY_TO_START', 'STARTED'].includes(poolStatus) && (
           <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
-            <Text className="font-semibold mb-4">View Locations in Google Maps</Text>
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="font-semibold">Optimized Route</Text>
+              {navigationLink.routeInfo && (
+                <View className={`px-2 py-1 rounded ${navigationLink.routeInfo.trafficLevel === 'low' ? 'bg-green-100' : navigationLink.routeInfo.trafficLevel === 'moderate' ? 'bg-yellow-100' : 'bg-red-100'}`}>
+                  <Text className={`text-xs font-medium ${navigationLink.routeInfo.trafficLevel === 'low' ? 'text-green-700' : navigationLink.routeInfo.trafficLevel === 'moderate' ? 'text-yellow-700' : 'text-red-700'}`}>
+                    {navigationLink.routeInfo.trafficLevel.charAt(0).toUpperCase() + navigationLink.routeInfo.trafficLevel.slice(1)} traffic
+                  </Text>
+                </View>
+              )}
+            </View>
+            <View className="gap-3">
+              {navigationLink.orderedStops.map((stop, idx) => {
+                const stopColor = stop.type === 'driver' ? '#3B82F6' : stop.type === 'pickup' ? '#22C55E' : '#EF4444';
+                const stopLabel = stop.type === 'driver' ? 'Start' : stop.type === 'pickup' ? 'Pick up' : 'Drop off';
+                
+                return (
+                  <View key={`${stop.type}-${stop.userId}-${idx}`} className="flex-row items-start gap-3">
+                    <View className="items-center">
+                      <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: stopColor, justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ color: 'white', fontSize: 12, fontWeight: '600' }}>{stop.order}</Text>
+                      </View>
+                      {idx < navigationLink.orderedStops.length - 1 && (
+                        <View style={{ width: 2, height: 20, backgroundColor: '#e5e7eb', marginTop: 4 }} />
+                      )}
+                    </View>
+                    <View className="flex-1">
+                      <View className="flex-row items-center gap-2">
+                        <Text className="text-sm text-gray-500">{stopLabel}</Text>
+                        {stop.isCurrentUser && (
+                          <View className="bg-blue-100 px-2 py-0.5 rounded">
+                            <Text className="text-xs text-blue-700">You</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text className="font-medium" numberOfLines={1}>
+                        {stop.address || `${stopLabel} point`}
+                      </Text>
+                      <Text className="text-xs text-gray-400">
+                        ETA: {stop.estimatedArrivalMinutes === 0 ? 'Start' : `+${stop.estimatedArrivalMinutes} min`}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+            {/* Route Summary */}
+            {navigationLink.routeInfo && (
+              <View className="mt-3 pt-3 border-t border-gray-100">
+                <View className="flex-row justify-between">
+                  <Text className="text-gray-600">Total Distance</Text>
+                  <Text className="font-medium">{navigationLink.routeInfo.totalDistanceKm} km</Text>
+                </View>
+                <View className="flex-row justify-between mt-1">
+                  <Text className="text-gray-600">Total Duration</Text>
+                  <Text className="font-medium">{navigationLink.routeInfo.totalDurationMinutes} mins</Text>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* View Individual Locations - Links to open each location in Google Maps */}
+        {navigationLink && ['WAITING_FOR_DRIVER', 'READY_TO_START', 'STARTED'].includes(poolStatus) && (
+          <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
+            <Text className="font-semibold mb-4">View Individual Locations</Text>
             <View className="gap-3">
               {navigationLink.waypoints.map((waypoint, idx) => (
                 <View key={waypoint.userId} className="gap-2">

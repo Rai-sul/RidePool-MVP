@@ -481,6 +481,12 @@ export class SmartRouteService {
       }
     }
 
+    // Log the final waypoint order for debugging
+    logger.info(`[SmartRoute] Optimal waypoint order (${waypoints.length} stops):`);
+    waypoints.forEach((wp, idx) => {
+      logger.info(`  ${idx + 1}. ${wp.type.toUpperCase()} - User: ${wp.userId.substring(0, 8)}... - ${wp.address || `${wp.location.latitude.toFixed(4)},${wp.location.longitude.toFixed(4)}`}`);
+    });
+
     return waypoints;
   }
 

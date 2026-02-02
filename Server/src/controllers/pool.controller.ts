@@ -1217,6 +1217,11 @@ export class PoolController {
         })
         .eq('pool_id', poolId);
 
+      // Clear cached route so fresh optimal route is calculated with final members
+      // This ensures the navigation link shows the correct route for the finalized pool
+      await smartRouteService.clearPoolRoute(poolId);
+      logger.info(`[Pool] Cleared route cache for pool ${poolId} - will recalculate with finalized members`);
+
       // Notify all members
       for (const member of activeMembers) {
         await notificationService.sendPushNotification(member.user_id, {
@@ -1518,7 +1523,9 @@ export class PoolController {
    * Get Google Maps app navigation deep link for a pool
    * Opens Google Maps app with all waypoints - FREE navigation with real-time traffic
    * Both users and drivers can use this to see all pickup/dropoff points
-   * This is SUPER COST EFFECTIVE - no API calls, uses native Google Maps app
+   * 
+   * IMPORTANT: Uses the SAME optimized route from smartRouteService to ensure
+   * the Google Maps deep link shows the exact same optimal route that's displayed in our app
    */
   async getNavigationDeepLink(req: AuthRequest, res: Response, next: NextFunction) {
     try {
@@ -1588,7 +1595,7 @@ export class PoolController {
         });
       }
 
-      // Build member routes
+      // Build member routes for smart route calculation
       const memberRoutes: PoolMemberRoute[] = rides.map((ride: any) => ({
         userId: ride.user_id,
         pickup: { latitude: ride.pickup_lat, longitude: ride.pickup_lng },
@@ -1617,47 +1624,76 @@ export class PoolController {
         }
       }
 
-      // Use user's pickup as origin if not driver, otherwise use driver location
-      const userRide = rides.find((r: any) => r.user_id === userId);
-      const origin = isDriver && driverLocation
-        ? driverLocation
-        : userRide
-          ? { latitude: userRide.pickup_lat, longitude: userRide.pickup_lng }
-          : memberRoutes[0].pickup;
-
-      // Final destination is the pool's destination
-      const destination: Location = {
-        latitude: pool.destination_lat,
-        longitude: pool.destination_lng,
-      };
-
-      // Build waypoints: all pickups first, then dropoffs (in optimized order)
-      // For cost efficiency, calculate order locally using H3/haversine instead of Google API
-      const pickupWaypoints = memberRoutes
-        .filter(m => m.userId !== userId || isDriver) // Include user's own pickup only if they're the driver
-        .map(m => m.pickup);
-
-      const dropoffWaypoints = memberRoutes
-        .filter(m => {
-          // Exclude final destination (pool destination) from waypoints
-          const isFinalDest = 
-            Math.abs(m.dropoff.latitude - destination.latitude) < 0.001 &&
-            Math.abs(m.dropoff.longitude - destination.longitude) < 0.001;
-          return !isFinalDest;
-        })
-        .map(m => m.dropoff);
-
-      const allWaypoints = [...pickupWaypoints, ...dropoffWaypoints];
-
-      // Generate the FREE Google Maps deep link
-      const navigationUrl = googleMapsService.generateNavigationDeepLink(
-        origin,
-        destination,
-        allWaypoints.length > 0 ? allWaypoints : undefined
+      // ========================================================
+      // KEY FIX: Get the SAME optimized route from smartRouteService
+      // This ensures Google Maps shows the exact same optimal route
+      // ========================================================
+      const combinedRoute = await smartRouteService.calculateCombinedRoute(
+        memberRoutes,
+        {
+          driverLocation,
+          optimizeFor: 'balanced',
+          trafficModel: 'best_guess',
+          useCoarseDriverLocation: true,
+        },
+        poolId
       );
 
-      // Also generate individual deep links for each point (for viewing specific locations)
-      const waypointLinks = memberRoutes.map((member, idx) => ({
+      if (!combinedRoute || combinedRoute.waypoints.length === 0) {
+        return res.status(500).json({
+          success: false,
+          error: { code: 'ROUTE_CALCULATION_FAILED', message: 'Failed to calculate optimized route' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Extract ordered waypoints from the optimized route (excluding driver start and final destination)
+      // The waypoints are already in optimal order from smartRouteService
+      // Order example: Driver → Pickup A → Pickup B → Dropoff A → Dropoff B (NOT A-A, B-B)
+      const orderedWaypoints = combinedRoute.waypoints;
+      
+      // First waypoint is origin (driver location or first pickup)
+      const originWaypoint = orderedWaypoints[0];
+      const origin: Location = originWaypoint.location;
+
+      // Last waypoint is the final destination
+      const destinationWaypoint = orderedWaypoints[orderedWaypoints.length - 1];
+      const destination: Location = destinationWaypoint.location;
+
+      // Intermediate waypoints (everything between origin and destination, in optimal order)
+      // These are the stops the driver needs to make along the way
+      const intermediateWaypoints = orderedWaypoints
+        .slice(1, -1) // Exclude first (origin) and last (destination)
+        .map(wp => wp.location);
+
+      // Log the route order for debugging
+      logger.info(`[Pool] Navigation route order for pool ${poolId}:`);
+      logger.info(`[Pool] Total waypoints: ${orderedWaypoints.length}`);
+      orderedWaypoints.forEach((wp, idx) => {
+        logger.info(`  ${idx + 1}. ${wp.type.toUpperCase()} - User: ${wp.userId.substring(0, 8)}... - Lat: ${wp.location.latitude.toFixed(6)}, Lng: ${wp.location.longitude.toFixed(6)} - ${wp.address || 'No address'}`);
+      });
+      logger.info(`[Pool] Origin (first): ${origin.latitude.toFixed(6)}, ${origin.longitude.toFixed(6)} - Type: ${originWaypoint.type}`);
+      logger.info(`[Pool] Destination (last): ${destination.latitude.toFixed(6)}, ${destination.longitude.toFixed(6)} - Type: ${destinationWaypoint.type}`);
+      logger.info(`[Pool] Intermediate waypoints: ${intermediateWaypoints.length}`);
+
+      // Generate the FREE Google Maps deep link with ALL stops visible
+      // This shows the complete route with all pickup and dropoff points as markers
+      const allStopLocations = orderedWaypoints.map(wp => wp.location);
+      const navigationUrl = googleMapsService.generateViewRouteDeepLink(allStopLocations);
+
+      logger.info(`[Pool] Generated navigation URL: ${navigationUrl.substring(0, 200)}...`);
+
+      // Generate platform-specific navigation URLs (Android, iOS, Universal)
+      const platformLinks = googleMapsService.generatePlatformNavigationLinks(
+        origin,
+        destination,
+        intermediateWaypoints.length > 0 ? intermediateWaypoints : undefined
+      );
+
+      logger.info(`[Pool] Platform links generated - Android: ${platformLinks.android.substring(0, 100)}...`);
+
+      // Generate individual deep links for each member's pickup and dropoff
+      const waypointLinks = memberRoutes.map((member) => ({
         userId: member.userId,
         isCurrentUser: member.userId === userId,
         pickup: {
@@ -1672,28 +1708,50 @@ export class PoolController {
         },
       }));
 
-      logger.info(`[Pool] Generated navigation deep link for pool ${poolId}, ${allWaypoints.length} waypoints`);
+      // Build ordered stop list for display (showing the optimal sequence)
+      const orderedStops = orderedWaypoints.map((wp, idx) => ({
+        order: idx + 1,
+        type: wp.type,
+        userId: wp.userId,
+        isCurrentUser: wp.userId === userId,
+        address: wp.address,
+        location: wp.location,
+        estimatedArrivalMinutes: wp.estimatedArrivalMinutes,
+      }));
+
+      logger.info(`[Pool] Generated navigation deep link for pool ${poolId} with ${intermediateWaypoints.length} intermediate waypoints (optimized order)`);
 
       res.json({
         success: true,
         data: {
           poolId,
           navigationUrl,
-          instructions: 'Tap to open Google Maps for FREE turn-by-turn navigation with real-time traffic',
+          platformLinks, // Platform-specific URLs for better navigation experience
+          instructions: 'Tap to open Google Maps with the optimized route for all pickup and dropoff points',
           origin: {
             location: origin,
-            type: isDriver ? 'driver_location' : 'your_pickup',
+            type: originWaypoint.type === 'driver' ? 'driver_location' : 'first_pickup',
+            address: originWaypoint.address,
           },
           destination: {
             location: destination,
-            address: pool.destination_address,
+            address: destinationWaypoint.address || pool.destination_address,
           },
-          waypoints: waypointLinks,
+          orderedStops, // Shows the full route sequence in optimal order
+          waypoints: waypointLinks, // Individual location links for each member
+          routeInfo: {
+            totalDistanceKm: combinedRoute.totalDistanceKm || 0,
+            totalDurationMinutes: combinedRoute.durationInTraffic || combinedRoute.totalDurationMinutes || 0,
+            trafficLevel: combinedRoute.trafficLevel || 'moderate',
+            routeSummary: combinedRoute.routeSummary || 'Optimized carpool route',
+          },
           meta: {
-            waypointCount: allWaypoints.length,
+            waypointCount: intermediateWaypoints.length,
+            totalStops: orderedWaypoints.length,
             isDriver,
             isMember,
             freeNavigation: true,
+            usesOptimizedRoute: true,
             costSavings: '100% - No API cost, uses Google Maps app',
           },
         },

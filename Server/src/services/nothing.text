@@ -14,6 +14,13 @@ when user joins in a pool. In rider table His/her pool id is not updating.
 The floating pool tracking button is not updating and showing in real time status.
 hmm
 
-1. raisul is sexy
-
 Make sure if no of users in pool == 1 still pool will be waiting for riders until searching time finish. Pool will be canceled iff no of number ==0 instead of 1.
+
+Have to work on map pickup and destination points
+
+
+
+
+raisul_pool latest
+then raisul_new
+then raisul

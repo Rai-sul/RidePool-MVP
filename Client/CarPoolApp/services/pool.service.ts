@@ -184,19 +184,37 @@ export interface CombinedRouteResponse {
   };
 }
 
-// Navigation Link Response - FREE Google Maps navigation
+// Navigation Link Response - FREE Google Maps navigation with optimized route
 export interface NavigationLinkResponse {
   poolId: string;
   navigationUrl: string;
+  // Platform-specific navigation URLs for better experience
+  platformLinks?: {
+    universal: string;  // Works on all platforms
+    android: string;    // Uses google.navigation intent for direct navigation
+    ios: string;        // Uses comgooglemaps:// scheme
+  };
   instructions: string;
   origin: {
     location: { latitude: number; longitude: number };
-    type: 'driver_location' | 'your_pickup';
+    type: 'driver_location' | 'first_pickup';
+    address?: string;
   };
   destination: {
     location: { latitude: number; longitude: number };
     address?: string;
   };
+  // Ordered stops showing the optimal route sequence
+  orderedStops: Array<{
+    order: number;
+    type: 'pickup' | 'dropoff' | 'driver';
+    userId: string;
+    isCurrentUser: boolean;
+    address?: string;
+    location: { latitude: number; longitude: number };
+    estimatedArrivalMinutes: number;
+  }>;
+  // Individual location links for each member
   waypoints: Array<{
     userId: string;
     isCurrentUser: boolean;
@@ -211,11 +229,19 @@ export interface NavigationLinkResponse {
       mapLink: string;
     };
   }>;
+  routeInfo: {
+    totalDistanceKm: number;
+    totalDurationMinutes: number;
+    trafficLevel: 'low' | 'moderate' | 'high';
+    routeSummary: string;
+  };
   meta: {
     waypointCount: number;
+    totalStops: number;
     isDriver: boolean;
     isMember: boolean;
     freeNavigation: boolean;
+    usesOptimizedRoute: boolean;
     costSavings: string;
   };
 }
