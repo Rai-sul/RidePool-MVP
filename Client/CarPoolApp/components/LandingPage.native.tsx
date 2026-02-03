@@ -61,6 +61,8 @@ export default function LandingPage({ userProfile, onDestinationSelect, onPickup
 
   const accentColors = isFemale ? ['#db2777', '#f43f5e'] : ['#1f2937', '#374151'];
 
+  const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+
   // Get current location on mount
   useEffect(() => {
     (async () => {
@@ -77,12 +79,61 @@ export default function LandingPage({ userProfile, onDestinationSelect, onPickup
         }
 
         const location = await ExpoLocation.getCurrentPositionAsync({});
-        setPickupLocation({
-          name: 'Current Location',
-          address: 'Your current position',
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
+        const { latitude, longitude } = location.coords;
+
+        // Reverse geocode to get a proper place name
+        if (GOOGLE_MAPS_API_KEY) {
+          try {
+            const response = await fetch(
+              `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_MAPS_API_KEY}`
+            );
+            const data = await response.json();
+            const result = data.results?.[0];
+            const address = result?.formatted_address || 'Your current position';
+            
+            // Extract a meaningful place name from address components
+            let placeName = 'Current Location';
+            if (result?.address_components) {
+              const nameComponent = result.address_components.find((c: any) => 
+                c.types.includes('establishment') || 
+                c.types.includes('point_of_interest') ||
+                c.types.includes('premise') ||
+                c.types.includes('neighborhood') ||
+                c.types.includes('sublocality_level_1') ||
+                c.types.includes('sublocality')
+              );
+              if (nameComponent) {
+                placeName = nameComponent.long_name;
+              } else {
+                const firstPart = address.split(',')[0]?.trim();
+                if (firstPart && !/^\d/.test(firstPart)) {
+                  placeName = firstPart;
+                }
+              }
+            }
+            
+            setPickupLocation({
+              name: placeName,
+              address,
+              latitude,
+              longitude,
+            });
+          } catch {
+            setPickupLocation({
+              name: 'Current Location',
+              address: 'Your current position',
+              latitude,
+              longitude,
+            });
+          }
+        } else {
+          setPickupLocation({
+            name: 'Current Location',
+            address: 'Your current position',
+            latitude,
+            longitude,
+          });
+        }
       } catch (error) {
         console.log('Location error:', error);
         setPickupLocation({

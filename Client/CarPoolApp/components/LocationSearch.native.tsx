@@ -164,17 +164,41 @@ export default function LocationSearch({
       const location = await ExpoLocation.getCurrentPositionAsync({});
       const { latitude, longitude } = location.coords;
 
-      // Reverse geocode to get address
+      // Reverse geocode to get address and place name
       if (GOOGLE_MAPS_API_KEY) {
         try {
           const response = await fetch(
             `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_MAPS_API_KEY}`
           );
           const data = await response.json();
-          const address = data.results?.[0]?.formatted_address || 'Your current position';
+          const result = data.results?.[0];
+          const address = result?.formatted_address || 'Your current position';
+          
+          // Extract a meaningful place name from address components or formatted address
+          let placeName = 'Current Location';
+          if (result?.address_components) {
+            // Look for establishment, point_of_interest, premise, or neighborhood
+            const nameComponent = result.address_components.find((c: any) => 
+              c.types.includes('establishment') || 
+              c.types.includes('point_of_interest') ||
+              c.types.includes('premise') ||
+              c.types.includes('neighborhood') ||
+              c.types.includes('sublocality_level_1') ||
+              c.types.includes('sublocality')
+            );
+            if (nameComponent) {
+              placeName = nameComponent.long_name;
+            } else {
+              // Fallback: use first part of formatted address
+              const firstPart = address.split(',')[0]?.trim();
+              if (firstPart && !/^\d/.test(firstPart)) {
+                placeName = firstPart;
+              }
+            }
+          }
           
           handleSelect({
-            name: 'Current Location',
+            name: placeName,
             address,
             latitude,
             longitude,
