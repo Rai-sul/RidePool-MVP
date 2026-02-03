@@ -647,33 +647,62 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                         )}
                       </View>
 
-                      <View className="grid grid-cols-2 gap-2">
-                        {/* Distance to pool - shows distance from user's pickup to pool's current location */}
+                      <View className="flex flex-row flex-wrap gap-2">
+                        {/* Distance to co-rider's pickup */}
                         {poolResult.distanceToPoolKm !== undefined && (
-                          <View className="flex flex-row items-center gap-2">
+                          <View className="flex flex-row items-center gap-1.5 bg-blue-50 px-2.5 py-1.5 rounded-lg">
                             <MapPin className="w-4 h-4 text-blue-600" />
-                            <Text className="text-sm text-blue-700">
+                            <Text className="text-sm text-blue-700 font-medium">
                               {poolResult.distanceToPoolKm < 1 
                                 ? `${Math.round(poolResult.distanceToPoolKm * 1000)}m away` 
                                 : `${poolResult.distanceToPoolKm.toFixed(1)}km away`}
                             </Text>
                           </View>
                         )}
-                        <View className="flex flex-row items-center gap-2">
+                        {/* Pickup detour time - time to reach co-rider */}
+                        {poolResult.pickupDetourMinutes !== undefined && poolResult.pickupDetourMinutes > 0 && (
+                          <View className="flex flex-row items-center gap-1.5 bg-purple-50 px-2.5 py-1.5 rounded-lg">
+                            <Clock className="w-4 h-4 text-purple-600" />
+                            <Text className="text-sm text-purple-700 font-medium">~{poolResult.pickupDetourMinutes} min</Text>
+                          </View>
+                        )}
+                        {/* Route match percentage */}
+                        <View className="flex flex-row items-center gap-1.5 bg-gray-50 px-2.5 py-1.5 rounded-lg">
                           <Navigation className="w-4 h-4 text-gray-600" />
-                          <Text className="text-sm text-gray-600">{poolResult.routeOverlapPercentage}% route match</Text>
+                          <Text className="text-sm text-gray-700 font-medium">{poolResult.routeOverlapPercentage}% match</Text>
                         </View>
-                        <View className="flex flex-row items-center gap-2">
-                          <Clock className="w-4 h-4 text-blue-600" />
-                          <Text className="text-sm text-gray-600">{poolResult.exactETA || 'N/A'} min</Text>
-                        </View>
-                        {poolResult.estimatedDetour > 0 && (
-                          <View className="flex flex-row items-center gap-2">
-                            <MapPin className="w-4 h-4 text-orange-500" />
-                            <Text className="text-sm text-orange-600">+{poolResult.estimatedDetour.toFixed(1)}km detour</Text>
+                        {/* ETA - only show if available */}
+                        {poolResult.exactETA && (
+                          <View className="flex flex-row items-center gap-1.5 bg-green-50 px-2.5 py-1.5 rounded-lg">
+                            <Clock className="w-4 h-4 text-green-600" />
+                            <Text className="text-sm text-green-700 font-medium">{poolResult.exactETA} min ETA</Text>
+                          </View>
+                        )}
+                        {/* Detour time for destination */}
+                        {poolResult.estimatedDetourMinutes !== undefined && poolResult.estimatedDetourMinutes > 0 && (
+                          <View className="flex flex-row items-center gap-1.5 bg-orange-50 px-2.5 py-1.5 rounded-lg">
+                            <Clock className="w-4 h-4 text-orange-500" />
+                            <Text className="text-sm text-orange-600 font-medium">+{poolResult.estimatedDetourMinutes} min detour</Text>
                           </View>
                         )}
                       </View>
+
+                      {/* Pickup point location - shows where the pool's pickup is */}
+                      {poolResult.poolPickupLocation?.address && (
+                        <View className="mt-3 pt-2 border-t border-gray-100">
+                          <View className="flex flex-row items-center gap-2">
+                            <View className="w-6 h-6 rounded-full bg-green-100 items-center justify-center">
+                              <Car className="w-3.5 h-3.5 text-green-600" />
+                            </View>
+                            <View className="flex-1">
+                              <Text className="text-xs text-gray-500">Co-rider's pickup</Text>
+                              <Text className="text-sm text-gray-700 font-medium">
+                                {poolResult.poolPickupLocation.address}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      )}
                     </TouchableOpacity>
                   ))}
                 </View>

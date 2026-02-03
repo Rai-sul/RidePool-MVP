@@ -38,6 +38,10 @@ export interface ScoredMatchingResult extends H3MatchingResult {
   };
   // Distance from user's pickup to pool's current location
   distanceToPoolKm?: number;
+  // Estimated time (in minutes) for driver to detour from pool pickup to user's pickup
+  pickupDetourMinutes?: number;
+  // Estimated detour time in minutes (calculated from destination detour distance)
+  estimatedDetourMinutes?: number;
   // Google Maps enriched data (optional, only for top matches)
   exactDistance?: number; // Exact distance in km from Google Maps
   exactETA?: number; // Exact ETA in minutes from Google Maps
@@ -318,6 +322,10 @@ export class PoolMatchingService {
 
         // Only include pools that meet minimum score threshold
         if (scoreResult.totalScore >= this.MINIMUM_MATCH_SCORE) {
+          // Calculate estimated detour time (assuming avg city speed of 25 km/h)
+          const AVERAGE_CITY_SPEED_KMH = 25;
+          const estimatedDetourMinutes = Math.round((Math.abs(destinationDistance) / AVERAGE_CITY_SPEED_KMH) * 60);
+
           matches.push({
             poolId: pool.id,
             h3Distance: h3Utils.getH3Distance(destinationH3, poolDestinationH3),
@@ -327,6 +335,7 @@ export class PoolMatchingService {
             ),
             viabilityScore: pool.viability_score || scoreResult.totalScore,
             estimatedDetour: Math.abs(destinationDistance),
+            estimatedDetourMinutes,
             score: scoreResult.totalScore,
             scoreBreakdown: scoreResult,
             routeOverlapPercentage: Math.round(routeOverlap * 100),
@@ -656,6 +665,10 @@ export class PoolMatchingService {
         const poolPickupInfo = pool.score_breakdown?.creator_pickup;
         let poolPickupLocation: { lat: number; lng: number; address?: string } | undefined;
         let distanceToPoolKm: number | undefined;
+        let pickupDetourMinutes: number | undefined;
+
+        // Average city speed for time calculations
+        const AVERAGE_CITY_SPEED_KMH = 25;
 
         if (poolPickupInfo?.lat && poolPickupInfo?.lng) {
           poolPickupLocation = {
@@ -670,7 +683,12 @@ export class PoolMatchingService {
             poolPickupInfo.lat,
             poolPickupInfo.lng
           );
+          // Calculate estimated time for driver to detour from pool pickup to user's pickup
+          pickupDetourMinutes = Math.round((distanceToPoolKm / AVERAGE_CITY_SPEED_KMH) * 60);
         }
+
+        // Calculate estimated destination detour time
+        const estimatedDetourMinutes = Math.round((Math.abs(destinationDistance) / AVERAGE_CITY_SPEED_KMH) * 60);
 
         matches.push({
           poolId: pool.id,
@@ -679,6 +697,8 @@ export class PoolMatchingService {
           commonHexagons: destinationRing.filter((h) => h === poolDestinationH3),
           viabilityScore: pool.viability_score || scoreResult.totalScore,
           estimatedDetour: Math.abs(destinationDistance),
+          estimatedDetourMinutes,
+          pickupDetourMinutes,
           score: scoreResult.totalScore,
           scoreBreakdown: scoreResult,
           routeOverlapPercentage: Math.round(routeOverlap * 100),
