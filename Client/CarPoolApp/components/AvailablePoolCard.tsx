@@ -16,11 +16,13 @@ export interface PoolSearchResultData {
     lat: number;
     lng: number;
     address?: string;
+    name?: string;
   };
   poolDropoffLocation?: {
     lat: number;
     lng: number;
     address?: string;
+    name?: string;
   };
   distanceToPoolKm?: number;
   currentPassengers?: number;
@@ -31,7 +33,9 @@ export interface CoRiderInfo {
   id: string;
   name?: string;
   pickupAddress?: string;
+  pickupName?: string;
   dropoffAddress?: string;
+  dropoffName?: string;
   distanceFromUser?: number;
 }
 
@@ -57,6 +61,19 @@ export default function AvailablePoolCard({
       return `${Math.round(km * 1000)}m`;
     }
     return `${km.toFixed(1)}km`;
+  };
+
+  // Extract a short location name from the address if name is not available
+  // This handles the case where the pool was created before the name field was added
+  const getLocationDisplayName = (name?: string, address?: string): string => {
+    if (name) return name;
+    if (!address) return '';
+    // Try to extract the first part of the address (usually the landmark/place name)
+    const parts = address.split(',');
+    if (parts.length > 0) {
+      return parts[0].trim();
+    }
+    return address;
   };
 
   const getMatchScoreColor = (score: number): string => {
@@ -215,7 +232,7 @@ export default function AvailablePoolCard({
       </View>
 
       {/* Co-Riders Section */}
-      {(coRiders.length > 0 || pool.poolPickupLocation?.address || pool.poolDropoffLocation?.address) && (
+      {(coRiders.length > 0 || pool.poolPickupLocation?.name || pool.poolPickupLocation?.address || pool.poolDropoffLocation?.name || pool.poolDropoffLocation?.address) && (
         <View
           style={{
             backgroundColor: '#ffffff',
@@ -247,7 +264,7 @@ export default function AvailablePoolCard({
           {/* Co-Rider Stops */}
           <View style={{ padding: 12 }}>
             {/* Pool Creator's Pickup */}
-            {pool.poolPickupLocation?.address && (
+            {(pool.poolPickupLocation?.name || pool.poolPickupLocation?.address) && (
               <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 }}>
                 {/* Timeline Indicator */}
                 <View style={{ alignItems: 'center', marginRight: 10, width: 24 }}>
@@ -295,14 +312,14 @@ export default function AvailablePoolCard({
                     style={{ fontSize: 13, color: '#111827', fontWeight: '500' }}
                     numberOfLines={2}
                   >
-                    {pool.poolPickupLocation.address}
+                    {getLocationDisplayName(pool.poolPickupLocation.name, pool.poolPickupLocation.address)}
                   </Text>
                 </View>
               </View>
             )}
 
             {/* Pool Creator's Dropoff */}
-            {pool.poolDropoffLocation?.address && (
+            {(pool.poolDropoffLocation?.name || pool.poolDropoffLocation?.address) && (
               <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: coRiders.length > 0 ? 12 : 0 }}>
                 {/* Timeline Indicator */}
                 <View style={{ alignItems: 'center', marginRight: 10, width: 24 }}>
@@ -336,7 +353,7 @@ export default function AvailablePoolCard({
                     style={{ fontSize: 13, color: '#111827', fontWeight: '500' }}
                     numberOfLines={2}
                   >
-                    {pool.poolDropoffLocation.address}
+                    {getLocationDisplayName(pool.poolDropoffLocation.name, pool.poolDropoffLocation.address)}
                   </Text>
                 </View>
               </View>
@@ -391,7 +408,7 @@ export default function AvailablePoolCard({
                         style={{ fontSize: 13, color: '#111827', fontWeight: '500' }}
                         numberOfLines={1}
                       >
-                        {rider.pickupAddress}
+                        {getLocationDisplayName(rider.pickupName, rider.pickupAddress)}
                       </Text>
                     </View>
                   </View>
@@ -429,7 +446,7 @@ export default function AvailablePoolCard({
                         style={{ fontSize: 13, color: '#111827', fontWeight: '500' }}
                         numberOfLines={1}
                       >
-                        {rider.dropoffAddress}
+                        {getLocationDisplayName(rider.dropoffName, rider.dropoffAddress)}
                       </Text>
                     </View>
                   </View>

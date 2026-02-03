@@ -500,9 +500,11 @@ export interface CreatePoolRequest {
   pickup_lat: number;
   pickup_lng: number;
   pickup_address?: string;
+  pickup_name?: string;
   destination_lat: number;
   destination_lng: number;
   destination_address?: string;
+  destination_name?: string;
   vehicle_type: VehicleType;
   max_passengers: number;
   gender_restriction?: GenderPreference;

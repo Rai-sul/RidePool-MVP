@@ -6,9 +6,11 @@ export interface CreatePoolRequest {
   pickup_lat: number;
   pickup_lng: number;
   pickup_address?: string;
+  pickup_name?: string;
   destination_lat: number;
   destination_lng: number;
   destination_address?: string;
+  destination_name?: string;
   vehicle_type: VehicleType;
   max_passengers?: number;
   gender_restriction?: GenderPreference;
@@ -72,6 +74,7 @@ export interface PoolSearchResult {
       lat: number;
       lng: number;
       address?: string;
+      name?: string;
     };
     // Distance from user's pickup to pool's current location
     distanceToPoolKm?: number;

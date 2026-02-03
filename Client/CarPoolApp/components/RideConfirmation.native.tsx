@@ -122,10 +122,12 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
       const result = await createPool({
         pickup_lat: pickupLocation.latitude,
         pickup_lng: pickupLocation.longitude,
-        pickup_address: pickupLocation.address || pickupLocation.name,
+        pickup_address: pickupLocation.address,
+        pickup_name: pickupLocation.name,
         destination_lat: destination.latitude,
         destination_lng: destination.longitude,
-        destination_address: destination.address || destination.name,
+        destination_address: destination.address,
+        destination_name: destination.name,
         vehicle_type: selectedVehicleType,
         max_passengers: selectedVehicleType === 'CNG' ? 2 : 4,
         gender_restriction: (isFemale && activeRideType === 'female-only') ? 'FEMALE_ONLY' : 'ANY',
@@ -199,10 +201,10 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
       const rideResult = await requestRide({
         pickup_lat: pickupLocation.latitude,
         pickup_lng: pickupLocation.longitude,
-        pickup_address: pickupLocation.address || pickupLocation.name,
+        pickup_address: pickupLocation.address,
         dropoff_lat: destination.latitude,
         dropoff_lng: destination.longitude,
-        dropoff_address: destination.address || destination.name,
+        dropoff_address: destination.address,
         vehicle_type: selectedVehicleType,
         gender_restriction: (isFemale && activeRideType === 'female-only') ? 'FEMALE_ONLY' : 'ANY',
       });
@@ -293,7 +295,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
         id: 'pool-location',
         latitude: poolPickupCoords.latitude,
         longitude: poolPickupCoords.longitude,
-        title: `Pool Location${selectedPoolResult?.poolPickupLocation?.address ? ` - ${selectedPoolResult.poolPickupLocation.address}` : ''}`,
+        title: `Pool Location${selectedPoolResult?.poolPickupLocation?.name ? ` - ${selectedPoolResult.poolPickupLocation.name}` : (selectedPoolResult?.poolPickupLocation?.address ? ` - ${selectedPoolResult.poolPickupLocation.address}` : '')}`,
         icon: 'pool',
       });
     }
@@ -879,7 +881,8 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                         poolDropoffLocation: poolResult.poolDropoffLocation || (destination ? {
                           lat: destination.latitude!,
                           lng: destination.longitude!,
-                          address: destination.address || destination.name,
+                          name: destination.name,
+                          address: destination.address,
                         } : undefined),
                         distanceToPoolKm: poolResult.distanceToPoolKm,
                         currentPassengers: poolResult.currentPassengers || 1,
