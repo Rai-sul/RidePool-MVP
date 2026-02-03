@@ -245,6 +245,11 @@ export default function GoogleMapView({
         showsUserLocation={showUserLocation}
         showsMyLocationButton
         showsCompass
+        zoomEnabled={true}
+        scrollEnabled={true}
+        rotateEnabled={true}
+        pitchEnabled={true}
+        zoomControlEnabled={true}
       >
         {routeCoords.length > 1 && (
           <NativePolyline coordinates={routeCoords} strokeColor="#4285F4" strokeWidth={5} />

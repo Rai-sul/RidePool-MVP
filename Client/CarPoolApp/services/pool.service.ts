@@ -47,6 +47,9 @@ export interface PoolSearchResult {
     score: number;
     routeOverlapPercentage: number;
     estimatedDetour: number;
+    estimatedDetourMinutes?: number;
+    // Estimated time (in minutes) for driver to detour from pool pickup to user's pickup
+    pickupDetourMinutes?: number;
     exactDistance?: number;
     exactETA?: number;
     // Pool pickup location (where the pool's creator/driver is)

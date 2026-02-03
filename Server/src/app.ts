@@ -17,7 +17,7 @@ import { config } from './config/env';
 dotenv.config();
 
 const app: Express = express();
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT || '3000', 10);
 const isProduction = process.env.NODE_ENV === 'production';
 
 configureSecurityHeaders(app);
@@ -79,11 +79,12 @@ async function startServer() {
     logger.warn('Cache unavailable, running without cache:', error);
   }
 
-  const server = app.listen(PORT, () => {
-    logger.info(`Server running on port ${PORT}`);
+  const HOST = process.env.HOST || '0.0.0.0';
+  const server = app.listen(PORT, HOST, () => {
+    logger.info(`Server running on ${HOST}:${PORT}`);
     logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
     logger.info(`MVP Mode: ${config.mvpMode ? 'enabled' : 'disabled'}`);
-    console.log(`Server is running on http://localhost:${PORT}`);
+    console.log(`Server is running on http://${HOST}:${PORT}`);
   });
 
   gracefulShutdownService.register(server);

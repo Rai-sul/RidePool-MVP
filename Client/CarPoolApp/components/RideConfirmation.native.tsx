@@ -10,6 +10,7 @@ import { rideService, RideEstimate, RideEstimateResponse, AlternativeRouteInfo }
 import { poolService } from '../services/pool.service';
 import LinearGradient from './LinearGradient';
 import GoogleMapView from './GoogleMapView';
+import AvailablePoolCard, { PoolSearchResultData, CoRiderInfo } from './AvailablePoolCard';
 
 type RideConfirmationProps = {
   pickupLocation?: Location | null;
@@ -626,70 +627,215 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
               )}
             </View>
 
-            {/* Available Pools */}
+            {/* Available Pools Section */}
             {selectedVehicleType && (
-              <View className="space-y-3">
-                <View className="flex flex-row items-center gap-2">
-                  <Users className="w-5 h-5" />
-                  <Text className="font-semibold">Available Pools</Text>
+              <View style={{ marginTop: 8 }}>
+                {/* Section Header */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: 16,
+                    paddingHorizontal: 4,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 10,
+                        backgroundColor: '#eff6ff',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Users size={20} color="#2563eb" />
+                    </View>
+                    <View>
+                      <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827' }}>
+                        Available Pools
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#6b7280' }}>
+                        {loading ? 'Searching...' : `${filteredPools.length} pool${filteredPools.length !== 1 ? 's' : ''} found`}
+                      </Text>
+                    </View>
+                  </View>
+                  {!loading && filteredPools.length > 0 && (
+                    <View
+                      style={{
+                        backgroundColor: '#dcfce7',
+                        paddingHorizontal: 10,
+                        paddingVertical: 4,
+                        borderRadius: 12,
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#16a34a' }}>
+                        LIVE
+                      </Text>
+                    </View>
+                  )}
                 </View>
 
                 {/* Loading State */}
                 {loading && (
-                  <View className="items-center py-8 px-4 bg-gray-50 rounded-xl mt-3">
-                    <ActivityIndicator size="large" color="#2563eb" />
-                    <Text className="text-gray-600 mt-3">Searching for pools...</Text>
+                  <View
+                    style={{
+                      alignItems: 'center',
+                      paddingVertical: 40,
+                      paddingHorizontal: 20,
+                      backgroundColor: '#f9fafb',
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: '#e5e7eb',
+                      borderStyle: 'dashed',
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 64,
+                        height: 64,
+                        borderRadius: 32,
+                        backgroundColor: '#eff6ff',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginBottom: 16,
+                      }}
+                    >
+                      <ActivityIndicator size="large" color="#2563eb" />
+                    </View>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#374151', marginBottom: 4 }}>
+                      Finding nearby pools...
+                    </Text>
+                    <Text style={{ fontSize: 13, color: '#6b7280', textAlign: 'center' }}>
+                      We're matching you with riders heading your way
+                    </Text>
                   </View>
                 )}
 
                 {/* Error State */}
                 {error && !loading && (
-                  <View className="items-center py-8 px-4 bg-red-50 rounded-xl mt-3">
-                    <AlertCircle className="w-12 h-12 text-red-500 mb-3" />
-                    <Text className="text-red-700 font-medium text-center">Failed to search pools</Text>
-                    <Text className="text-sm text-red-500 mt-2 text-center">{error}</Text>
+                  <View
+                    style={{
+                      alignItems: 'center',
+                      paddingVertical: 32,
+                      paddingHorizontal: 20,
+                      backgroundColor: '#fef2f2',
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: '#fecaca',
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 56,
+                        height: 56,
+                        borderRadius: 28,
+                        backgroundColor: '#fee2e2',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginBottom: 12,
+                      }}
+                    >
+                      <AlertCircle size={28} color="#dc2626" />
+                    </View>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#b91c1c', marginBottom: 4 }}>
+                      Search Failed
+                    </Text>
+                    <Text style={{ fontSize: 13, color: '#dc2626', textAlign: 'center' }}>
+                      {error}
+                    </Text>
                   </View>
                 )}
 
-                {/* No Pools Found - Show Create Pool Option */}
+                {/* No Pools Found - Create Pool CTA */}
                 {!loading && !error && filteredPools.length === 0 && (
-                  <View className="items-center py-8 px-4 bg-blue-50 rounded-xl mt-3">
-                    <Users className="w-12 h-12 text-blue-500 mb-3" />
-                    <Text className="text-gray-800 font-semibold text-center text-lg">No matching pools found</Text>
-                    <Text className="text-sm text-gray-600 mt-2 text-center">
-                      Be the first to create a pool for this route!
+                  <View
+                    style={{
+                      alignItems: 'center',
+                      paddingVertical: 32,
+                      paddingHorizontal: 20,
+                      backgroundColor: '#eff6ff',
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: '#bfdbfe',
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 72,
+                        height: 72,
+                        borderRadius: 36,
+                        backgroundColor: '#dbeafe',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginBottom: 16,
+                      }}
+                    >
+                      <Users size={36} color="#2563eb" />
+                    </View>
+                    <Text style={{ fontSize: 18, fontWeight: '700', color: '#1e40af', marginBottom: 6, textAlign: 'center' }}>
+                      No pools found nearby
+                    </Text>
+                    <Text style={{ fontSize: 14, color: '#3b82f6', textAlign: 'center', marginBottom: 20, lineHeight: 20 }}>
+                      Be the first to create a pool for this route and save money when others join!
                     </Text>
 
                     <TouchableOpacity
                       onPress={handleCreatePool}
                       disabled={isCreatingPool}
-                      className="mt-4 bg-blue-600 rounded-xl px-6 py-3 flex-row items-center gap-2"
                       style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: '#2563eb',
+                        paddingHorizontal: 24,
+                        paddingVertical: 14,
+                        borderRadius: 12,
+                        gap: 8,
                         shadowColor: '#2563eb',
                         shadowOffset: { width: 0, height: 4 },
                         shadowOpacity: 0.3,
                         shadowRadius: 8,
                         elevation: 6,
+                        opacity: isCreatingPool ? 0.7 : 1,
                       }}
                     >
                       {isCreatingPool ? (
                         <ActivityIndicator size="small" color="#ffffff" />
                       ) : (
-                        <>
-                          <Plus className="w-5 h-5 text-white" />
-                          <Text className="text-white font-semibold">Create New Pool</Text>
-                        </>
+                        <Plus size={20} color="#ffffff" />
                       )}
+                      <Text style={{ fontSize: 16, fontWeight: '600', color: '#ffffff' }}>
+                        {isCreatingPool ? 'Creating Pool...' : 'Create New Pool'}
+                      </Text>
                     </TouchableOpacity>
 
-                    {/* Show alternatives if available */}
+                    {/* Alternatives */}
                     {alternatives.length > 0 && (
-                      <View className="mt-4 w-full">
-                        <Text className="text-sm text-gray-600 mb-2">Or try:</Text>
+                      <View style={{ width: '100%', marginTop: 20 }}>
+                        <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 8 }}>
+                          Or try these alternatives:
+                        </Text>
                         {alternatives.map((alt: any, idx: number) => (
-                          <View key={idx} className="bg-white rounded-lg p-3 mb-2 border border-gray-200">
-                            <Text className="font-medium text-gray-800">{alt.title}</Text>
-                            <Text className="text-sm text-gray-500">{alt.description}</Text>
+                          <View
+                            key={idx}
+                            style={{
+                              backgroundColor: '#ffffff',
+                              borderRadius: 10,
+                              padding: 12,
+                              marginBottom: 8,
+                              borderWidth: 1,
+                              borderColor: '#e5e7eb',
+                            }}
+                          >
+                            <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>
+                              {alt.title}
+                            </Text>
+                            <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+                              {alt.description}
+                            </Text>
                           </View>
                         ))}
                       </View>
@@ -697,82 +843,82 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                   </View>
                 )}
 
-                {/* Pool Results */}
+                {/* Pool Results - Using new AvailablePoolCard */}
                 {!loading && !error && filteredPools.length > 0 && (
-                  <View className="mt-3">
-                    <Text className="text-sm text-gray-500 mb-2">Tap a pool to join</Text>
-                    {filteredPools.map((poolResult: any) => (
-                      <TouchableOpacity
-                        key={poolResult.poolId}
-                        onPress={() => handlePoolClick(poolResult)}
-                        className={`border-2 rounded-2xl p-4 mb-3 ${selectedPoolId === poolResult.poolId
-                            ? 'border-blue-500'
-                            : 'border-gray-200'
-                          }`}
-                        style={selectedPoolId === poolResult.poolId ? {
-                          backgroundColor: '#eff6ff',
-                          shadowColor: '#000',
-                          shadowOffset: { width: 0, height: 4 },
-                          shadowOpacity: 0.1,
-                          shadowRadius: 6,
-                          elevation: 8,
-                        } : {
-                          backgroundColor: '#ffffff',
-                        }}
-                      >
-                        <View className="flex flex-row items-center justify-between mb-3">
-                          <View className="flex flex-row items-center gap-3">
-                            <LinearGradient
-                              colors={['#2563eb', '#06b6d4']}
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 1, y: 1 }}
-                              className="w-12 h-12 rounded-full flex items-center justify-center"
-                            >
-                              <Text className="text-white text-lg font-bold">P</Text>
-                            </LinearGradient>
-                            <View>
-                              <Text className="text-base font-semibold text-gray-900 mb-1">Pool #{poolResult.poolId.slice(0, 8)}</Text>
-                              <View className="flex flex-row items-center gap-1">
-                                <Text className="text-sm text-gray-600">Match: {Math.round(poolResult.score * 100)}%</Text>
-                              </View>
-                            </View>
-                          </View>
-                          {selectedPoolId === poolResult.poolId && (
-                            <View className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
-                              <View className="w-2 h-2 bg-white rounded-full"></View>
-                            </View>
-                          )}
-                        </View>
+                  <View>
+                    {/* Results Header */}
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginBottom: 12,
+                        paddingHorizontal: 4,
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, color: '#6b7280' }}>
+                        Tap a pool to see details and join
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#9ca3af' }}>
+                        Sorted by match
+                      </Text>
+                    </View>
 
-                        <View className="flex flex-row flex-wrap gap-3">
-                          {/* Distance to pool - shows distance from user's pickup to pool's current location */}
-                          {poolResult.distanceToPoolKm !== undefined && (
-                            <View className="flex flex-row items-center gap-1.5">
-                              <MapPin className="w-4 h-4 text-blue-600" />
-                              <Text className="text-sm text-blue-700">
-                                {poolResult.distanceToPoolKm < 1
-                                  ? `${Math.round(poolResult.distanceToPoolKm * 1000)}m away`
-                                  : `${poolResult.distanceToPoolKm.toFixed(1)}km away`}
-                              </Text>
-                            </View>
-                          )}
-                          <View className="flex flex-row items-center gap-1.5">
-                            <Navigation className="w-4 h-4 text-gray-600" />
-                            <Text className="text-sm text-gray-700">{poolResult.routeOverlapPercentage}% route match</Text>
-                          </View>
-                          <View className="flex flex-row items-center gap-1.5">
-                            <Clock className="w-4 h-4 text-blue-600" />
-                            <Text className="text-sm text-gray-700">{poolResult.exactETA || 'N/A'} min</Text>
-                          </View>
-                          {poolResult.estimatedDetour > 0 && (
-                            <View className="flex flex-row items-center gap-1.5">
-                              <MapPin className="w-4 h-4 text-orange-500" />
-                              <Text className="text-sm text-orange-600">+{poolResult.estimatedDetour.toFixed(1)}km detour</Text>
-                            </View>
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    ))}
+                    {/* Pool Cards */}
+                    {filteredPools.map((poolResult: any) => {
+                      const poolData: PoolSearchResultData = {
+                        poolId: poolResult.poolId,
+                        score: poolResult.score,
+                        routeOverlapPercentage: poolResult.routeOverlapPercentage,
+                        estimatedDetour: poolResult.estimatedDetour,
+                        estimatedDetourMinutes: poolResult.estimatedDetourMinutes,
+                        pickupDetourMinutes: poolResult.pickupDetourMinutes,
+                        exactDistance: poolResult.exactDistance,
+                        exactETA: poolResult.exactETA,
+                        poolPickupLocation: poolResult.poolPickupLocation,
+                        poolDropoffLocation: poolResult.poolDropoffLocation || (destination ? {
+                          lat: destination.latitude!,
+                          lng: destination.longitude!,
+                          address: destination.address || destination.name,
+                        } : undefined),
+                        distanceToPoolKm: poolResult.distanceToPoolKm,
+                        currentPassengers: poolResult.currentPassengers || 1,
+                        maxPassengers: poolResult.maxPassengers || (selectedVehicleType === 'CNG' ? 2 : 4),
+                      };
+
+                      return (
+                        <AvailablePoolCard
+                          key={poolResult.poolId}
+                          pool={poolData}
+                          isSelected={selectedPoolId === poolResult.poolId}
+                          onPress={() => handlePoolClick(poolResult)}
+                        />
+                      );
+                    })}
+
+                    {/* Create Pool Alternative */}
+                    <TouchableOpacity
+                      onPress={handleCreatePool}
+                      disabled={isCreatingPool}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: '#f9fafb',
+                        borderWidth: 2,
+                        borderColor: '#e5e7eb',
+                        borderStyle: 'dashed',
+                        borderRadius: 16,
+                        padding: 16,
+                        gap: 8,
+                        marginTop: 4,
+                      }}
+                    >
+                      <Plus size={20} color="#6b7280" />
+                      <Text style={{ fontSize: 14, fontWeight: '500', color: '#6b7280' }}>
+                        Or create your own pool
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
