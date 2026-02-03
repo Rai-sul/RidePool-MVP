@@ -35,6 +35,7 @@ export interface ScoredMatchingResult extends H3MatchingResult {
     lat: number;
     lng: number;
     address?: string;
+    name?: string;
   };
   // Distance from user's pickup to pool's current location
   distanceToPoolKm?: number;
@@ -653,7 +654,7 @@ export class PoolMatchingService {
 
         // Get pool pickup location from score_breakdown (creator's pickup)
         const poolPickupInfo = pool.score_breakdown?.creator_pickup;
-        let poolPickupLocation: { lat: number; lng: number; address?: string } | undefined;
+        let poolPickupLocation: { lat: number; lng: number; address?: string; name?: string } | undefined;
         let distanceToPoolKm: number | undefined;
         let pickupDetourMinutes: number | undefined;
 
@@ -665,6 +666,7 @@ export class PoolMatchingService {
             lat: poolPickupInfo.lat,
             lng: poolPickupInfo.lng,
             address: poolPickupInfo.address,
+            name: poolPickupInfo.name,
           };
           // Calculate distance from user's pickup to pool's current location
           distanceToPoolKm = calculateDistance(

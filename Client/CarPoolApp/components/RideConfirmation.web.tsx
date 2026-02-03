@@ -118,10 +118,12 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
       const result = await createPool({
         pickup_lat: pickupLocation.latitude,
         pickup_lng: pickupLocation.longitude,
-        pickup_address: pickupLocation.address || pickupLocation.name,
+        pickup_address: pickupLocation.address,
+        pickup_name: pickupLocation.name,
         destination_lat: destination.latitude,
         destination_lng: destination.longitude,
-        destination_address: destination.address || destination.name,
+        destination_address: destination.address,
+        destination_name: destination.name,
         vehicle_type: selectedVehicleType,
         max_passengers: selectedVehicleType === 'CNG' ? 2 : 4,
         gender_restriction: (isFemale && activeRideType === 'female-only') ? 'FEMALE_ONLY' : 'ANY',
@@ -191,10 +193,10 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
       const rideResult = await requestRide({
         pickup_lat: pickupLocation.latitude,
         pickup_lng: pickupLocation.longitude,
-        pickup_address: pickupLocation.address || pickupLocation.name,
+        pickup_address: pickupLocation.address,
         dropoff_lat: destination.latitude,
         dropoff_lng: destination.longitude,
-        dropoff_address: destination.address || destination.name,
+        dropoff_address: destination.address,
         vehicle_type: selectedVehicleType,
         gender_restriction: (isFemale && activeRideType === 'female-only') ? 'FEMALE_ONLY' : 'ANY',
       });
@@ -285,7 +287,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
         id: 'pool-location',
         latitude: poolPickupCoords.latitude,
         longitude: poolPickupCoords.longitude,
-        title: `Pool Location${selectedPoolResult?.poolPickupLocation?.address ? ` - ${selectedPoolResult.poolPickupLocation.address}` : ''}`,
+        title: `Pool Location${selectedPoolResult?.poolPickupLocation?.name ? ` - ${selectedPoolResult.poolPickupLocation.name}` : (selectedPoolResult?.poolPickupLocation?.address ? ` - ${selectedPoolResult.poolPickupLocation.address}` : '')}`,
         icon: 'pool',
       });
     }
@@ -688,7 +690,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                       </View>
 
                       {/* Pickup point location - shows where the pool's pickup is */}
-                      {poolResult.poolPickupLocation?.address && (
+                      {(poolResult.poolPickupLocation?.name || poolResult.poolPickupLocation?.address) && (
                         <View className="mt-3 pt-2 border-t border-gray-100">
                           <View className="flex flex-row items-center gap-2">
                             <View className="w-6 h-6 rounded-full bg-green-100 items-center justify-center">
@@ -697,7 +699,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                             <View className="flex-1">
                               <Text className="text-xs text-gray-500">Co-rider's pickup</Text>
                               <Text className="text-sm text-gray-700 font-medium">
-                                {poolResult.poolPickupLocation.address}
+                                {poolResult.poolPickupLocation.name || poolResult.poolPickupLocation.address}
                               </Text>
                             </View>
                           </View>

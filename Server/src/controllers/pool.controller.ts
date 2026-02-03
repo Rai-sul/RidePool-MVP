@@ -128,6 +128,7 @@ export class PoolController {
           lat: poolData.pickup_lat,
           lng: poolData.pickup_lng,
           address: poolData.pickup_address,
+          name: poolData.pickup_name,
           h3_index: pickupH3,
         },
         base_distance_km: rideEstimate.distanceKm,
