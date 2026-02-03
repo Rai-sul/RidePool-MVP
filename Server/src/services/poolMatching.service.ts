@@ -154,6 +154,7 @@ export class PoolMatchingService {
       // Step 5: Query database for potential pools
       // Note: We filter current_passengers < max_passengers in code since Supabase doesn't support column-to-column comparison
       // Note: We use .or() for driver_id because .neq() excludes NULL values
+      // Note: We filter by destination H3 but allow for extended search via client-side check if extended_search_h3 is present
       const { data: rawPools, error } = (await supabase
         .from("pools")
         .select("*")
@@ -162,7 +163,8 @@ export class PoolMatchingService {
           "WAITING_FOR_RIDERS",
           "WAITING_FOR_DRIVER",
         ] as PoolStatus[])
-        .in("destination_h3_index", destinationSearchHexagons)
+        // Initially query mostly by destination H3 - we'll handle expanded logic below
+        .or(`destination_h3_index.in.(${destinationSearchHexagons.join(',')}),score_breakdown->extended_search_h3.cs.[${JSON.stringify(destinationH3)}]`)
         .neq("creator_user_id", userId)
         .or(`driver_id.is.null,driver_id.neq.${userId}`)
         .gt("current_passengers", 0)) as any;
@@ -271,9 +273,13 @@ export class PoolMatchingService {
         const destinationRing = h3Utils.getH3Ring(rideDestinationH3, 2);
 
         // Check if destination hexagon matches within acceptable range
+        // Also check if pool has extended search enabled and covers our destination
         const poolDestinationH3 = pool.destination_h3_index;
+        const extendedSearchH3 = pool.score_breakdown?.extended_search_h3 || [];
+        
         const isDestinationCompatible =
-          destinationRing.includes(poolDestinationH3);
+          destinationRing.includes(poolDestinationH3) || 
+          extendedSearchH3.includes(rideDestinationH3);
 
         // Skip if incompatible destination
         if (!isDestinationCompatible) {
@@ -453,12 +459,14 @@ export class PoolMatchingService {
       // Step 4: Query database for potential pools
       // Note: We filter current_passengers < max_passengers in code since Supabase doesn't support column-to-column comparison
       // Note: We use .or() for driver_id because .neq() excludes NULL values
+      // Note: We use OR logic for destination - either in standard search hexagons OR in the pool's extended search list
       const { data: rawPools, error } = (await supabase
         .from("pools")
         .select("*")
         .eq("vehicle_type", ride.vehicle_type)
         .in("status", ["WAITING_FOR_RIDERS", "WAITING_FOR_DRIVER"] as PoolStatus[])
-        .in("destination_h3_index", destinationSearchHexagons)
+        // Allow matching if pool's destination is in our search ring OR if our destination is in pool's extended search
+        .or(`destination_h3_index.in.(${destinationSearchHexagons.join(',')}),score_breakdown->extended_search_h3.cs.[${JSON.stringify(destinationH3)}]`)
         .neq("creator_user_id", userId)
         .or(`driver_id.is.null,driver_id.neq.${userId}`)
         .gt("current_passengers", 0)) as any;
@@ -603,12 +611,14 @@ export class PoolMatchingService {
         );
 
         // Check destination compatibility
+        // Also check if pool has extended search enabled and covers our destination
         const ridePickupH3 = h3Utils.latLngToH3(pickup, 9);
         const rideDestinationH3 = h3Utils.latLngToH3(destination, 7);
         const destinationRing = h3Utils.getH3Ring(rideDestinationH3, 2);
         const poolDestinationH3 = pool.destination_h3_index;
+        const extendedSearchH3 = pool.score_breakdown?.extended_search_h3 || [];
 
-        if (!destinationRing.includes(poolDestinationH3)) {
+        if (!destinationRing.includes(poolDestinationH3) && !extendedSearchH3.includes(rideDestinationH3)) {
           incompatibleReasons['destination_incompatible']++;
           continue;
         }

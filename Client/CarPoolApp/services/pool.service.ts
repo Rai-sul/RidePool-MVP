@@ -14,10 +14,25 @@ export interface CreatePoolRequest {
   gender_restriction?: GenderPreference;
 }
 
+// Search timing from server - single source of truth
+export interface SearchTiming {
+  elapsedSeconds?: number;
+  remainingSeconds: number;
+  phase: 'INITIAL' | 'EXTENDED' | 'EXPIRED';
+  isExpired?: boolean;
+  initialSeconds: number;
+  extendedSeconds: number;
+  totalSeconds: number;
+}
+
 export interface CreatePoolResponse {
   pool: Pool;
-  lookup_expires_at: string;
-  lookup_time_seconds: number;
+  search_timing: {
+    initial_seconds: number;
+    extended_seconds: number;
+    total_seconds: number;
+    expires_at: string;
+  };
 }
 
 export interface JoinPoolRequest {
@@ -82,7 +97,7 @@ export interface PoolSearchResult {
 
 export interface GetPoolResponse {
   pool: Pool;
-  lookup_remaining_seconds: number | null;
+  search_timing: SearchTiming | null;
 }
 
 export interface PoolRouteStop {

@@ -4,7 +4,7 @@ import { supabaseAdmin } from '../config/supabase';
 import { poolMatchingService } from '../services/poolMatching.service';
 import { fareService } from '../services/fare.service';
 import { rideEstimationService, PoolMemberLocation } from '../services/rideEstimation.service';
-import { lookupTimeService } from '../services/lookupTime.service';
+import { lookupTimeService, SEARCH_TIMING } from '../services/lookupTime.service';
 import { penaltyService } from '../services/penalty.service';
 import { notificationService } from '../services/notification.service';
 import { smartRouteService, PoolMemberRoute } from '../services/smartRoute.service';
@@ -12,8 +12,6 @@ import { googleMapsService } from '../services/googleMaps.service';
 import { CreatePoolRequest, Pool, PoolStatus, Ride, RideStatus, Location, VehicleType } from '../types';
 import { h3Utils } from '../utils/h3.utils';
 import { logger } from '../utils/logger';
-
-const LOOKUP_TIME_MS = parseInt(process.env.LOOKUP_TIME_MS || '300000', 10); // 5 minutes default
 
 export class PoolController {
   async searchPools(req: AuthRequest, res: Response, next: NextFunction) {
@@ -206,14 +204,19 @@ export class PoolController {
         logger.warn(`Failed to add creator as pool member: ${memberError.message}`);
       }
 
-      lookupTimeService.startLookupTimer(pool.id, LOOKUP_TIME_MS);
+      // Start the 2-phase server-side timer (30s initial + 10s extended = 40s total)
+      lookupTimeService.startLookupTimer(pool.id);
 
       res.status(201).json({
         success: true,
         data: {
           pool,
-          lookup_expires_at: new Date(Date.now() + LOOKUP_TIME_MS).toISOString(),
-          lookup_time_seconds: LOOKUP_TIME_MS / 1000,
+          search_timing: {
+            initial_seconds: SEARCH_TIMING.INITIAL_SECONDS,
+            extended_seconds: SEARCH_TIMING.EXTENDED_SECONDS,
+            total_seconds: SEARCH_TIMING.TOTAL_SECONDS,
+            expires_at: new Date(Date.now() + SEARCH_TIMING.TOTAL_SECONDS * 1000).toISOString(),
+          },
         },
         timestamp: new Date().toISOString(),
       });
@@ -387,9 +390,10 @@ export class PoolController {
         }
       }
 
-      // Clear cached route when membership changes (so next request recalculates)
-      // This ensures all users see the updated route with new member
-      await smartRouteService.clearPoolRoute(poolId);
+      // Note: No need to clear/recalculate route here because:
+      // - Users can only join during WAITING_FOR_RIDERS status
+      // - Route is calculated when pool transitions to WAITING_FOR_DRIVER
+      // - At that point, all members are finalized
 
       await notificationService.sendPoolFoundNotification(pool.creator_user_id, poolId);
 
@@ -492,13 +496,17 @@ export class PoolController {
         }));
       }
 
-      const remainingTime = lookupTimeService.getRemainingTime(poolId);
+      // Calculate search timing based on pool creation time (single source of truth)
+      // This works even if server restarted and timer is not in memory
+      const searchTiming = pool.status === 'WAITING_FOR_RIDERS' && pool.created_at
+        ? lookupTimeService.calculateTimerFromCreatedAt(pool.created_at)
+        : null;
 
       res.json({
         success: true,
         data: {
           pool,
-          lookup_remaining_seconds: remainingTime ? Math.ceil(remainingTime / 1000) : null,
+          search_timing: searchTiming,
         },
         timestamp: new Date().toISOString(),
       });
@@ -684,8 +692,41 @@ export class PoolController {
         }
       }
 
-      // Clear cached route when membership changes (so next request recalculates)
+      // Clear cached route when membership changes
       await smartRouteService.clearPoolRoute(poolId);
+
+      // Pre-calculate the new route with remaining members
+      // This is needed when a member leaves during WAITING_FOR_DRIVER or READY_TO_START
+      if (['WAITING_FOR_DRIVER', 'READY_TO_START'].includes(poolWithMembers.status) && activeMembers.length >= 2) {
+        try {
+          const rideIds = activeMembers.map((m: any) => m.ride_id).filter(Boolean);
+          const { data: rides } = await supabaseAdmin
+            .from('rides')
+            .select('user_id, pickup_lat, pickup_lng, pickup_address, dropoff_lat, dropoff_lng, dropoff_address')
+            .in('id', rideIds);
+
+          if (rides && rides.length > 0) {
+            const memberRoutes: PoolMemberRoute[] = rides.map((ride: any) => ({
+              userId: ride.user_id,
+              pickup: { latitude: ride.pickup_lat, longitude: ride.pickup_lng },
+              dropoff: { latitude: ride.dropoff_lat, longitude: ride.dropoff_lng },
+              pickupAddress: ride.pickup_address,
+              dropoffAddress: ride.dropoff_address,
+            }));
+
+            // Calculate and cache the updated route
+            await smartRouteService.calculateCombinedRoute(
+              memberRoutes,
+              { optimizeFor: 'balanced' },
+              poolId
+            );
+            logger.info(`[Pool] Pre-calculated route after member left pool ${poolId} (${memberRoutes.length} remaining)`);
+          }
+        } catch (routeError) {
+          logger.warn(`[Pool] Failed to pre-calculate route after member left:`, routeError);
+          // Non-fatal - clients will calculate on first request
+        }
+      }
 
       res.json({
         success: true,
@@ -1012,11 +1053,63 @@ export class PoolController {
   }
 
   /**
-   * Extend pool search to wider geographic area
-   * Called after initial 30-second lookup expires
-   * Expands search to additional H3 hexagons (neighbors of neighbors)
+   * @deprecated Server now automatically handles extended search phase
+   * This endpoint is kept for backward compatibility but does nothing
+   * The 2-phase timer (30s initial + 10s extended) runs automatically on the server
    */
   async extendSearch(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { poolId } = req.params;
+
+      // Get the pool to return current status
+      const { data: pool, error: poolError } = await supabaseAdmin
+        .from('pools')
+        .select('id, status, created_at')
+        .eq('id', poolId)
+        .single();
+
+      if (poolError || !pool) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Return current search timing - server handles extension automatically
+      const searchTiming = pool.status === 'WAITING_FOR_RIDERS' && pool.created_at
+        ? lookupTimeService.calculateTimerFromCreatedAt(pool.created_at)
+        : null;
+
+      res.json({
+        success: true,
+        data: {
+          message: 'Server handles extended search automatically',
+          current_status: pool.status,
+          search_timing: searchTiming,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @deprecated Server now automatically handles search completion
+   * This endpoint is kept for backward compatibility but does nothing
+   * The server automatically transitions or cancels the pool after the 40-second timer
+   */
+  async completeSearch(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -1032,7 +1125,7 @@ export class PoolController {
       // Get the pool
       const { data: pool, error: poolError } = await supabaseAdmin
         .from('pools')
-        .select('id, creator_user_id, status, destination_h3_index, vehicle_type, gender_restriction')
+        .select('id, status, created_at, current_passengers')
         .eq('id', poolId)
         .single();
 
@@ -1044,202 +1137,18 @@ export class PoolController {
         });
       }
 
-      // Only pool creator can extend search
-      if (pool.creator_user_id !== userId) {
-        return res.status(403).json({
-          success: false,
-          error: { code: 'NOT_CREATOR', message: 'Only pool creator can extend search' },
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // Can only extend if still waiting for riders - return graceful response if not
-      if (pool.status !== 'WAITING_FOR_RIDERS') {
-        return res.json({
-          success: true,
-          data: {
-            extended: false,
-            reason: 'Pool status changed',
-            current_status: pool.status,
-          },
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // Extend the lookup timer by 10 more seconds
-      const EXTENDED_TIME_MS = 10000;
-      lookupTimeService.extendLookupTime(poolId, EXTENDED_TIME_MS);
-
-      // Get expanded H3 indexes (neighbors of neighbors for wider search)
-      const baseH3 = pool.destination_h3_index;
-      const expandedH3Indexes = baseH3 ? h3Utils.getExtendedNeighbors(baseH3, 2) : [];
-
-      logger.info(`[Pool] Extended search for pool ${poolId} to ${expandedH3Indexes.length} hexagons`);
+      // Return current status - server handles completion automatically
+      const searchTiming = pool.status === 'WAITING_FOR_RIDERS' && pool.created_at
+        ? lookupTimeService.calculateTimerFromCreatedAt(pool.created_at)
+        : null;
 
       res.json({
         success: true,
         data: {
-          extended: true,
-          new_search_radius: 2, // H3 ring distance
-          extended_h3_count: expandedH3Indexes.length,
-          extended_time_seconds: EXTENDED_TIME_MS / 1000,
-        },
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  /**
-   * Complete pool search and transition to waiting for driver
-   * Called when client-side search timer expires
-   * - If 2+ passengers: transition to WAITING_FOR_DRIVER
-   * - If only 1 passenger (no one joined): cancel the pool so others don't see it
-   */
-  async completeSearch(req: AuthRequest, res: Response, next: NextFunction) {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      const { poolId } = req.params;
-
-      // Get the pool with member count
-      const { data: pool, error: poolError } = await supabaseAdmin
-        .from('pools')
-        .select(`
-          id, creator_user_id, status, current_passengers, max_passengers,
-          pool_members(user_id, ride_id, left_at)
-        `)
-        .eq('id', poolId)
-        .single();
-
-      if (poolError || !pool) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // Only pool creator or members can complete search
-      const activeMembers = pool.pool_members?.filter((m: any) => m.left_at === null) || [];
-      const isMember = activeMembers.some((m: any) => m.user_id === userId);
-      
-      if (!isMember && pool.creator_user_id !== userId) {
-        return res.status(403).json({
-          success: false,
-          error: { code: 'NOT_MEMBER', message: 'Only pool members can complete search' },
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // Can only complete if still in WAITING_FOR_RIDERS status
-      if (pool.status !== 'WAITING_FOR_RIDERS') {
-        return res.json({
-          success: true,
-          data: {
-            completed: false,
-            reason: 'Pool already transitioned',
-            current_status: pool.status,
-          },
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // Cancel the lookup timer since we're manually completing
-      lookupTimeService.cancelLookupTimer(poolId);
-
-      // Check if pool has minimum passengers (2+)
-      const MIN_PASSENGERS_TO_START = 2;
-      if (activeMembers.length < MIN_PASSENGERS_TO_START) {
-        // Not enough passengers - cancel the pool so it's no longer visible to others
-        logger.info(`[Pool] Pool ${poolId} search expired with only ${activeMembers.length} passenger(s), cancelling pool`);
-        
-        // Update pool status to CANCELLED
-        await supabaseAdmin
-          .from('pools')
-          .update({
-            status: 'CANCELLED' as PoolStatus,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', poolId);
-
-        // Update all member rides status to CANCELLED
-        const rideIds = activeMembers.map((m: any) => m.ride_id).filter(Boolean);
-        if (rideIds.length > 0) {
-          await supabaseAdmin
-            .from('rides')
-            .update({
-              status: 'CANCELLED' as RideStatus,
-              cancelled_reason: 'Pool search expired - no other riders joined',
-              pool_id: null,
-              updated_at: new Date().toISOString(),
-            })
-            .in('id', rideIds);
-        }
-
-        return res.json({
-          success: true,
-          data: {
-            completed: false,
-            expired: true,
-            reason: 'Search expired with no other riders',
-            current_passengers: activeMembers.length,
-            required_passengers: MIN_PASSENGERS_TO_START,
-            pool_cancelled: true,
-          },
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // Transition to WAITING_FOR_DRIVER
-      await supabaseAdmin
-        .from('pools')
-        .update({
-          status: 'WAITING_FOR_DRIVER' as PoolStatus,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', poolId);
-
-      // Update all member rides status
-      await supabaseAdmin
-        .from('rides')
-        .update({
-          status: 'WAITING_FOR_DRIVER' as RideStatus,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('pool_id', poolId);
-
-      // Clear cached route so fresh optimal route is calculated with final members
-      // This ensures the navigation link shows the correct route for the finalized pool
-      await smartRouteService.clearPoolRoute(poolId);
-      logger.info(`[Pool] Cleared route cache for pool ${poolId} - will recalculate with finalized members`);
-
-      // Notify all members
-      for (const member of activeMembers) {
-        await notificationService.sendPushNotification(member.user_id, {
-          title: 'Pool Ready!',
-          message: 'Your pool is complete. Searching for a driver...',
-          type: 'POOL_MATCH',
-          metadata: { poolId, passengers: activeMembers.length },
-        });
-      }
-
-      logger.info(`[Pool] Pool ${poolId} search completed, transitioned to WAITING_FOR_DRIVER with ${activeMembers.length} passengers`);
-
-      res.json({
-        success: true,
-        data: {
-          completed: true,
-          new_status: 'WAITING_FOR_DRIVER',
-          passengers: activeMembers.length,
+          message: 'Server handles search completion automatically',
+          current_status: pool.status,
+          current_passengers: pool.current_passengers,
+          search_timing: searchTiming,
         },
         timestamp: new Date().toISOString(),
       });

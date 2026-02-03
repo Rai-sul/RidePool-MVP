@@ -2,56 +2,148 @@ import { supabaseAdmin } from '../config/supabase';
 import { PoolStatus, RideStatus } from '../types';
 import { notificationService } from './notification.service';
 import { logger } from '../utils/logger';
+import { h3Utils } from '../utils/h3.utils';
+import { smartRouteService, PoolMemberRoute } from './smartRoute.service';
 
-const LOOKUP_TIME_MS = parseInt(process.env.LOOKUP_TIME_MS || '300000', 10); // 5 minutes default
+// Timer configuration - single source of truth
+const INITIAL_SEARCH_MS = 30000; // 30 seconds initial search
+const EXTENDED_SEARCH_MS = 10000; // 10 seconds extended search
+const TOTAL_SEARCH_MS = INITIAL_SEARCH_MS + EXTENDED_SEARCH_MS; // 40 seconds total
 const MIN_PASSENGERS_TO_START = 2;
+
+// Export constants for client to use via API
+export const SEARCH_TIMING = {
+  INITIAL_SECONDS: INITIAL_SEARCH_MS / 1000,
+  EXTENDED_SECONDS: EXTENDED_SEARCH_MS / 1000,
+  TOTAL_SECONDS: TOTAL_SEARCH_MS / 1000,
+};
+
+type SearchPhase = 'INITIAL' | 'EXTENDED' | 'EXPIRED';
 
 interface LookupTimer {
   poolId: string;
-  timeoutId: NodeJS.Timeout;
+  initialTimeoutId: NodeJS.Timeout;
+  extendedTimeoutId?: NodeJS.Timeout;
   createdAt: Date;
-  expiresAt: Date;
+  initialExpiresAt: Date;
+  totalExpiresAt: Date;
+  phase: SearchPhase;
 }
 
 export class LookupTimeService {
   private timers: Map<string, LookupTimer> = new Map();
 
-  startLookupTimer(poolId: string, durationMs: number = LOOKUP_TIME_MS): void {
+  /**
+   * Start the two-phase lookup timer for a pool
+   * Phase 1: Initial search (30 seconds) - search in immediate area
+   * Phase 2: Extended search (10 seconds) - search in wider area
+   * After both phases, pool is either transitioned or cancelled
+   */
+  startLookupTimer(poolId: string): void {
     if (this.timers.has(poolId)) {
       logger.info(`[LookupTime] Timer already exists for pool ${poolId}, skipping`);
       return;
     }
 
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + durationMs);
+    const initialExpiresAt = new Date(now.getTime() + INITIAL_SEARCH_MS);
+    const totalExpiresAt = new Date(now.getTime() + TOTAL_SEARCH_MS);
 
-    const timeoutId = setTimeout(async () => {
-      await this.handleLookupTimeout(poolId);
-    }, durationMs);
+    // Phase 1: Initial search timer
+    const initialTimeoutId = setTimeout(async () => {
+      await this.handleInitialPhaseComplete(poolId);
+    }, INITIAL_SEARCH_MS);
 
     this.timers.set(poolId, {
       poolId,
-      timeoutId,
+      initialTimeoutId,
       createdAt: now,
-      expiresAt,
+      initialExpiresAt,
+      totalExpiresAt,
+      phase: 'INITIAL',
     });
 
-    logger.info(`[LookupTime] Started timer for pool ${poolId}, expires at ${expiresAt.toISOString()}`);
+    logger.info(`[LookupTime] Started 2-phase timer for pool ${poolId}: initial=${initialExpiresAt.toISOString()}, total=${totalExpiresAt.toISOString()}`);
   }
 
-  cancelLookupTimer(poolId: string): boolean {
+  /**
+   * Handle completion of initial 30-second search phase
+   * Automatically transitions to extended search phase
+   */
+  private async handleInitialPhaseComplete(poolId: string): Promise<void> {
     const timer = this.timers.get(poolId);
     if (!timer) {
-      return false;
+      logger.warn(`[LookupTime] No timer found for pool ${poolId} in initial phase handler`);
+      return;
     }
 
-    clearTimeout(timer.timeoutId);
-    this.timers.delete(poolId);
-    logger.info(`[LookupTime] Cancelled timer for pool ${poolId}`);
-    return true;
+    try {
+      const { data: pool, error: poolError } = await supabaseAdmin
+        .from('pools')
+        .select('id, status, current_passengers, max_passengers, creator_user_id, destination_h3_index')
+        .eq('id', poolId)
+        .single();
+
+      if (poolError || !pool) {
+        logger.error(`[LookupTime] Pool ${poolId} not found for initial phase handling`);
+        this.timers.delete(poolId);
+        return;
+      }
+
+      // If pool is no longer waiting for riders, stop the timer
+      if (pool.status !== 'WAITING_FOR_RIDERS') {
+        logger.info(`[LookupTime] Pool ${poolId} status is ${pool.status}, stopping timer`);
+        this.timers.delete(poolId);
+        return;
+      }
+
+      // If pool already has enough passengers, transition immediately
+      if (pool.current_passengers >= MIN_PASSENGERS_TO_START) {
+        logger.info(`[LookupTime] Pool ${poolId} has ${pool.current_passengers} passengers, transitioning to WAITING_FOR_DRIVER`);
+        await this.transitionToWaitingForDriver(poolId);
+        this.timers.delete(poolId);
+        return;
+      }
+
+      // Start Phase 2: Extended search
+      logger.info(`[LookupTime] Pool ${poolId} entering extended search phase (10 seconds)`);
+      timer.phase = 'EXTENDED';
+
+      // Expand search area by updating pool's searchable H3 indexes
+      if (pool.destination_h3_index) {
+        const expandedH3Indexes = h3Utils.getExtendedNeighbors(pool.destination_h3_index, 2);
+        await supabaseAdmin
+          .from('pools')
+          .update({
+            score_breakdown: supabaseAdmin.rpc('jsonb_set_key', {
+              target: 'score_breakdown',
+              key: 'extended_search_h3',
+              value: JSON.stringify(expandedH3Indexes),
+            }),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', poolId);
+        logger.info(`[LookupTime] Extended search area to ${expandedH3Indexes.length} H3 hexagons`);
+      }
+
+      // Set extended phase timer
+      timer.extendedTimeoutId = setTimeout(async () => {
+        await this.handleExtendedPhaseComplete(poolId);
+      }, EXTENDED_SEARCH_MS);
+
+      this.timers.set(poolId, timer);
+
+    } catch (error) {
+      logger.error(`[LookupTime] Error handling initial phase for pool ${poolId}:`, error);
+      this.timers.delete(poolId);
+    }
   }
 
-  async handleLookupTimeout(poolId: string): Promise<void> {
+  /**
+   * Handle completion of extended 10-second search phase
+   * Either transitions pool or cancels it
+   */
+  private async handleExtendedPhaseComplete(poolId: string): Promise<void> {
     this.timers.delete(poolId);
 
     try {
@@ -62,7 +154,7 @@ export class LookupTimeService {
         .single();
 
       if (poolError || !pool) {
-        logger.error(`[LookupTime] Pool ${poolId} not found for timeout handling`);
+        logger.error(`[LookupTime] Pool ${poolId} not found for extended phase handling`);
         return;
       }
 
@@ -76,13 +168,27 @@ export class LookupTimeService {
         await this.transitionToWaitingForDriver(poolId);
       } else {
         // Pool doesn't have enough passengers - cancel the pool
-        // No more extensions - the client-side timer controls the search window
-        logger.info(`[LookupTime] Pool ${poolId} has only ${pool.current_passengers} passenger(s), cancelling`);
+        logger.info(`[LookupTime] Pool ${poolId} has only ${pool.current_passengers} passenger(s) after extended search, cancelling`);
         await this.cancelPool(poolId, pool.creator_user_id);
       }
     } catch (error) {
-      logger.error(`[LookupTime] Error handling timeout for pool ${poolId}:`, error);
+      logger.error(`[LookupTime] Error handling extended phase for pool ${poolId}:`, error);
     }
+  }
+
+  cancelLookupTimer(poolId: string): boolean {
+    const timer = this.timers.get(poolId);
+    if (!timer) {
+      return false;
+    }
+
+    clearTimeout(timer.initialTimeoutId);
+    if (timer.extendedTimeoutId) {
+      clearTimeout(timer.extendedTimeoutId);
+    }
+    this.timers.delete(poolId);
+    logger.info(`[LookupTime] Cancelled timer for pool ${poolId}`);
+    return true;
   }
 
   private async cancelPool(poolId: string, creatorUserId: string): Promise<void> {
@@ -122,12 +228,6 @@ export class LookupTimeService {
       }
     }
 
-    await notificationService.sendPoolCancelledNotification(
-      creatorUserId,
-      poolId,
-      'Pool cancelled: minimum 2 passengers required'
-    );
-
     logger.info(`[LookupTime] Pool ${poolId} cancelled, ${members?.length || 0} riders notified`);
   }
 
@@ -147,7 +247,7 @@ export class LookupTimeService {
       .select('user_id, ride_id')
       .eq('pool_id', poolId);
 
-    // Update ride status to CONFIRMED (search complete with riders) then WAITING_FOR_DRIVER
+    // Update ride status to CONFIRMED
     await supabaseAdmin
       .from('rides')
       .update({
@@ -155,6 +255,42 @@ export class LookupTimeService {
         updated_at: new Date().toISOString(),
       })
       .eq('pool_id', poolId);
+
+    // PRE-CALCULATE the combined route so all users see the same route immediately
+    // This is the "ONE-SHOT" - calculate once when pool is finalized
+    if (members && members.length > 0) {
+      try {
+        const rideIds = members.map((m) => m.ride_id).filter(Boolean);
+        const { data: rides } = await supabaseAdmin
+          .from('rides')
+          .select('user_id, pickup_lat, pickup_lng, pickup_address, dropoff_lat, dropoff_lng, dropoff_address')
+          .in('id', rideIds);
+
+        if (rides && rides.length > 0) {
+          const memberRoutes: PoolMemberRoute[] = rides.map((ride: any) => ({
+            userId: ride.user_id,
+            pickup: { latitude: ride.pickup_lat, longitude: ride.pickup_lng },
+            dropoff: { latitude: ride.dropoff_lat, longitude: ride.dropoff_lng },
+            pickupAddress: ride.pickup_address,
+            dropoffAddress: ride.dropoff_address,
+          }));
+
+          // Calculate and cache the route (no driver location yet)
+          const route = await smartRouteService.calculateCombinedRoute(
+            memberRoutes,
+            { optimizeFor: 'balanced' },
+            poolId
+          );
+
+          if (route) {
+            logger.info(`[LookupTime] Pre-calculated route for pool ${poolId}: ${route.waypoints.length} waypoints, ${route.totalDistanceKm}km`);
+          }
+        }
+      } catch (routeError) {
+        logger.warn(`[LookupTime] Failed to pre-calculate route for pool ${poolId}:`, routeError);
+        // Non-fatal - clients will calculate on first request
+      }
+    }
 
     if (members) {
       for (const member of members) {
@@ -169,57 +305,93 @@ export class LookupTimeService {
     logger.info(`[LookupTime] Pool ${poolId} transitioned, ${members?.length || 0} riders notified`);
   }
 
-  getRemainingTime(poolId: string): number | null {
+  /**
+   * Get timer info for a pool - used by API to send to client
+   */
+  getTimerInfo(poolId: string): {
+    remainingSeconds: number;
+    phase: SearchPhase;
+    initialSeconds: number;
+    extendedSeconds: number;
+    totalSeconds: number;
+  } | null {
     const timer = this.timers.get(poolId);
     if (!timer) {
       return null;
     }
 
-    const remaining = timer.expiresAt.getTime() - Date.now();
-    return Math.max(0, remaining);
+    const now = Date.now();
+    let remainingMs: number;
+
+    if (timer.phase === 'INITIAL') {
+      remainingMs = timer.initialExpiresAt.getTime() - now;
+    } else {
+      remainingMs = timer.totalExpiresAt.getTime() - now;
+    }
+
+    return {
+      remainingSeconds: Math.max(0, Math.ceil(remainingMs / 1000)),
+      phase: timer.phase,
+      initialSeconds: SEARCH_TIMING.INITIAL_SECONDS,
+      extendedSeconds: SEARCH_TIMING.EXTENDED_SECONDS,
+      totalSeconds: SEARCH_TIMING.TOTAL_SECONDS,
+    };
   }
 
-  getTimerInfo(poolId: string): LookupTimer | null {
-    return this.timers.get(poolId) || null;
+  /**
+   * Calculate timer info from pool creation time (for pools where timer may not be in memory)
+   * This is useful when server restarts or for displaying on client
+   */
+  calculateTimerFromCreatedAt(createdAt: Date | string): {
+    elapsedSeconds: number;
+    remainingSeconds: number;
+    phase: SearchPhase;
+    isExpired: boolean;
+    initialSeconds: number;
+    extendedSeconds: number;
+    totalSeconds: number;
+  } {
+    const createdAtMs = new Date(createdAt).getTime();
+    const elapsedMs = Date.now() - createdAtMs;
+    const elapsedSeconds = elapsedMs / 1000;
+
+    let phase: SearchPhase;
+    let remainingSeconds: number;
+    let isExpired = false;
+
+    if (elapsedSeconds < SEARCH_TIMING.INITIAL_SECONDS) {
+      phase = 'INITIAL';
+      remainingSeconds = SEARCH_TIMING.INITIAL_SECONDS - elapsedSeconds;
+    } else if (elapsedSeconds < SEARCH_TIMING.TOTAL_SECONDS) {
+      phase = 'EXTENDED';
+      remainingSeconds = SEARCH_TIMING.TOTAL_SECONDS - elapsedSeconds;
+    } else {
+      phase = 'EXPIRED';
+      remainingSeconds = 0;
+      isExpired = true;
+    }
+
+    return {
+      elapsedSeconds: Math.floor(elapsedSeconds),
+      remainingSeconds: Math.max(0, Math.ceil(remainingSeconds)),
+      phase,
+      isExpired,
+      initialSeconds: SEARCH_TIMING.INITIAL_SECONDS,
+      extendedSeconds: SEARCH_TIMING.EXTENDED_SECONDS,
+      totalSeconds: SEARCH_TIMING.TOTAL_SECONDS,
+    };
   }
 
   getActiveTimersCount(): number {
     return this.timers.size;
   }
 
-  async extendLookupTime(poolId: string, additionalMs: number): Promise<boolean> {
-    const timer = this.timers.get(poolId);
-    if (!timer) {
-      return false;
-    }
-
-    clearTimeout(timer.timeoutId);
-
-    const newExpiresAt = new Date(timer.expiresAt.getTime() + additionalMs);
-    const remainingMs = newExpiresAt.getTime() - Date.now();
-
-    if (remainingMs <= 0) {
-      await this.handleLookupTimeout(poolId);
-      return true;
-    }
-
-    const newTimeoutId = setTimeout(async () => {
-      await this.handleLookupTimeout(poolId);
-    }, remainingMs);
-
-    this.timers.set(poolId, {
-      ...timer,
-      timeoutId: newTimeoutId,
-      expiresAt: newExpiresAt,
-    });
-
-    logger.info(`[LookupTime] Extended timer for pool ${poolId}, new expiry: ${newExpiresAt.toISOString()}`);
-    return true;
-  }
-
   clearAllTimers(): void {
     for (const [poolId, timer] of this.timers) {
-      clearTimeout(timer.timeoutId);
+      clearTimeout(timer.initialTimeoutId);
+      if (timer.extendedTimeoutId) {
+        clearTimeout(timer.extendedTimeoutId);
+      }
       logger.info(`[LookupTime] Cleared timer for pool ${poolId}`);
     }
     this.timers.clear();
