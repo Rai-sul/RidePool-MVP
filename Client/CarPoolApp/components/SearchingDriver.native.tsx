@@ -109,13 +109,16 @@ export default function SearchingDriver({ onCancel, onDriverFound, onSearchExpir
       await cancelTrip();
       
       // Create a new pool with the same parameters
+      // Use location name instead of address for better user-friendliness in co-rider views
       const result = await poolService.createPool({
         pickup_lat: pickupLocation.latitude,
         pickup_lng: pickupLocation.longitude,
-        pickup_address: pickupLocation.address || pickupLocation.name,
+        pickup_address: pickupLocation.address,
+        pickup_name: pickupLocation.name,
         destination_lat: selectedDestination.latitude!,
         destination_lng: selectedDestination.longitude!,
-        destination_address: selectedDestination.address || selectedDestination.name,
+        destination_address: selectedDestination.address,
+        destination_name: selectedDestination.name,
         vehicle_type: selectedPool.vehicle_type,
         max_passengers: selectedPool.max_passengers,
         gender_restriction: selectedPool.gender_restriction,

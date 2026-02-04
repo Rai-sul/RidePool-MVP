@@ -166,6 +166,7 @@ export interface CombinedRouteWaypoint {
   type: 'pickup' | 'dropoff' | 'driver';
   userId: string;
   location: { latitude: number; longitude: number };
+  name?: string;
   address?: string;
   order: number;
   estimatedArrivalMinutes: number;
@@ -231,6 +232,7 @@ export interface NavigationLinkResponse {
     type: 'pickup' | 'dropoff' | 'driver';
     userId: string;
     isCurrentUser: boolean;
+    name?: string;
     address?: string;
     location: { latitude: number; longitude: number };
     estimatedArrivalMinutes: number;
@@ -241,11 +243,13 @@ export interface NavigationLinkResponse {
     isCurrentUser: boolean;
     pickup: {
       location: { latitude: number; longitude: number };
+      name?: string;
       address?: string;
       mapLink: string;
     };
     dropoff: {
       location: { latitude: number; longitude: number };
+      name?: string;
       address?: string;
       mapLink: string;
     };

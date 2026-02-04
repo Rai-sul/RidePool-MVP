@@ -214,13 +214,14 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
     setIsJoiningPool(true);
     try {
       // Step 1: Create a ride request first
+      // Use location name instead of address for better user-friendliness in co-rider views
       const rideResult = await requestRide({
         pickup_lat: pickupLocation.latitude,
         pickup_lng: pickupLocation.longitude,
-        pickup_address: pickupLocation.address,
+        pickup_address: pickupLocation.name || pickupLocation.address,
         dropoff_lat: destination.latitude,
         dropoff_lng: destination.longitude,
-        dropoff_address: destination.address,
+        dropoff_address: destination.name || destination.address,
         vehicle_type: selectedVehicleType,
         gender_restriction: (isFemale && activeRideType === 'female-only') ? 'FEMALE_ONLY' : 'ANY',
       });

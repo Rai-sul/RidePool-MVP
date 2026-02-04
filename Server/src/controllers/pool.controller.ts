@@ -13,6 +13,53 @@ import { CreatePoolRequest, Pool, PoolStatus, Ride, RideStatus, Location, Vehicl
 import { h3Utils } from '../utils/h3.utils';
 import { logger } from '../utils/logger';
 
+/**
+ * Extracts a user-friendly location name from an address string.
+ * If the stored address is already a place name (short, no street number pattern),
+ * returns it as-is. Otherwise, extracts the first meaningful part.
+ * 
+ * Examples:
+ * - "East West University" → "East West University" (already a name)
+ * - "North South University, Bashundhara, Dhaka" → "North South University"
+ * - "123 Main Street, Gulshan 2, Dhaka" → "Gulshan 2" (extracts area name)
+ * - "House 45, Road 12, Banani, Dhaka 1213" → "Banani"
+ */
+function extractLocationName(address: string | undefined): string {
+  if (!address) return 'Location';
+  
+  const trimmed = address.trim();
+  
+  // If it's short (under 40 chars) and doesn't look like an address, it's likely a name
+  // Address patterns: starts with number, contains "Road", "Street", "House", etc.
+  const addressPatterns = /^(\d+|House|Plot|Flat|Road|Street|Block|Sector)\s/i;
+  if (trimmed.length <= 40 && !addressPatterns.test(trimmed) && !trimmed.includes(',')) {
+    return trimmed;
+  }
+  
+  // Split by comma and find the first meaningful part
+  const parts = trimmed.split(',').map(p => p.trim()).filter(p => p.length > 0);
+  
+  if (parts.length === 0) return 'Location';
+  
+  // Check each part for meaningful location name (not a street number or generic address component)
+  for (const part of parts) {
+    // Skip parts that look like street addresses (start with numbers or have house/road/street)
+    if (/^(\d+|House|Plot|Flat)\s/i.test(part)) continue;
+    // Skip parts that are just postal codes (4-6 digits)
+    if (/^\d{4,6}$/.test(part)) continue;
+    // Skip parts that look like "Road 12" or "Street 45"
+    if (/^(Road|Street|Block|Sector)\s+\d+/i.test(part)) continue;
+    // Skip "Bangladesh" or "Dhaka" alone as they're too generic
+    if (/^(Bangladesh|Dhaka)$/i.test(part)) continue;
+    
+    // This part looks like a meaningful location name
+    return part;
+  }
+  
+  // Fallback: return first part, limited length
+  return parts[0].substring(0, 40);
+}
+
 export class PoolController {
   async searchPools(req: AuthRequest, res: Response, next: NextFunction) {
     try {
@@ -135,17 +182,18 @@ export class PoolController {
       };
 
       // First, create a ride for the pool creator
+      // Use location name instead of address for better user-friendliness in co-rider views
       const { data: creatorRide, error: rideError } = await supabaseAdmin
         .from('rides')
         .insert({
           user_id: userId,
           pickup_lat: poolData.pickup_lat,
           pickup_lng: poolData.pickup_lng,
-          pickup_address: poolData.pickup_address,
+          pickup_address: poolData.pickup_name || poolData.pickup_address,
           pickup_h3_index: pickupH3,
           dropoff_lat: poolData.destination_lat,
           dropoff_lng: poolData.destination_lng,
-          dropoff_address: poolData.destination_address,
+          dropoff_address: poolData.destination_name || poolData.destination_address,
           dropoff_h3_index: dropoffH3,
           vehicle_type: poolData.vehicle_type,
           gender_restriction: poolData.gender_restriction || 'ANY',
@@ -166,7 +214,7 @@ export class PoolController {
           creator_user_id: userId,
           destination_lat: poolData.destination_lat,
           destination_lng: poolData.destination_lng,
-          destination_address: poolData.destination_address,
+          destination_address: poolData.destination_name || poolData.destination_address,
           destination_h3_index: destinationH3,
           vehicle_type: poolData.vehicle_type,
           max_passengers: poolData.max_passengers,
@@ -1336,6 +1384,7 @@ export class PoolController {
             type: wp.type,
             userId: wp.userId,
             location: wp.location,
+            name: extractLocationName(wp.address),
             address: wp.address,
             order: wp.order,
             estimatedArrivalMinutes: wp.estimatedArrivalMinutes,
@@ -1608,11 +1657,13 @@ export class PoolController {
         isCurrentUser: member.userId === userId,
         pickup: {
           location: member.pickup,
+          name: extractLocationName(member.pickupAddress),
           address: member.pickupAddress,
           mapLink: `https://www.google.com/maps/search/?api=1&query=${member.pickup.latitude},${member.pickup.longitude}`,
         },
         dropoff: {
           location: member.dropoff,
+          name: extractLocationName(member.dropoffAddress),
           address: member.dropoffAddress,
           mapLink: `https://www.google.com/maps/search/?api=1&query=${member.dropoff.latitude},${member.dropoff.longitude}`,
         },
@@ -1624,6 +1675,7 @@ export class PoolController {
         type: wp.type,
         userId: wp.userId,
         isCurrentUser: wp.userId === userId,
+        name: extractLocationName(wp.address),
         address: wp.address,
         location: wp.location,
         estimatedArrivalMinutes: wp.estimatedArrivalMinutes,
