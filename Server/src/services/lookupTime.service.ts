@@ -4,6 +4,7 @@ import { notificationService } from './notification.service';
 import { logger } from '../utils/logger';
 import { h3Utils } from '../utils/h3.utils';
 import { smartRouteService, PoolMemberRoute } from './smartRoute.service';
+import { config } from '../config/env';
 
 // Timer configuration - single source of truth
 const INITIAL_SEARCH_MS = 30000; // 30 seconds initial search
@@ -80,7 +81,7 @@ export class LookupTimeService {
     try {
       const { data: pool, error: poolError } = await supabaseAdmin
         .from('pools')
-        .select('id, status, current_passengers, max_passengers, creator_user_id, destination_h3_index')
+        .select('id, status, current_passengers, max_passengers, creator_user_id, destination_h3_index, score_breakdown')
         .eq('id', poolId)
         .single();
 
@@ -109,21 +110,37 @@ export class LookupTimeService {
       logger.info(`[LookupTime] Pool ${poolId} entering extended search phase (10 seconds)`);
       timer.phase = 'EXTENDED';
 
-      // Expand search area by updating pool's searchable H3 indexes
+      // Expand search area by updating pool's searchable H3 indexes for BOTH pickup and destination
+      const extendedSearchData: { extended_search_h3?: string[]; extended_pickup_h3?: string[] } = {};
+
+      // Expand destination search area (Resolution 7: +2 rings ≈ +4.8 km)
       if (pool.destination_h3_index) {
-        const expandedH3Indexes = h3Utils.getExtendedNeighbors(pool.destination_h3_index, 2);
+        const expandedDestinationH3 = h3Utils.getExtendedNeighbors(pool.destination_h3_index, 2);
+        extendedSearchData.extended_search_h3 = expandedDestinationH3;
+        logger.info(`[LookupTime] Extended destination search to ${expandedDestinationH3.length} H3 hexagons`);
+      }
+
+      // Expand pickup search area (Resolution 9: +2 rings ≈ +0.7 km)
+      const creatorPickupH3 = pool.score_breakdown?.creator_pickup?.h3_index;
+      if (creatorPickupH3) {
+        const expandedPickupH3 = h3Utils.getExtendedNeighbors(creatorPickupH3, 2);
+        extendedSearchData.extended_pickup_h3 = expandedPickupH3;
+        logger.info(`[LookupTime] Extended pickup search to ${expandedPickupH3.length} H3 hexagons`);
+      }
+
+      // Update pool with expanded search areas
+      if (Object.keys(extendedSearchData).length > 0) {
+        const currentScoreBreakdown = pool.score_breakdown || {};
         await supabaseAdmin
           .from('pools')
           .update({
-            score_breakdown: supabaseAdmin.rpc('jsonb_set_key', {
-              target: 'score_breakdown',
-              key: 'extended_search_h3',
-              value: JSON.stringify(expandedH3Indexes),
-            }),
+            score_breakdown: {
+              ...currentScoreBreakdown,
+              ...extendedSearchData,
+            },
             updated_at: new Date().toISOString(),
           })
           .eq('id', poolId);
-        logger.info(`[LookupTime] Extended search area to ${expandedH3Indexes.length} H3 hexagons`);
       }
 
       // Set extended phase timer

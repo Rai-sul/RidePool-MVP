@@ -18,9 +18,11 @@ import { calculateDistance } from "../utils/helper";
 import { h3Utils } from "../utils/h3.utils";
 import { CONSTANTS } from "../config/constants";
 import { supabase } from "../config/supabase";
+import { SEARCH_TIMING } from "./lookupTime.service";
 import { config } from "../config/env";
 import { googleMapsService } from "./googleMaps.service";
 import { poolSearchResponseService } from "./poolSearchResponse.service";
+import { routeOverlapService, UserRoute, Coordinate } from "./routeOverlap.service";
 
 // ============================================
 // ENHANCED MATCHING TYPES
@@ -145,15 +147,17 @@ export class PoolMatchingService {
       const destinationH3 = h3Utils.latLngToH3(destination, 7); // Resolution 7 for destination
 
       // Step 3: Get search area hexagons around pickup (H3 ring search)
+      // Pickup: Resolution 9 with ring 6 ≈ 2.1 km radius
       const pickupSearchHexagons = h3Utils.getH3Ring(
         pickupH3,
-        config.h3.searchRadius
+        config.h3.searchRadiusPickup
       );
 
       // Step 4: Get search area hexagons around destination
+      // Destination: Resolution 7 with ring 2 ≈ 4.8 km radius
       const destinationSearchHexagons = h3Utils.getH3Ring(
         destinationH3,
-        config.h3.searchRadius
+        config.h3.searchRadiusDestination
       );
 
       // Step 5: Query database for potential pools
@@ -184,7 +188,7 @@ export class PoolMatchingService {
 
       // Filter out pools whose search time has expired (still in WAITING_FOR_RIDERS but older than lookup time)
       // This ensures users don't see stale pools where the creator hasn't acted yet
-      const LOOKUP_TIME_MS = parseInt(process.env.LOOKUP_TIME_MS || '300000', 10); // 5 minutes default
+      const TOTAL_SEARCH_MS = SEARCH_TIMING.TOTAL_SECONDS * 1000; // 40 seconds
       const now = Date.now();
       pools = pools.filter((pool: any) => {
         // Only filter WAITING_FOR_RIDERS pools - WAITING_FOR_DRIVER pools are valid
@@ -195,31 +199,37 @@ export class PoolMatchingService {
         const poolCreatedAt = new Date(pool.created_at).getTime();
         const poolAge = now - poolCreatedAt;
         // Only show pools that are still within their lookup time window
-        return poolAge < LOOKUP_TIME_MS;
+        return poolAge < TOTAL_SEARCH_MS;
       });
 
       // Filter pools by pickup H3 - pools should have similar pickup location
       // The pickup H3 is stored in score_breakdown.creator_pickup.h3_index
-      // First try exact pickup area match
+      // Also check if pool has extended_pickup_h3 (from extended search phase)
       let pickupFilteredPools = pools.filter((pool: any) => {
         const poolPickupH3 = pool.score_breakdown?.creator_pickup?.h3_index;
+        const extendedPickupH3 = pool.score_breakdown?.extended_pickup_h3 || [];
+        
         if (!poolPickupH3) {
           return false;
         }
-        return pickupSearchHexagons.includes(poolPickupH3);
+        
+        // Match if: rider's pickup is in pool's pickup area OR pool's extended pickup area includes rider's pickup
+        return pickupSearchHexagons.includes(poolPickupH3) || extendedPickupH3.includes(pickupH3);
       });
 
       // If no pools found, expand search to adjacent hexagons (larger ring)
       if (pickupFilteredPools.length === 0 && pools.length > 0) {
         console.log("[PoolMatching] No pools in pickup area, expanding to adjacent hexagons...");
-        const expandedPickupHexagons = h3Utils.getH3Ring(pickupH3, config.h3.searchRadius + 2);
+        const expandedPickupHexagons = h3Utils.getH3Ring(pickupH3, config.h3.searchRadiusPickup + 2);
         
         pickupFilteredPools = pools.filter((pool: any) => {
           const poolPickupH3 = pool.score_breakdown?.creator_pickup?.h3_index;
+          const extendedPickupH3 = pool.score_breakdown?.extended_pickup_h3 || [];
+          
           if (!poolPickupH3) {
             return false;
           }
-          return expandedPickupHexagons.includes(poolPickupH3);
+          return expandedPickupHexagons.includes(poolPickupH3) || extendedPickupH3.includes(pickupH3);
         });
       }
 
@@ -453,8 +463,10 @@ export class PoolMatchingService {
       const destinationH3 = h3Utils.latLngToH3(destination, 7);
 
       // Step 3: Get search area hexagons
-      const pickupSearchHexagons = h3Utils.getH3Ring(pickupH3, config.h3.searchRadius);
-      const destinationSearchHexagons = h3Utils.getH3Ring(destinationH3, config.h3.searchRadius);
+      // Pickup: Resolution 9 with ring 6 ≈ 2.1 km radius
+      const pickupSearchHexagons = h3Utils.getH3Ring(pickupH3, config.h3.searchRadiusPickup);
+      // Destination: Resolution 7 with ring 2 ≈ 4.8 km radius
+      const destinationSearchHexagons = h3Utils.getH3Ring(destinationH3, config.h3.searchRadiusDestination);
 
       console.log("[PoolMatching] Search params:", {
         userId,
@@ -504,7 +516,7 @@ export class PoolMatchingService {
 
       // Filter out pools whose search time has expired (still in WAITING_FOR_RIDERS but older than lookup time)
       // This ensures users don't see stale pools where the creator hasn't acted yet
-      const LOOKUP_TIME_MS = parseInt(process.env.LOOKUP_TIME_MS || '300000', 10); // 5 minutes default
+      const TOTAL_SEARCH_MS = SEARCH_TIMING.TOTAL_SECONDS * 1000; // 40 seconds
       const now = Date.now();
       pools = pools.filter((pool: any) => {
         // Only filter WAITING_FOR_RIDERS pools - WAITING_FOR_DRIVER pools are valid
@@ -515,31 +527,37 @@ export class PoolMatchingService {
         const poolCreatedAt = new Date(pool.created_at).getTime();
         const poolAge = now - poolCreatedAt;
         // Only show pools that are still within their lookup time window
-        return poolAge < LOOKUP_TIME_MS;
+        return poolAge < TOTAL_SEARCH_MS;
       });
 
       // Filter pools by pickup H3 - pools should have similar pickup location
       // The pickup H3 is stored in score_breakdown.creator_pickup.h3_index
-      // First try exact pickup area match
+      // Also check if pool has extended_pickup_h3 (from extended search phase)
       let pickupFilteredPools = pools.filter((pool: any) => {
         const poolPickupH3 = pool.score_breakdown?.creator_pickup?.h3_index;
+        const extendedPickupH3 = pool.score_breakdown?.extended_pickup_h3 || [];
+        
         if (!poolPickupH3) {
           return false;
         }
-        return pickupSearchHexagons.includes(poolPickupH3);
+        
+        // Match if: rider's pickup is in pool's pickup area OR pool's extended pickup area includes rider's pickup
+        return pickupSearchHexagons.includes(poolPickupH3) || extendedPickupH3.includes(pickupH3);
       });
 
       // If no pools found, expand search to adjacent hexagons (larger ring)
       if (pickupFilteredPools.length === 0 && pools.length > 0) {
         console.log("[PoolMatching] No pools in pickup area, expanding to adjacent hexagons...");
-        const expandedPickupHexagons = h3Utils.getH3Ring(pickupH3, config.h3.searchRadius + 2); // Expand by 2 more rings
+        const expandedPickupHexagons = h3Utils.getH3Ring(pickupH3, config.h3.searchRadiusPickup + 2); // Expand by 2 more rings
         
         pickupFilteredPools = pools.filter((pool: any) => {
           const poolPickupH3 = pool.score_breakdown?.creator_pickup?.h3_index;
+          const extendedPickupH3 = pool.score_breakdown?.extended_pickup_h3 || [];
+          
           if (!poolPickupH3) {
             return false;
           }
-          return expandedPickupHexagons.includes(poolPickupH3);
+          return expandedPickupHexagons.includes(poolPickupH3) || extendedPickupH3.includes(pickupH3);
         });
         console.log("[PoolMatching] After expanded pickup search:", { count: pickupFilteredPools.length });
       }
@@ -560,7 +578,7 @@ export class PoolMatchingService {
         const analytics = poolSearchResponseService.generateAnalytics(
           0,
           { 'no_pools_in_area': 1 },
-          config.h3.searchRadius
+          config.h3.searchRadiusDestination
         );
 
         // Build metadata
@@ -723,7 +741,7 @@ export class PoolMatchingService {
       const analytics = poolSearchResponseService.generateAnalytics(
         totalPoolsChecked,
         incompatibleReasons,
-        config.h3.searchRadius
+        config.h3.searchRadiusDestination
       );
 
       const metadata = await poolSearchResponseService.buildSearchMetadata(ride, nearbyPools);
@@ -762,7 +780,7 @@ export class PoolMatchingService {
           destinationHexagonsSearched: 0,
           pickupHexagonsSearched: 0,
           incompatibleReasons: { error: 1 },
-          searchRadius: config.h3.searchRadius,
+          searchRadius: config.h3.searchRadiusDestination,
         },
         metadata: {
           hasNearbyPools: false,
@@ -787,7 +805,7 @@ export class PoolMatchingService {
    */
   async findNearbyDrivers(
     pickup: Location,
-    searchRadius: number = config.h3.searchRadius
+    searchRadius: number = config.h3.searchRadiusPickup
   ): Promise<DriverSearchResult[]> {
     try {
       const pickupH3_res9 = h3Utils.latLngToH3(pickup, 9);
@@ -795,11 +813,11 @@ export class PoolMatchingService {
 
       const searchHexagons_res9 = h3Utils.getH3Ring(
         pickupH3_res9,
-        config.h3.searchRadius
+        config.h3.searchRadiusPickup
       );
       const searchHexagons_res8 = h3Utils.getH3Ring(
         pickupH3_res8,
-        config.h3.searchRadius
+        config.h3.searchRadiusPickup
       );
 
       const { data: vehicleLocations, error } = (await supabase
@@ -1090,15 +1108,46 @@ export class PoolMatchingService {
 
   /**
    * Calculate route overlap percentage (0-1) using location geometry
+   * 
+   * Enhanced version: Uses actual route geometry when available,
+   * falls back to simple destination-based calculation otherwise.
+   * 
+   * @param ridePickup - Rider's pickup location
+   * @param rideDestination - Rider's destination
+   * @param poolDestination - Pool's destination
+   * @param poolPickup - Pool creator's pickup (optional, for full route analysis)
+   * @param rideRouteCoords - Rider's route coordinates (optional)
+   * @param poolRouteCoords - Pool's route coordinates (optional)
    */
   private calculateRouteOverlapPercentage(
     ridePickup: Location,
     rideDestination: Location,
-    poolDestination: Location
+    poolDestination: Location,
+    poolPickup?: Location,
+    rideRouteCoords?: Coordinate[],
+    poolRouteCoords?: Coordinate[]
   ): number {
-    // Simple overlap calculation based on how well destinations align
-    // In production, this should use actual route geometry (Google Maps Directions API)
+    // If we have route coordinates, use the advanced overlap algorithm
+    if (rideRouteCoords?.length && poolRouteCoords?.length && poolPickup) {
+      const userA: UserRoute = {
+        userId: 'rider',
+        pickup: ridePickup,
+        destination: rideDestination,
+        routeCoords: rideRouteCoords,
+      };
+      const userB: UserRoute = {
+        userId: 'pool',
+        pickup: poolPickup,
+        destination: poolDestination,
+        routeCoords: poolRouteCoords,
+      };
 
+      const result = routeOverlapService.calculateTwoUserOverlap(userA, userB);
+      return result.overlapPercentage / 100; // Convert to 0-1 range
+    }
+
+    // Fallback: Simple overlap calculation based on destination proximity
+    // This is used when route coordinates are not available
     const maxDistance = CONSTANTS.DESTINATION_RANGE_KM || 5;
     const destDistance = calculateDistance(
       rideDestination.latitude,

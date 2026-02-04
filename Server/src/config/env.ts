@@ -18,7 +18,9 @@ export const config = {
     resolutionPickup: parseInt(process.env.H3_RESOLUTION_PICKUP || '9', 10),
     resolutionDestination: parseInt(process.env.H3_RESOLUTION_DESTINATION || '7', 10),
     resolutionDriver: parseInt(process.env.H3_RESOLUTION_DRIVER || '8', 10),
-    searchRadius: parseInt(process.env.H3_SEARCH_RADIUS || '2', 10),
+    searchRadius: parseInt(process.env.H3_SEARCH_RADIUS || '2', 10), // Default for destination (res 7: 2 rings × 2.4km ≈ 4.8km)
+    searchRadiusPickup: parseInt(process.env.H3_SEARCH_RADIUS_PICKUP || '6', 10), // For pickup (res 9: 6 rings × 0.35km ≈ 2.1km)
+    searchRadiusDestination: parseInt(process.env.H3_SEARCH_RADIUS_DESTINATION || '2', 10), // For destination (res 7: 2 rings × 2.4km ≈ 4.8km)
   },
   cache: {
     memoryMaxSize: parseInt(process.env.MEMORY_CACHE_MAX_SIZE || '1000', 10),

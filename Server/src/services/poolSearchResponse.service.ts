@@ -11,6 +11,7 @@ import {
 import { supabase } from '../config/supabase';
 import { calculateDistance } from '../utils/helper';
 import { h3Utils } from '../utils/h3.utils';
+import { SEARCH_TIMING } from './lookupTime.service';
 
 export class PoolSearchResponseService {
   private readonly PEAK_HOURS = [
@@ -134,7 +135,7 @@ export class PoolSearchResponseService {
       }
 
       // Filter out expired pools (WAITING_FOR_RIDERS but older than lookup time)
-      const LOOKUP_TIME_MS = parseInt(process.env.LOOKUP_TIME_MS || '300000', 10);
+      const TOTAL_SEARCH_MS = SEARCH_TIMING.TOTAL_SECONDS * 1000; // 40 seconds
       const now = Date.now();
       const pools = rawPools.filter((pool: any) => {
         if (pool.status !== 'WAITING_FOR_RIDERS') {
@@ -142,7 +143,7 @@ export class PoolSearchResponseService {
         }
         const poolCreatedAt = new Date(pool.created_at).getTime();
         const poolAge = now - poolCreatedAt;
-        return poolAge < LOOKUP_TIME_MS;
+        return poolAge < TOTAL_SEARCH_MS;
       });
 
       const nearbyPools: NearbyPoolInfo[] = [];
