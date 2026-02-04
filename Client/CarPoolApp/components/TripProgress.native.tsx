@@ -816,7 +816,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
                         )}
                       </View>
                       <Text className="font-medium" numberOfLines={1}>
-                        {stop.address || `${stopLabel} point`}
+                        {stop.name || stop.address || `${stopLabel} point`}
                       </Text>
                       <Text className="text-xs text-gray-400">
                         ETA: {stop.estimatedArrivalMinutes === 0 ? 'Start' : `+${stop.estimatedArrivalMinutes} min`}
@@ -862,7 +862,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
                     >
                       <MapPin className="w-4 h-4" color="#22c55e" />
                       <Text className="text-green-700 text-xs" numberOfLines={1}>
-                        {waypoint.pickup.address || 'Pickup'}
+                        {waypoint.pickup.name || waypoint.pickup.address || 'Pickup'}
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -871,7 +871,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
                     >
                       <MapPin className="w-4 h-4" color="#ef4444" />
                       <Text className="text-red-700 text-xs" numberOfLines={1}>
-                        {waypoint.dropoff.address || 'Drop-off'}
+                        {waypoint.dropoff.name || waypoint.dropoff.address || 'Drop-off'}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -1050,7 +1050,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
                         )}
                       </View>
                       <Text className="font-medium" numberOfLines={1}>
-                        {waypoint.address || `Waypoint ${idx + 1}`}
+                        {waypoint.name || waypoint.address || `Waypoint ${idx + 1}`}
                       </Text>
                       <Text className="text-xs text-gray-400">
                         ETA: {waypoint.estimatedArrivalMinutes === 0 ? 'Start' : `+${waypoint.estimatedArrivalMinutes} min`}
