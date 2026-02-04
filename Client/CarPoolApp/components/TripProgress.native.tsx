@@ -625,13 +625,13 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
         </View>
 
         {/* Progress Bar */}
-        <View className="px-6 py-4 bg-white">
+        {/* <View className="px-6 py-4 bg-white">
           <Progress value={progress} className="h-2" />
           <View className="flex-row justify-between mt-2">
             <Text className="text-sm text-gray-500">Pickup</Text>
             <Text className="text-sm text-gray-500">Destination</Text>
           </View>
-        </View>
+        </View> */}
 
         {/* Lookup Timer Card - Only show during waiting phase for pool creator */}
         {isPoolCreator && (searchPhase === 'initial' || searchPhase === 'extended') && poolStatus === 'WAITING_FOR_RIDERS' && (

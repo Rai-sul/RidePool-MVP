@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MapPin, Clock, Users, Navigation, ChevronRight, ChevronLeft, Car, Taka, AlertCircle, Plus } from './Icons';
+import { MapPin, Clock, Users, Navigation, ChevronRight, ChevronLeft, Car, Taka, AlertCircle, Plus, RefreshCw } from './Icons';
 import { Button } from './ui/button';
 import type { Destination, UserProfile, Pool, Location } from '../contexts/GlobalContext';
 import { usePools } from '../hooks/usePools';
@@ -110,6 +110,22 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
       gender_restriction: (isFemale && activeRideType === 'female-only') ? 'FEMALE_ONLY' : 'ANY',
     });
   }, [pickupLocation, destination, selectedVehicleType, isFemale, activeRideType]);
+
+  // Handle reload pools - manually refresh pool search results
+  const handleReloadPools = useCallback(() => {
+    if (!pickupLocation || !destination?.latitude || !destination?.longitude || !selectedVehicleType) {
+      return;
+    }
+
+    searchPools({
+      pickup_lat: pickupLocation.latitude,
+      pickup_lng: pickupLocation.longitude,
+      dropoff_lat: destination.latitude,
+      dropoff_lng: destination.longitude,
+      vehicle_type: selectedVehicleType,
+      gender_restriction: (isFemale && activeRideType === 'female-only') ? 'FEMALE_ONLY' : 'ANY',
+    });
+  }, [pickupLocation, destination, selectedVehicleType, isFemale, activeRideType, searchPools]);
 
   // Handle creating a new pool when no matches found
   const handleCreatePool = useCallback(async () => {
@@ -665,18 +681,48 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                     </View>
                   </View>
                   {!loading && filteredPools.length > 0 && (
-                    <View
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <TouchableOpacity
+                        onPress={handleReloadPools}
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
+                          backgroundColor: '#eff6ff',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <RefreshCw size={18} color="#2563eb" />
+                      </TouchableOpacity>
+                      <View
+                        style={{
+                          backgroundColor: '#dcfce7',
+                          paddingHorizontal: 10,
+                          paddingVertical: 4,
+                          borderRadius: 12,
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#16a34a' }}>
+                          LIVE
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                  {!loading && filteredPools.length === 0 && (
+                    <TouchableOpacity
+                      onPress={handleReloadPools}
                       style={{
-                        backgroundColor: '#dcfce7',
-                        paddingHorizontal: 10,
-                        paddingVertical: 4,
-                        borderRadius: 12,
+                        width: 36,
+                        height: 36,
+                        borderRadius: 18,
+                        backgroundColor: '#eff6ff',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       }}
                     >
-                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#16a34a' }}>
-                        LIVE
-                      </Text>
-                    </View>
+                      <RefreshCw size={18} color="#2563eb" />
+                    </TouchableOpacity>
                   )}
                 </View>
 

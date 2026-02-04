@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native-web';
-import { MapPin, Clock, Users, Navigation, ChevronRight, ChevronLeft, Car, Taka, AlertCircle, Plus } from './Icons';
+import { MapPin, Clock, Users, Navigation, ChevronRight, ChevronLeft, Car, Taka, AlertCircle, Plus, RefreshCw } from './Icons';
 import { Button } from './ui/button';
 import GoogleMapView from './GoogleMapView';
 import LinearGradient from './LinearGradient';
@@ -106,6 +106,22 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
       gender_restriction: (isFemale && activeRideType === 'female-only') ? 'FEMALE_ONLY' : 'ANY',
     });
   }, [pickupLocation, destination, selectedVehicleType, isFemale, activeRideType]);
+
+  // Handle reload pools - manually refresh pool search results
+  const handleReloadPools = useCallback(() => {
+    if (!pickupLocation || !destination?.latitude || !destination?.longitude || !selectedVehicleType) {
+      return;
+    }
+
+    searchPools({
+      pickup_lat: pickupLocation.latitude,
+      pickup_lng: pickupLocation.longitude,
+      dropoff_lat: destination.latitude,
+      dropoff_lng: destination.longitude,
+      vehicle_type: selectedVehicleType,
+      gender_restriction: (isFemale && activeRideType === 'female-only') ? 'FEMALE_ONLY' : 'ANY',
+    });
+  }, [pickupLocation, destination, selectedVehicleType, isFemale, activeRideType, searchPools]);
   
   // Handle creating a new pool when no matches found
   const handleCreatePool = useCallback(async () => {
@@ -547,9 +563,22 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
           {/* Available Pools */}
           {selectedVehicleType && (
             <View className="space-y-3">
-              <View className="flex flex-row items-center gap-2">
-                <Users className="w-5 h-5" />
-                <Text>Available Pools</Text>
+              <View className="flex flex-row items-center justify-between">
+                <View className="flex flex-row items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  <Text>Available Pools</Text>
+                  <Text className="text-sm text-gray-500">
+                    {loading ? '(Searching...)' : `(${filteredPools.length} found)`}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={handleReloadPools}
+                  disabled={loading}
+                  className="w-9 h-9 rounded-full bg-blue-50 items-center justify-center"
+                  style={{ opacity: loading ? 0.5 : 1 }}
+                >
+                  <RefreshCw className={`w-5 h-5 text-blue-600 ${loading ? 'animate-spin' : ''}`} />
+                </TouchableOpacity>
               </View>
               
               {/* Loading State */}
