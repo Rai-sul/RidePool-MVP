@@ -449,7 +449,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                   <View className="w-3 h-3 bg-blue-600 rounded-full flex-shrink-0"></View>
                   <View className="flex-1">
                     <Text className="text-xs text-gray-500">Pickup</Text>
-                    <Text className="text-sm font-medium" numberOfLines={1}>Current Location</Text>
+                    <Text className="text-sm font-medium" numberOfLines={1}>{pickupLocation?.name}</Text>
                   </View>
                 </View>
 
@@ -477,7 +477,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                       <Taka className="w-5 h-5 text-green-600" />
                       <Text className="font-semibold">৳{rideEstimate.estimatedFare}</Text>
                     </View>
-                    <Text className="text-xs text-gray-500">per person (with pool)</Text>
+                    <Text className="text-xs text-gray-500">Fair (with pool)</Text>
                   </View>
                   <View className="w-px h-10 bg-gray-300"></View>
                   <View className="flex flex-col items-center">
@@ -491,7 +491,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                     <>
                       <View className="w-px h-10 bg-gray-300"></View>
                       <View className="flex flex-col items-center">
-                        <Text className="font-semibold text-green-600">৳{rideEstimate.estimatedSavings}</Text>
+                        <Text className="font-semibold text-green-600">৳{Math.floor(rideEstimate.estimatedSavings)}</Text>
                         <Text className="text-xs text-gray-500">savings</Text>
                       </View>
                     </>
@@ -862,7 +862,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                     </TouchableOpacity>
 
                     {/* Alternatives */}
-                    {alternatives.length > 0 && (
+                    {/* {alternatives.length > 0 && (
                       <View style={{ width: '100%', marginTop: 20 }}>
                         <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 8 }}>
                           Or try these alternatives:
@@ -888,7 +888,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                           </View>
                         ))}
                       </View>
-                    )}
+                    )} */}
                   </View>
                 )}
 

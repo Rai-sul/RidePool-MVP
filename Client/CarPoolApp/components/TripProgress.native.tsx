@@ -491,12 +491,13 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   }, [onCancelPool, poolStatus]);
 
   const getStatusText = () => {
-    switch (tripStatus) {
-      case 'waiting': return hasDriver ? 'Driver assigned' : 'Waiting for riders...';
-      case 'on-the-way': return 'Driver is on the way';
-      case 'arrived': return 'Driver has arrived';
-      case 'in-progress': return 'Trip in progress';
-      case 'completed': return 'Trip completed';
+    switch (poolStatus) {
+      case 'WAITING_FOR_RIDERS': return 'Waiting for riders...';
+      case 'WAITING_FOR_DRIVER': return 'Waiting for driver...';
+      case 'READY_TO_START': return 'Driver is on the way';
+      case 'STARTED': return 'Trip in progress';
+      case 'COMPLETED': return 'Trip completed';
+      case 'CANCELLED': return 'Pool cancelled';
       default: return 'Preparing trip';
     }
   };
@@ -779,7 +780,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
         )}
 
         {/* Optimized Route Stops - Shows the full route in optimal order */}
-        {navigationLink?.orderedStops && ['WAITING_FOR_DRIVER', 'READY_TO_START', 'STARTED'].includes(poolStatus) && (
+        {/* {navigationLink?.orderedStops && ['WAITING_FOR_DRIVER', 'READY_TO_START', 'STARTED'].includes(poolStatus) && (
           <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
             <View className="flex-row items-center justify-between mb-4">
               <Text className="font-semibold">Optimized Route</Text>
@@ -825,9 +826,9 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
                   </View>
                 );
               })}
-            </View>
+            </View> */}
             {/* Route Summary */}
-            {navigationLink.routeInfo && (
+            {/* {navigationLink.routeInfo && (
               <View className="mt-3 pt-3 border-t border-gray-100">
                 <View className="flex-row justify-between">
                   <Text className="text-gray-600">Total Distance</Text>
@@ -840,12 +841,12 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
               </View>
             )}
           </View>
-        )}
+        )} */}
 
         {/* View Individual Locations - Links to open each location in Google Maps */}
-        {navigationLink && ['WAITING_FOR_DRIVER', 'READY_TO_START', 'STARTED'].includes(poolStatus) && (
+        {/* {navigationLink && ['WAITING_FOR_DRIVER', 'READY_TO_START', 'STARTED'].includes(poolStatus) && (
           <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
-            <Text className="font-semibold mb-4">View Individual Locations</Text>
+            <Text className="font-semibold mb-4">View Individualsss Locations</Text>
             <View className="gap-3">
               {navigationLink.waypoints.map((waypoint, idx) => (
                 <View key={waypoint.userId} className="gap-2">
@@ -879,7 +880,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
               ))}
             </View>
           </View>
-        )}
+        )} */}
 
         {/* Pool Status Card */}
         <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
@@ -1128,7 +1129,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
               </Text>
             </View>
             <View className="flex-row justify-between">
-              <Text className="text-gray-600">Fare per Person</Text>
+              <Text className="text-gray-600">Your Fare (with pool)</Text>
               <Text className={`font-semibold ${accentText}`}>
                 ৳ {poolDetails?.fare_per_person
                   ? Math.round(poolDetails.fare_per_person)
@@ -1137,10 +1138,18 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
                     : 'Calculating...'}
               </Text>
             </View>
+
+            <View className="flex-row justify-between">
+              <Text className="text-gray-600">Pickup</Text>
+              <Text className="font-medium text-right flex-1 ml-4" numberOfLines={1}>
+              {pickupLocation?.name || pickupLocation?.address || 'N/A'}
+              </Text>
+            </View>
+
             <View className="flex-row justify-between">
               <Text className="text-gray-600">Destination</Text>
               <Text className="font-medium text-right flex-1 ml-4" numberOfLines={1}>
-                {poolDetails?.destination_address || selectedPool?.destination_address || destination?.name || 'N/A'}
+                {destination?.name || destination?.address || 'N/A'}
               </Text>
             </View>
           </View>
