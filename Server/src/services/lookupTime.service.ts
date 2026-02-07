@@ -7,9 +7,9 @@ import { smartRouteService, PoolMemberRoute } from './smartRoute.service';
 import { config } from '../config/env';
 
 // Timer configuration - single source of truth
-const INITIAL_SEARCH_MS = 30000; // 30 seconds initial search
-const EXTENDED_SEARCH_MS = 10000; // 10 seconds extended search
-const TOTAL_SEARCH_MS = INITIAL_SEARCH_MS + EXTENDED_SEARCH_MS; // 40 seconds total
+const INITIAL_SEARCH_MS = 120000; // 2 minutes initial search
+const EXTENDED_SEARCH_MS = 60000; // 1 minute extended search
+const TOTAL_SEARCH_MS = INITIAL_SEARCH_MS + EXTENDED_SEARCH_MS; // 3 minutes total
 const MIN_PASSENGERS_TO_START = 2;
 
 // Export constants for client to use via API

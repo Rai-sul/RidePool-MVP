@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { supabaseAdmin } from '../config/supabase';
 import { poolMatchingService } from '../services/poolMatching.service';
+import { priyoSathiService } from '../services/priyoSathi.service';
 import { geolocationService } from '../services/geolocation.service';
 import { rideEstimationService } from '../services/rideEstimation.service';
 import { CreateRideRequest, Ride, RideStatus, Location, VehicleType } from '../types';
@@ -26,6 +27,9 @@ export class RideController {
       if (!isPickupValid || !isDropoffValid) {
         return res.status(400).json({ error: 'Invalid location coordinates' });
       }
+
+      // Record ride intent for Priyo Sathi visibility (even before pool is created)
+      await priyoSathiService.setUserRideIntent(userId, pickup, dropoff);
 
       const pickupH3 = h3Utils.latLngToH3(pickup, 9);
       const dropoffH3 = h3Utils.latLngToH3(dropoff, 7);
@@ -188,6 +192,9 @@ export class RideController {
           timestamp: new Date().toISOString(),
         });
       }
+
+      // Record ride intent for Priyo Sathi visibility (estimate flow)
+      await priyoSathiService.setUserRideIntent(userId, pickup, dropoff);
 
       // Get ride estimate with ETA and fare
       const estimate = await rideEstimationService.getRideEstimate(

@@ -372,12 +372,17 @@ export class NotificationService {
     });
   }
 
-  async sendPriyoSathiInviteNotification(userId: string, inviterName: string, rideId: string): Promise<void> {
+  async sendPriyoSathiInviteNotification(
+    userId: string,
+    inviterName: string,
+    rideId: string,
+    poolId?: string
+  ): Promise<void> {
     await this.sendPushNotification(userId, {
       title: 'Ride Invite',
       message: `${inviterName} is looking for a ride. Join them?`,
       type: 'MESSAGE',
-      metadata: { ride_id: rideId, inviter: inviterName },
+      metadata: { ride_id: rideId, inviter: inviterName, pool_id: poolId || null },
     });
   }
 

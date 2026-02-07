@@ -57,6 +57,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   // Use real-time pool updates
   const {
     pool: poolDetails,
+    searchTiming,
     coRiders,
     hasDriver,
     poolStatus,
@@ -235,9 +236,9 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   // Check if current user is the pool creator
   const isPoolCreator = selectedPool?.creator_user_id === userProfile?.id;
 
-  // Constants for search timing (should match server)
-  const INITIAL_SECONDS = 30;
-  const TOTAL_SECONDS = 40;
+  // Constants for search timing (server is source of truth)
+  const INITIAL_SECONDS = searchTiming?.initialSeconds ?? 120;
+  const TOTAL_SECONDS = searchTiming?.totalSeconds ?? 180;
 
   // Calculate search phase and remaining seconds from pool.created_at
   // This is the single source of truth - always calculated from creation time

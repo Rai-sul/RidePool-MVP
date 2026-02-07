@@ -351,7 +351,7 @@ export class PriyoSathiController {
 
       const { data: ride, error: rideError } = await supabaseAdmin
         .from('rides')
-        .select('id, pool_id, dropoff_address')
+        .select('id, pool_id, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng')
         .eq('id', ride_id)
         .eq('user_id', userId)
         .single();
@@ -360,6 +360,92 @@ export class PriyoSathiController {
         return res.status(404).json({
           success: false,
           error: { code: 'RIDE_NOT_FOUND', message: 'Ride not found' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      let poolId = ride.pool_id as string | null;
+
+      if (!poolId) {
+        const { data: member } = await supabaseAdmin
+          .from('pool_members')
+          .select('pool_id')
+          .eq('ride_id', ride.id)
+          .is('left_at', null)
+          .single();
+
+        if (member?.pool_id) {
+          poolId = member.pool_id;
+          await supabaseAdmin.from('rides').update({ pool_id: poolId }).eq('id', ride.id);
+        }
+      }
+
+      if (!poolId) {
+        const { data: latestPool } = await supabaseAdmin
+          .from('pools')
+          .select('id, status, current_passengers, max_passengers')
+          .eq('creator_user_id', userId)
+          .in('status', ['WAITING_FOR_RIDERS', 'WAITING_FOR_DRIVER'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (latestPool?.id) {
+          poolId = latestPool.id;
+          await supabaseAdmin.from('rides').update({ pool_id: poolId }).eq('id', ride.id);
+        }
+      }
+
+      if (!poolId) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'NO_POOL', message: 'No active pool to invite into' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { data: pool, error: poolError } = await supabaseAdmin
+        .from('pools')
+        .select('id, status, current_passengers, max_passengers')
+        .eq('id', poolId)
+        .single();
+
+      if (poolError || !pool) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      if (!['WAITING_FOR_RIDERS', 'WAITING_FOR_DRIVER'].includes(pool.status)) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'POOL_NOT_AVAILABLE', message: 'Pool is no longer accepting riders' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      if (pool.current_passengers >= pool.max_passengers) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'POOL_FULL', message: 'Pool is full' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Enforce Priyo Sathi visibility rule before sending invite
+      const { priyoSathiService } = await import('../services/priyoSathi.service');
+      const eligibility = await priyoSathiService.isCompanionEligibleForInvite(
+        userId,
+        companionId,
+        ride.id
+      );
+
+      if (!eligibility.eligible) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'NOT_ELIGIBLE', message: eligibility.reason || 'Companion not eligible for invite' },
           timestamp: new Date().toISOString(),
         });
       }
@@ -373,7 +459,8 @@ export class PriyoSathiController {
       await notificationService.sendPriyoSathiInviteNotification(
         companionId,
         user?.full_name || user?.phone || 'A friend',
-        ride_id
+        ride_id,
+        poolId || undefined
       );
 
       logger.info(`[PriyoSathi] User ${userId} invited ${companionId} to ride ${ride_id}`);
@@ -424,6 +511,9 @@ export class PriyoSathiController {
 
       // Import priyoSathiService here to avoid circular dependency
       const { priyoSathiService } = await import('../services/priyoSathi.service');
+
+      // Store current user's ride intent so they can be discovered by companions
+      await priyoSathiService.setUserRideIntent(userId, userPickup, userDestination);
 
       // Find candidates without creating a ride - preview mode, don't send notifications
       const result = await priyoSathiService.findAndNotifyCompanions(
@@ -585,11 +675,73 @@ export class PriyoSathiController {
 
       // Get pool details if exists
       let poolInfo = null;
-      if (ride.pool_id) {
+      let poolId = ride.pool_id as string | null;
+
+      if (!poolId) {
+        const { data: notifications } = await supabaseAdmin
+          .from('notifications')
+          .select('metadata, created_at')
+          .eq('user_id', userId)
+          .eq('type', 'MESSAGE')
+          .gte('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString());
+
+        if (notifications && notifications.length > 0) {
+          const latestInvite = notifications
+            .filter((n: any) => n.metadata?.ride_id === rideId && n.metadata?.pool_id)
+            .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+
+          if (latestInvite?.metadata?.pool_id) {
+            poolId = latestInvite.metadata.pool_id;
+          }
+        }
+      }
+
+      if (!poolId) {
+        const { data: member } = await supabaseAdmin
+          .from('pool_members')
+          .select('pool_id')
+          .eq('ride_id', ride.id)
+          .is('left_at', null)
+          .single();
+
+        if (member?.pool_id) {
+          poolId = member.pool_id;
+          await supabaseAdmin.from('rides').update({ pool_id: poolId }).eq('id', ride.id);
+        }
+      }
+
+      if (!poolId) {
+        const { data: latestPool } = await supabaseAdmin
+          .from('pools')
+          .select('id, status, current_passengers, max_passengers, fare_per_person, destination_address, estimated_duration_minutes, estimated_distance_km')
+          .eq('creator_user_id', ride.user_id)
+          .in('status', ['WAITING_FOR_RIDERS', 'WAITING_FOR_DRIVER'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (latestPool?.id) {
+          poolId = latestPool.id;
+          await supabaseAdmin.from('rides').update({ pool_id: poolId }).eq('id', ride.id);
+          poolInfo = {
+            pool_id: latestPool.id,
+            status: latestPool.status,
+            current_passengers: latestPool.current_passengers,
+            max_passengers: latestPool.max_passengers,
+            fare_per_person: latestPool.fare_per_person,
+            destination_address: latestPool.destination_address,
+            estimated_duration_minutes: latestPool.estimated_duration_minutes,
+            estimated_distance_km: latestPool.estimated_distance_km,
+            can_join: ['WAITING_FOR_RIDERS', 'WAITING_FOR_DRIVER'].includes(latestPool.status) && latestPool.current_passengers < latestPool.max_passengers,
+          };
+        }
+      }
+
+      if (poolId && !poolInfo) {
         const { data: pool } = await supabaseAdmin
           .from('pools')
           .select('id, status, current_passengers, max_passengers, fare_per_person, destination_address, estimated_duration_minutes, estimated_distance_km')
-          .eq('id', ride.pool_id)
+          .eq('id', poolId)
           .single();
         
         if (pool) {
@@ -602,7 +754,7 @@ export class PriyoSathiController {
             destination_address: pool.destination_address,
             estimated_duration_minutes: pool.estimated_duration_minutes,
             estimated_distance_km: pool.estimated_distance_km,
-            can_join: ['WAITING_FOR_RIDERS'].includes(pool.status) && pool.current_passengers < pool.max_passengers,
+            can_join: ['WAITING_FOR_RIDERS', 'WAITING_FOR_DRIVER'].includes(pool.status) && pool.current_passengers < pool.max_passengers,
           };
         }
       }
@@ -684,7 +836,57 @@ export class PriyoSathiController {
         });
       }
 
-      if (!friendRide.pool_id) {
+      let poolId = friendRide.pool_id as string | null;
+
+      if (!poolId) {
+        const { data: notifications } = await supabaseAdmin
+          .from('notifications')
+          .select('metadata, created_at')
+          .eq('user_id', userId)
+          .eq('type', 'MESSAGE')
+          .gte('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString());
+
+        if (notifications && notifications.length > 0) {
+          const latestInvite = notifications
+            .filter((n: any) => n.metadata?.ride_id === rideId && n.metadata?.pool_id)
+            .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+
+          if (latestInvite?.metadata?.pool_id) {
+            poolId = latestInvite.metadata.pool_id;
+          }
+        }
+      }
+      if (!poolId) {
+        const { data: member } = await supabaseAdmin
+          .from('pool_members')
+          .select('pool_id')
+          .eq('ride_id', friendRide.id)
+          .is('left_at', null)
+          .single();
+
+        if (member?.pool_id) {
+          poolId = member.pool_id;
+          await supabaseAdmin.from('rides').update({ pool_id: poolId }).eq('id', friendRide.id);
+        }
+      }
+
+      if (!poolId) {
+        const { data: latestPool } = await supabaseAdmin
+          .from('pools')
+          .select('id, status')
+          .eq('creator_user_id', friendRide.user_id)
+          .in('status', ['WAITING_FOR_RIDERS', 'WAITING_FOR_DRIVER'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (latestPool?.id) {
+          poolId = latestPool.id;
+          await supabaseAdmin.from('rides').update({ pool_id: poolId }).eq('id', friendRide.id);
+        }
+      }
+
+      if (!poolId) {
         return res.status(400).json({
           success: false,
           error: { code: 'NO_POOL', message: 'This ride does not have a pool to join' },
@@ -712,7 +914,7 @@ export class PriyoSathiController {
       const { data: pool, error: poolError } = await supabaseAdmin
         .from('pools')
         .select('id, status, current_passengers, max_passengers, vehicle_type, gender_restriction')
-        .eq('id', friendRide.pool_id)
+        .eq('id', poolId)
         .single();
 
       if (poolError || !pool) {
@@ -723,7 +925,7 @@ export class PriyoSathiController {
         });
       }
 
-      if (pool.status !== 'WAITING_FOR_RIDERS') {
+      if (!['WAITING_FOR_RIDERS', 'WAITING_FOR_DRIVER'].includes(pool.status)) {
         return res.status(400).json({
           success: false,
           error: { code: 'POOL_NOT_AVAILABLE', message: 'Pool is no longer accepting riders' },
@@ -753,7 +955,7 @@ export class PriyoSathiController {
           vehicle_type: pool.vehicle_type,
           gender_restriction: pool.gender_restriction,
           status: 'MATCHED',
-          pool_id: friendRide.pool_id,
+          pool_id: poolId,
         })
         .select()
         .single();
@@ -765,7 +967,7 @@ export class PriyoSathiController {
 
       // Join the pool using atomic operation
       const { data: joinResult, error: joinError } = await supabaseAdmin.rpc('atomic_join_pool', {
-        p_pool_id: friendRide.pool_id,
+        p_pool_id: poolId,
         p_user_id: userId,
         p_ride_id: newRide.id,
       });
@@ -795,7 +997,7 @@ export class PriyoSathiController {
         title: 'Priyo Sathi Joined!',
         message: `${currentUser?.full_name || currentUser?.phone || 'Your friend'} joined your pool!`,
         type: 'POOL_MATCH',
-        metadata: { pool_id: friendRide.pool_id, joiner_id: userId },
+        metadata: { pool_id: poolId, joiner_id: userId },
       });
 
       logger.info(`[PriyoSathi] User ${userId} accepted ride invite and joined pool ${friendRide.pool_id}`);
@@ -804,7 +1006,7 @@ export class PriyoSathiController {
         success: true,
         data: {
           ride_id: newRide.id,
-          pool_id: friendRide.pool_id,
+          pool_id: poolId,
           message: 'Successfully joined your friend\'s pool!',
         },
         timestamp: new Date().toISOString(),

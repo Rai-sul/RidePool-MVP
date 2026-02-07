@@ -12,7 +12,7 @@ type SearchingDriverProps = {
   onSearchExpired?: () => void;
 };
 
-const SEARCH_TIMEOUT_SECONDS = 30;
+const DEFAULT_TOTAL_SEARCH_SECONDS = 180;
 
 const statusMessages = [
   'Waiting for other riders...',
@@ -24,14 +24,14 @@ export default function SearchingDriver({ onCancel, onDriverFound, onSearchExpir
   const [messageIndex, setMessageIndex] = useState(0);
   const [scaleAnim] = useState(new Animated.Value(1));
   const [opacityAnim] = useState(new Animated.Value(0.5));
-  const [remainingSeconds, setRemainingSeconds] = useState(SEARCH_TIMEOUT_SECONDS);
+  const [remainingSeconds, setRemainingSeconds] = useState(DEFAULT_TOTAL_SEARCH_SECONDS);
   const [searchExpired, setSearchExpired] = useState(false);
   const [isCreatingNewPool, setIsCreatingNewPool] = useState(false);
   
   const { selectedPool, userProfile, cancelTrip, startTrip, selectedDestination, pickupLocation } = useGlobalContext();
   
   // Use realtime pool updates
-  const { poolStatus, hasDriver, pool: poolDetails, error: poolError } = usePoolRealtime(
+  const { poolStatus, hasDriver, pool: poolDetails, searchTiming, error: poolError } = usePoolRealtime(
     selectedPool?.id || null,
     userProfile?.id || null
   );
@@ -67,23 +67,27 @@ export default function SearchingDriver({ onCancel, onDriverFound, onSearchExpir
     }
   }, [currentPassengers, selectedPool?.id, onDriverFound, onSearchExpired]);
 
-  // Countdown timer
-  useEffect(() => {
-    if (searchExpired) return; // Don't continue countdown if already expired
-    
-    const timer = setInterval(() => {
-      setRemainingSeconds((prev) => {
-        if (prev <= 1) {
-          // Timer expired - handle based on passenger count
-          handleSearchExpiry();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+  const totalSeconds = searchTiming?.totalSeconds ?? DEFAULT_TOTAL_SEARCH_SECONDS;
 
+  // Countdown timer based on pool created_at and server timing
+  useEffect(() => {
+    if (searchExpired) return;
+    if (!selectedPool?.created_at) return;
+
+    const updateRemaining = () => {
+      const elapsedSeconds = (Date.now() - new Date(selectedPool.created_at).getTime()) / 1000;
+      const remaining = Math.max(0, Math.ceil(totalSeconds - elapsedSeconds));
+      setRemainingSeconds(remaining);
+
+      if (remaining <= 0) {
+        handleSearchExpiry();
+      }
+    };
+
+    updateRemaining();
+    const timer = setInterval(updateRemaining, 1000);
     return () => clearInterval(timer);
-  }, [handleSearchExpiry, searchExpired]);
+  }, [handleSearchExpiry, searchExpired, selectedPool?.created_at, totalSeconds]);
 
   // Watch for pool status changes - navigate when pool is ready or has driver
   useEffect(() => {

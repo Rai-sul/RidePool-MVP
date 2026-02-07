@@ -61,14 +61,31 @@ export default function PriyoSathiRideInviteHandler() {
   const handleAccept = async () => {
     if (!inviteDetails || !priyoSathiInvite) return;
 
-    // Check if pool is joinable
+    // If pool isn't joinable, refresh once to avoid stale data
     if (!inviteDetails.pool?.can_join) {
-      Alert.alert(
-        'Cannot Join',
-        inviteDetails.pool ? 'This pool is no longer accepting riders.' : 'No pool available to join.',
-        [{ text: 'OK', onPress: handleDismiss }]
-      );
-      return;
+      try {
+        const refreshed = await priyoSathiService.getRideInviteDetails(priyoSathiInvite.rideId);
+        if (refreshed.success && refreshed.data) {
+          setInviteDetails(refreshed.data);
+          if (!refreshed.data.pool?.can_join) {
+            Alert.alert(
+              'Cannot Join',
+              refreshed.data.pool
+                ? `This pool is not accepting riders. Status: ${refreshed.data.pool.status} (${refreshed.data.pool.current_passengers}/${refreshed.data.pool.max_passengers})`
+                : 'No pool available to join.',
+              [{ text: 'OK', onPress: handleDismiss }]
+            );
+            return;
+          }
+        }
+      } catch (err: any) {
+        Alert.alert(
+          'Cannot Join',
+          err.message || 'Failed to refresh invite details.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
     }
 
     setJoining(true);
@@ -280,7 +297,7 @@ export default function PriyoSathiRideInviteHandler() {
                 {inviteDetails && !inviteDetails.pool?.can_join && (
                   <View className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3">
                     <Text className="text-amber-700 text-sm text-center">
-                      ⚠️ This pool is no longer accepting riders
+                      ⚠️ This pool may not be accepting riders. Tap Join to refresh.
                     </Text>
                   </View>
                 )}
@@ -296,11 +313,11 @@ export default function PriyoSathiRideInviteHandler() {
                   
                   <TouchableOpacity
                     onPress={handleAccept}
-                    disabled={joining || !inviteDetails?.pool?.can_join}
+                    disabled={joining || !inviteDetails?.pool}
                     className={`flex-1 py-3 rounded-xl items-center ${
                       isFemale ? 'bg-pink-500' : 'bg-blue-600'
                     }`}
-                    style={{ opacity: joining || !inviteDetails?.pool?.can_join ? 0.5 : 1 }}
+                    style={{ opacity: joining || !inviteDetails?.pool ? 0.5 : 1 }}
                   >
                     {joining ? (
                       <ActivityIndicator size="small" color="#ffffff" />

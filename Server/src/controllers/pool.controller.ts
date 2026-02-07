@@ -83,16 +83,30 @@ export class PoolController {
         });
       }
 
+      const pickupLat = parseFloat(pickup_lat as string);
+      const pickupLng = parseFloat(pickup_lng as string);
+      const dropoffLat = parseFloat(dropoff_lat as string);
+      const dropoffLng = parseFloat(dropoff_lng as string);
+
       const mockRide: Partial<Ride> = {
         user_id: userId,
-        pickup_lat: parseFloat(pickup_lat as string),
-        pickup_lng: parseFloat(pickup_lng as string),
-        dropoff_lat: parseFloat(dropoff_lat as string),
-        dropoff_lng: parseFloat(dropoff_lng as string),
+        pickup_lat: pickupLat,
+        pickup_lng: pickupLng,
+        dropoff_lat: dropoffLat,
+        dropoff_lng: dropoffLng,
         vehicle_type: vehicle_type as any,
         gender_restriction: (gender_restriction as string) || 'ANY',
         status: 'CREATING_POOL',
       } as Ride;
+
+      // Record ride intent for Priyo Sathi visibility (search flow)
+      await priyoSathiService.setUserRideIntent(userId, {
+        latitude: pickupLat,
+        longitude: pickupLng,
+      }, {
+        latitude: dropoffLat,
+        longitude: dropoffLng,
+      });
 
       logger.info(`[Pool Search] User ${userId} searching with: pickup=${pickup_lat},${pickup_lng} dest=${dropoff_lat},${dropoff_lng} vehicle=${vehicle_type} gender=${gender_restriction || 'ANY'}`);
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Pool, PoolMember } from '../types';
-import { poolService } from '../services/pool.service';
+import { poolService, SearchTiming } from '../services/pool.service';
 
 // Polling interval for fallback (2 seconds)
 const POLLING_INTERVAL = 2000;
@@ -9,6 +9,7 @@ const POLLING_INTERVAL = 2000;
 interface PoolRealtimeState {
   pool: Pool | null;
   members: PoolMember[];
+  searchTiming: SearchTiming | null;
   loading: boolean;
   error: string | null;
   lastUpdated: Date | null;
@@ -52,6 +53,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
   const [state, setState] = useState<PoolRealtimeState>({
     pool: null,
     members: [],
+    searchTiming: null,
     loading: false,
     error: null,
     lastUpdated: null,
@@ -88,6 +90,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           ...prev,
           pool,
           members: pool.pool_members || [],
+          searchTiming: response.data.search_timing || null,
           loading: false,
           lastUpdated: new Date(),
           error: null,
@@ -104,6 +107,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
             ...prev,
             pool: null,
             members: [],
+            searchTiming: null,
             loading: false,
             error: 'This pool is no longer available',
           }));
@@ -112,6 +116,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           setState(prev => ({
             ...prev,
             loading: false,
+            searchTiming: prev.searchTiming || null,
             error: prev.pool ? null : errorMessage,
           }));
         }
@@ -129,6 +134,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           ...prev,
           pool: null,
           members: [],
+          searchTiming: null,
           loading: false,
           error: 'This pool is no longer available',
         }));
@@ -137,6 +143,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           ...prev,
           pool: null,
           members: [],
+          searchTiming: null,
           loading: false,
           error: 'This pool was cancelled',
         }));
@@ -146,6 +153,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           ...prev,
           loading: false,
           // Only set error if we don't have pool data - otherwise the user is in a valid pool
+          searchTiming: prev.searchTiming || null,
           error: prev.pool ? null : errorMessage,
         }));
       }
@@ -175,8 +183,13 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
               ...prev,
               pool,
               members: pool.pool_members || [],
+              searchTiming: response.data.search_timing || prev.searchTiming || null,
               lastUpdated: new Date(),
             };
+          }
+          // Keep searchTiming updated even if other fields didn't change
+          if (response.data.search_timing) {
+            return { ...prev, searchTiming: response.data.search_timing };
           }
           return prev;
         });
@@ -374,6 +387,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
   return {
     pool: state.pool,
     members: state.members,
+    searchTiming: state.searchTiming,
     coRiders,
     hasDriver,
     poolStatus,
