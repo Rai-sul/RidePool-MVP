@@ -74,6 +74,8 @@ export interface RideInviteDetails {
     max_passengers: number;
     fare_per_person: number;
     destination_address: string;
+    estimated_duration_minutes?: number;
+    estimated_distance_km?: number;
     can_join: boolean;
   } | null;
 }

@@ -588,7 +588,7 @@ export class PriyoSathiController {
       if (ride.pool_id) {
         const { data: pool } = await supabaseAdmin
           .from('pools')
-          .select('id, status, current_passengers, max_passengers, fare_per_person, destination_address')
+          .select('id, status, current_passengers, max_passengers, fare_per_person, destination_address, estimated_duration_minutes, estimated_distance_km')
           .eq('id', ride.pool_id)
           .single();
         
@@ -600,6 +600,8 @@ export class PriyoSathiController {
             max_passengers: pool.max_passengers,
             fare_per_person: pool.fare_per_person,
             destination_address: pool.destination_address,
+            estimated_duration_minutes: pool.estimated_duration_minutes,
+            estimated_distance_km: pool.estimated_distance_km,
             can_join: ['WAITING_FOR_RIDERS'].includes(pool.status) && pool.current_passengers < pool.max_passengers,
           };
         }
@@ -812,8 +814,24 @@ export class PriyoSathiController {
     }
   }
 
+  /**
+   * Notify only ONLINE companions who are within reasonable distance when a user creates a ride.
+   * This fixes the issue where offline users were receiving notifications.
+   */
   async notifyCompanionsOnRideSearch(userId: string, rideId: string): Promise<number> {
     try {
+      // Get user's ride details to check proximity
+      const { data: userRide } = await supabaseAdmin
+        .from('rides')
+        .select('pickup_lat, pickup_lng, dropoff_lat, dropoff_lng')
+        .eq('id', rideId)
+        .single();
+
+      if (!userRide) {
+        logger.warn(`[PriyoSathi] Cannot notify companions - ride ${rideId} not found`);
+        return 0;
+      }
+
       const { data: companions } = await supabaseAdmin
         .from('priyo_sathi')
         .select('companion_id')
@@ -830,15 +848,51 @@ export class PriyoSathiController {
         .eq('id', userId)
         .single();
 
+      let notifiedCount = 0;
+
       for (const c of companions) {
+        // Check if companion has an active ride (meaning they are ONLINE and looking for a ride)
+        const { data: companionRide } = await supabaseAdmin
+          .from('rides')
+          .select('pickup_lat, pickup_lng')
+          .eq('user_id', c.companion_id)
+          .in('status', ['CREATING_POOL', 'PENDING', 'MATCHED', 'WAITING_FOR_DRIVER'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        // Skip if companion is OFFLINE (no active ride)
+        if (!companionRide?.pickup_lat || !companionRide?.pickup_lng) {
+          logger.debug(`[PriyoSathi] Skipping notification to ${c.companion_id} - user is offline`);
+          continue;
+        }
+
+        // Calculate distance between users (only notify if within 10km)
+        const { calculateDistance } = await import('../utils/helper');
+        const distance = calculateDistance(
+          userRide.pickup_lat,
+          userRide.pickup_lng,
+          companionRide.pickup_lat,
+          companionRide.pickup_lng
+        );
+
+        if (distance > 10) {
+          logger.debug(`[PriyoSathi] Skipping notification to ${c.companion_id} - too far (${distance.toFixed(2)}km)`);
+          continue;
+        }
+
+        // User is online and within 10km - send notification
         await notificationService.sendPriyoSathiInviteNotification(
           c.companion_id,
           user?.full_name || user?.phone || 'Your Priyo Sathi',
           rideId
         );
+        notifiedCount++;
+        logger.info(`[PriyoSathi] Notified companion ${c.companion_id} (${distance.toFixed(2)}km away)`);
       }
 
-      return companions.length;
+      logger.info(`[PriyoSathi] Notified ${notifiedCount} of ${companions.length} companions for ride ${rideId}`);
+      return notifiedCount;
     } catch (error) {
       logger.error('[PriyoSathi] Failed to notify companions:', error);
       return 0;

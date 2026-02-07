@@ -208,34 +208,64 @@ export default function PriyoSathiRideInviteHandler() {
               </View>
             ) : (
               <View className="py-2">
-                {/* Destination Info */}
+                {/* Ride Details */}
                 {inviteDetails && (
-                  <View className="bg-gray-50 rounded-xl p-4 mb-4">
-                    <View className="flex-row items-start gap-3">
-                      <View className="w-8 h-8 bg-green-100 rounded-full items-center justify-center mt-0.5">
-                        <Navigation size={16} color="#16a34a" />
-                      </View>
-                      <View className="flex-1">
-                        <Text className="text-gray-500 text-xs uppercase tracking-wide">Destination</Text>
-                        <Text className="text-gray-900 font-medium mt-1">
-                          {inviteDetails.destination.address || 'Unknown destination'}
-                        </Text>
-                        {inviteDetails.pool && (
-                          <View className="flex-row items-center gap-2 mt-2">
-                            <View className="bg-blue-100 px-2 py-1 rounded">
-                              <Text className="text-blue-700 text-xs font-medium">
-                                {inviteDetails.pool.current_passengers}/{inviteDetails.pool.max_passengers} riders
-                              </Text>
-                            </View>
-                            <View className="bg-green-100 px-2 py-1 rounded">
-                              <Text className="text-green-700 text-xs font-medium">
-                                ৳{inviteDetails.pool.fare_per_person}
-                              </Text>
-                            </View>
-                          </View>
-                        )}
+                  <View className="space-y-3 mb-4">
+                    {/* Pickup Location */}
+                    <View className="bg-gray-50 rounded-xl p-4">
+                      <View className="flex-row items-start gap-3">
+                        <View className="w-8 h-8 bg-blue-100 rounded-full items-center justify-center mt-0.5">
+                          <MapPin size={16} color="#2563eb" />
+                        </View>
+                        <View className="flex-1">
+                          <Text className="text-gray-500 text-xs uppercase tracking-wide">Pickup</Text>
+                          <Text className="text-gray-900 font-medium mt-1">
+                            {inviteDetails.pickup.address || 'Unknown pickup'}
+                          </Text>
+                        </View>
                       </View>
                     </View>
+
+                    {/* Destination */}
+                    <View className="bg-gray-50 rounded-xl p-4">
+                      <View className="flex-row items-start gap-3">
+                        <View className="w-8 h-8 bg-green-100 rounded-full items-center justify-center mt-0.5">
+                          <Navigation size={16} color="#16a34a" />
+                        </View>
+                        <View className="flex-1">
+                          <Text className="text-gray-500 text-xs uppercase tracking-wide">Destination</Text>
+                          <Text className="text-gray-900 font-medium mt-1">
+                            {inviteDetails.destination.address || 'Unknown destination'}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Pool Info: Fare, Duration, Riders */}
+                    {inviteDetails.pool && (
+                      <View className="flex-row items-center justify-between bg-gray-50 rounded-xl p-4">
+                        <View className="items-center flex-1">
+                          <Text className="text-gray-500 text-xs uppercase">Fare</Text>
+                          <Text className="text-green-700 font-bold text-lg mt-1">
+                            ৳{inviteDetails.pool.fare_per_person}
+                          </Text>
+                        </View>
+                        {inviteDetails.pool.estimated_duration_minutes && (
+                          <View className="items-center flex-1 border-l border-gray-200">
+                            <Text className="text-gray-500 text-xs uppercase">Duration</Text>
+                            <Text className="text-gray-900 font-bold text-lg mt-1">
+                              {inviteDetails.pool.estimated_duration_minutes} min
+                            </Text>
+                          </View>
+                        )}
+                        <View className="items-center flex-1 border-l border-gray-200">
+                          <Text className="text-gray-500 text-xs uppercase">Riders</Text>
+                          <Text className="text-blue-700 font-bold text-lg mt-1">
+                            {inviteDetails.pool.current_passengers}/{inviteDetails.pool.max_passengers}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
                   </View>
                 )}
 
@@ -261,7 +291,7 @@ export default function PriyoSathiRideInviteHandler() {
                     onPress={handleDismiss}
                     className="flex-1 py-3 border-2 border-gray-200 rounded-xl items-center"
                   >
-                    <Text className="text-gray-700 font-semibold">Not Now</Text>
+                    <Text className="text-gray-700 font-semibold">Decline</Text>
                   </TouchableOpacity>
                   
                   <TouchableOpacity

@@ -46,31 +46,39 @@ export default function PriyoSathiInviteModal({
     setError(null);
 
     try {
-      // Fetch companions list
-      const companionsRes = await priyoSathiService.getCompanions();
-      if (companionsRes.success) {
-        const acceptedCompanions = (companionsRes.data.companions || []).filter(
-          (c) => c.status === 'ACCEPTED'
-        );
-        setCompanions(acceptedCompanions);
-      }
-
-      // Fetch nearby companions if we have location data
+      // Only fetch nearby companions - these are the ONLY ones who are online and can be invited
+      // We no longer fetch ALL companions because offline users should not be shown at all
       if (pickupLat && pickupLng && destinationLat && destinationLng) {
-        try {
-          const nearbyRes = await priyoSathiService.getNearbyCompanions(
-            pickupLat,
-            pickupLng,
-            destinationLat,
-            destinationLng
-          );
-          if (nearbyRes.success) {
-            setNearbyCompanions(nearbyRes.data.candidates || []);
-          }
-        } catch (nearbyErr) {
-          // Nearby is optional - don't fail the whole modal
-          console.warn('[PriyoSathiInvite] Could not fetch nearby companions:', nearbyErr);
+        const nearbyRes = await priyoSathiService.getNearbyCompanions(
+          pickupLat,
+          pickupLng,
+          destinationLat,
+          destinationLng
+        );
+        if (nearbyRes.success) {
+          const onlineCompanions = nearbyRes.data.candidates || [];
+          setNearbyCompanions(onlineCompanions);
+          
+          // Convert nearby companions to Companion format for display
+          // Only show companions who are actually online and nearby
+          const onlineCompanionList: Companion[] = onlineCompanions.map(nc => ({
+            id: nc.companion_id,
+            companion_id: nc.companion_id,
+            status: 'ACCEPTED' as const,
+            created_at: new Date().toISOString(),
+            companion: {
+              id: nc.companion_id,
+              phone: nc.phone,
+              full_name: nc.name,
+              average_rating: nc.rating,
+            },
+          }));
+          setCompanions(onlineCompanionList);
         }
+      } else {
+        // No location data - can't determine who is nearby, show empty
+        setCompanions([]);
+        setNearbyCompanions([]);
       }
     } catch (err: any) {
       console.error('[PriyoSathiInvite] Error fetching data:', err);
@@ -125,7 +133,7 @@ export default function PriyoSathiInviteModal({
                 <View>
                   <Text className="text-white text-lg font-semibold">Invite Priyo Sathi</Text>
                   <Text className="text-white/70 text-sm">
-                    {companions.length} friend{companions.length !== 1 ? 's' : ''} available
+                    {companions.length} friend{companions.length !== 1 ? 's' : ''} online nearby
                   </Text>
                 </View>
               </View>
@@ -157,30 +165,28 @@ export default function PriyoSathiInviteModal({
                 <View className="w-20 h-20 bg-gray-100 rounded-full items-center justify-center mb-4">
                   <UserPlus size={40} color="#9ca3af" />
                 </View>
-                <Text className="text-gray-900 font-semibold text-lg mb-2">No Priyo Sathi yet</Text>
+                <Text className="text-gray-900 font-semibold text-lg mb-2">No friends online</Text>
                 <Text className="text-gray-500 text-center px-4">
-                  Add friends from Profile → Priyo Sathi to invite them to ride together!
+                  None of your Priyo Sathi friends are currently looking for a ride nearby.
                 </Text>
               </View>
             ) : (
               <View className="space-y-3">
-                {/* Nearby Friends Section */}
-                {nearbyCompanions.length > 0 && (
-                  <View className="mb-4">
-                    <View className="flex-row items-center gap-2 mb-3">
-                      <MapPin size={16} color="#16a34a" />
-                      <Text className="text-green-700 font-semibold">Nearby Friends</Text>
-                    </View>
-                    <View className="bg-green-50 border border-green-200 rounded-xl p-3 mb-2">
-                      <Text className="text-green-700 text-sm">
-                        {nearbyCompanions.length} friend{nearbyCompanions.length !== 1 ? 's' : ''} found
-                        on or near your route!
-                      </Text>
-                    </View>
+                {/* Online/Nearby Friends Section */}
+                <View className="mb-4">
+                  <View className="flex-row items-center gap-2 mb-3">
+                    <MapPin size={16} color="#16a34a" />
+                    <Text className="text-green-700 font-semibold">Online & Nearby</Text>
                   </View>
-                )}
+                  <View className="bg-green-50 border border-green-200 rounded-xl p-3 mb-2">
+                    <Text className="text-green-700 text-sm">
+                      {companions.length} friend{companions.length !== 1 ? 's' : ''} online
+                      and near your route!
+                    </Text>
+                  </View>
+                </View>
 
-                {/* Friends List */}
+                {/* Friends List - Only showing online/nearby friends */}
                 {companions.map((companion) => {
                   const nearby = isNearby(companion.companion_id);
                   const isInvited = invitedIds.has(companion.companion_id);
@@ -189,49 +195,35 @@ export default function PriyoSathiInviteModal({
                   return (
                     <View
                       key={companion.id}
-                      className={`flex-row items-center gap-4 p-4 rounded-xl border ${
-                        nearby ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'
-                      }`}
+                      className="flex-row items-center gap-4 p-4 rounded-xl border bg-green-50 border-green-200"
                     >
                       {/* Avatar */}
-                      <View
-                        className={`w-12 h-12 rounded-full items-center justify-center ${
-                          nearby ? 'bg-green-300' : 'bg-gray-300'
-                        }`}
-                      >
-                        <Text className={`text-lg font-semibold ${nearby ? 'text-green-800' : 'text-gray-800'}`}>
+                      <View className="w-12 h-12 rounded-full items-center justify-center bg-green-300">
+                        <Text className="text-lg font-semibold text-green-800">
                           {getInitial(companion.companion?.full_name, companion.companion?.phone)}
                         </Text>
                       </View>
 
                       {/* Info */}
                       <View className="flex-1">
-                        <Text className="text-gray-900 font-medium">
+                        <Text className="font-medium text-gray-900">
                           {companion.companion?.full_name || companion.companion?.phone || 'Friend'}
                         </Text>
-                        {nearby ? (
-                          <View className="flex-row items-center gap-1 mt-1">
-                            <MapPin size={12} color="#16a34a" />
-                            <Text className="text-green-600 text-xs">
-                              {nearby.distance_km ? `${nearby.distance_km} km away` : 'On your route'}
-                            </Text>
-                            {nearby.detour_minutes && nearby.detour_minutes > 0 && (
-                              <>
-                                <Text className="text-gray-400 text-xs mx-1">•</Text>
-                                <Clock size={12} color="#6b7280" />
-                                <Text className="text-gray-500 text-xs">
-                                  +{nearby.detour_minutes} min detour
-                                </Text>
-                              </>
-                            )}
-                          </View>
-                        ) : (
-                          companion.companion?.average_rating && (
-                            <Text className="text-gray-500 text-sm">
-                              ⭐ {companion.companion.average_rating.toFixed(1)}
-                            </Text>
-                          )
-                        )}
+                        <View className="flex-row items-center gap-1 mt-1">
+                          <MapPin size={12} color="#16a34a" />
+                          <Text className="text-green-600 text-xs">
+                            {nearby?.distance_km ? `${nearby.distance_km} km away` : 'On your route'}
+                          </Text>
+                          {nearby?.detour_minutes && nearby.detour_minutes > 0 && (
+                            <>
+                              <Text className="text-gray-400 text-xs mx-1">•</Text>
+                              <Clock size={12} color="#6b7280" />
+                              <Text className="text-gray-500 text-xs">
+                                +{nearby.detour_minutes} min detour
+                              </Text>
+                            </>
+                          )}
+                        </View>
                       </View>
 
                       {/* Invite Button */}
@@ -239,15 +231,9 @@ export default function PriyoSathiInviteModal({
                         onPress={() => handleInvite(companion)}
                         disabled={isInviting || isInvited}
                         className={`px-4 py-2 rounded-lg ${
-                          isInvited
-                            ? 'bg-green-500'
-                            : nearby
-                            ? 'bg-green-600'
-                            : isFemale
-                            ? 'bg-pink-500'
-                            : 'bg-blue-600'
+                          isInvited ? 'bg-green-500' : 'bg-green-600'
                         }`}
-                        style={{ opacity: isInviting ? 0.7 : 1 }}
+                        style={{ opacity: isInviting ? 0.5 : 1 }}
                       >
                         {isInviting ? (
                           <ActivityIndicator size="small" color="#ffffff" />

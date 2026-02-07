@@ -12,6 +12,8 @@ const PRIYO_SATHI_CONSTRAINTS = {
   MAX_ROUTE_DEVIATION_M: 50,   // If friend is >50m from route, don't add
   MAX_COMPANIONS: 5,           // Maximum Priyo Sathi per user
   AVERAGE_CITY_SPEED_KMH: 25,  // Average city speed for time calculations
+  MAX_DISPLAY_DISTANCE_KM: 5,  // Maximum distance to show companion as "available"
+  MAX_H3_DISTANCE: 2,          // Max H3 cell distance (0=same, 1=adjacent, 2=near-adjacent)
 };
 
 export interface PriyoSathiCompanion {
@@ -138,8 +140,7 @@ export class PriyoSathiService {
           const companionLocation = await this.getCompanionLocation(companion.companion_id);
           
           if (!companionLocation) {
-            // FIX: Companion has no active ride - they are offline/not looking for a ride
-            // Do NOT show them as "available" or send notifications to offline users
+            // Companion has no active ride - they are offline/not looking for a ride
             result.skippedIds.push(companion.companion_id);
             logger.debug(`[PriyoSathi] Skipping companion ${companion.companion_id} - no active ride (offline)`);
             continue;
@@ -158,9 +159,11 @@ export class PriyoSathiService {
             (distanceFromUser / PRIYO_SATHI_CONSTRAINTS.AVERAGE_CITY_SPEED_KMH) * 60
           );
 
-          // Check if companion is in same hexagon area
+          // Check if companion is in same hexagon area (H3 resolution 9, ~174m edge)
+          // Distance <= 2 means same cell or adjacent cells (within ~500m)
           const companionH3 = h3Utils.latLngToH3(companionLocation, 9);
-          const isNearby = h3Utils.getH3Distance(userPickupH3, companionH3) <= 2;
+          const h3Distance = h3Utils.getH3Distance(userPickupH3, companionH3);
+          const isNearbyHexagon = h3Distance <= PRIYO_SATHI_CONSTRAINTS.MAX_H3_DISTANCE;
 
           // Check if companion is on the route (within 50m of route line)
           const isOnRoute = this.isLocationOnRoute(
@@ -170,9 +173,20 @@ export class PriyoSathiService {
             PRIYO_SATHI_CONSTRAINTS.MAX_ROUTE_DEVIATION_M
           );
 
-          // Determine if auto-match is possible
+          // FIX: Only show companion as available if they are within proximity range
+          // Criteria: Must be in nearby hexagon OR on route OR within max display distance
+          const isWithinProximity = isNearbyHexagon || isOnRoute || distanceFromUser <= PRIYO_SATHI_CONSTRAINTS.MAX_DISPLAY_DISTANCE_KM;
+
+          if (!isWithinProximity) {
+            // User is online but too far away - do NOT show them as available
+            result.skippedIds.push(companion.companion_id);
+            logger.debug(`[PriyoSathi] Skipping companion ${companion.companion_id} - online but too far (${distanceFromUser.toFixed(2)}km, h3Distance: ${h3Distance})`);
+            continue;
+          }
+
+          // Determine if auto-match is possible (stricter criteria)
           const canAutoMatch = 
-            isNearby &&
+            isNearbyHexagon &&
             detourMinutes <= PRIYO_SATHI_CONSTRAINTS.MAX_DETOUR_MINUTES &&
             distanceFromUser <= PRIYO_SATHI_CONSTRAINTS.MAX_DETOUR_DISTANCE_KM;
 
@@ -180,9 +194,11 @@ export class PriyoSathiService {
           if (canAutoMatch) {
             matchReason = `Can auto-match: ${distanceFromUser.toFixed(2)}km away, ${detourMinutes} min detour`;
           } else if (isOnRoute) {
-            matchReason = `On route but too far for auto-match: ${distanceFromUser.toFixed(2)}km`;
+            matchReason = `On route: ${distanceFromUser.toFixed(2)}km away`;
+          } else if (isNearbyHexagon) {
+            matchReason = `Nearby: ${distanceFromUser.toFixed(2)}km away`;
           } else {
-            matchReason = `Notification sent: ${distanceFromUser.toFixed(2)}km from pickup`;
+            matchReason = `Within range: ${distanceFromUser.toFixed(2)}km from pickup`;
           }
 
           result.candidates.push({
@@ -198,16 +214,14 @@ export class PriyoSathiService {
             matchReason,
           });
 
-          // Send notification to companion (only if sendNotifications is true and within 10km)
-          if (sendNotifications && distanceFromUser <= 10) {
+          // Send notification to companion (only if sendNotifications is true)
+          if (sendNotifications) {
             await notificationService.sendPriyoSathiInviteNotification(
               companion.companion_id,
               userData?.full_name || userData?.phone || 'Your Priyo Sathi',
               rideId
             );
             result.notifiedIds.push(companion.companion_id);
-          } else {
-            result.skippedIds.push(companion.companion_id);
           }
 
         } catch (companionError) {
