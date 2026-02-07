@@ -18,6 +18,12 @@ router.get('/requests', authenticate, priyoSathiController.getPendingRequests.bi
 // Query params: pickup_lat, pickup_lng, destination_lat, destination_lng
 router.get('/nearby', authenticate, priyoSathiController.getNearbyCompanions.bind(priyoSathiController));
 
+// Get ride invite details - must be before /:companionId routes
+router.get('/invite/:rideId', authenticate, priyoSathiController.getRideInviteDetails.bind(priyoSathiController));
+
+// Accept a ride invite and join the friend's pool
+router.post('/invite/:rideId/accept', authenticate, priyoSathiController.acceptRideInvite.bind(priyoSathiController));
+
 // Respond to a pending request (accept/reject)
 router.post('/requests/:requestId/respond', authenticate, priyoSathiController.respondToRequest.bind(priyoSathiController));
 

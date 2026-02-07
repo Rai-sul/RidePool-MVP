@@ -51,6 +51,47 @@ export interface InviteResponse {
   };
 }
 
+export interface RideInviteDetails {
+  ride_id: string;
+  inviter_name: string;
+  destination: {
+    latitude: number;
+    longitude: number;
+    address: string;
+  };
+  pickup: {
+    latitude: number;
+    longitude: number;
+    address: string;
+  };
+  vehicle_type: string;
+  gender_restriction: string;
+  ride_status: string;
+  pool: {
+    pool_id: string;
+    status: string;
+    current_passengers: number;
+    max_passengers: number;
+    fare_per_person: number;
+    destination_address: string;
+    can_join: boolean;
+  } | null;
+}
+
+export interface RideInviteDetailsResponse {
+  success: boolean;
+  data: RideInviteDetails;
+}
+
+export interface AcceptRideInviteResponse {
+  success: boolean;
+  data: {
+    ride_id: string;
+    pool_id: string;
+    message: string;
+  };
+}
+
 class PriyoSathiService {
   /**
    * Get list of accepted Priyo Sathi companions
@@ -98,6 +139,32 @@ class PriyoSathiService {
    */
   async removeCompanion(companionId: string): Promise<{ success: boolean }> {
     return apiClient.delete(API_ENDPOINTS.PRIYO_SATHI.REMOVE(companionId));
+  }
+
+  /**
+   * Get ride invite details - fetch the friend's ride and pool info
+   */
+  async getRideInviteDetails(rideId: string): Promise<RideInviteDetailsResponse> {
+    return apiClient.get<RideInviteDetailsResponse>(API_ENDPOINTS.PRIYO_SATHI.GET_RIDE_INVITE(rideId));
+  }
+
+  /**
+   * Accept a ride invite and join the friend's pool
+   */
+  async acceptRideInvite(
+    rideId: string,
+    pickupLat: number,
+    pickupLng: number,
+    pickupAddress?: string
+  ): Promise<AcceptRideInviteResponse> {
+    return apiClient.post<AcceptRideInviteResponse>(
+      API_ENDPOINTS.PRIYO_SATHI.ACCEPT_RIDE_INVITE(rideId),
+      {
+        pickup_lat: pickupLat,
+        pickup_lng: pickupLng,
+        pickup_address: pickupAddress,
+      }
+    );
   }
 }
 

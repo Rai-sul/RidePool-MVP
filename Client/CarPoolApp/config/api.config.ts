@@ -98,5 +98,7 @@ export const API_ENDPOINTS = {
     RESPOND_REQUEST: (requestId: string) => `/priyo-sathi/requests/${requestId}/respond`,
     INVITE_TO_RIDE: (companionId: string) => `/priyo-sathi/${companionId}/invite`,
     NEARBY: '/priyo-sathi/nearby',
+    GET_RIDE_INVITE: (rideId: string) => `/priyo-sathi/invite/${rideId}`,
+    ACCEPT_RIDE_INVITE: (rideId: string) => `/priyo-sathi/invite/${rideId}/accept`,
   },
 };

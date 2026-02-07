@@ -173,7 +173,7 @@ export class PriyoSathiController {
           companion_id,
           status,
           created_at,
-          companion:users!companion_id(id, phone, average_rating)
+          companion:users!companion_id(id, phone, full_name, average_rating)
         `)
         .eq('user_id', userId)
         .in('status', ['PENDING', 'ACCEPTED'])
@@ -213,7 +213,7 @@ export class PriyoSathiController {
         .select(`
           id,
           created_at,
-          requester:users!user_id(id, phone, average_rating)
+          requester:users!user_id(id, phone, full_name, average_rating)
         `)
         .eq('companion_id', userId)
         .eq('status', 'PENDING')
@@ -366,13 +366,13 @@ export class PriyoSathiController {
 
       const { data: user } = await supabaseAdmin
         .from('users')
-        .select('phone')
+        .select('phone, full_name')
         .eq('id', userId)
         .single();
 
       await notificationService.sendPriyoSathiInviteNotification(
         companionId,
-        user?.phone || 'A friend',
+        user?.full_name || user?.phone || 'A friend',
         ride_id
       );
 
@@ -515,6 +515,303 @@ export class PriyoSathiController {
     }
   }
 
+  /**
+   * Get ride invite details - fetch the friend's ride and pool info
+   * Used when a user taps on a Priyo Sathi invite notification
+   */
+  async getRideInviteDetails(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { rideId } = req.params;
+
+      // Fetch the ride details
+      const { data: ride, error: rideError } = await supabaseAdmin
+        .from('rides')
+        .select(`
+          id,
+          user_id,
+          pickup_lat,
+          pickup_lng,
+          pickup_address,
+          dropoff_lat,
+          dropoff_lng,
+          dropoff_address,
+          vehicle_type,
+          gender_restriction,
+          pool_id,
+          status
+        `)
+        .eq('id', rideId)
+        .single();
+
+      if (rideError || !ride) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'RIDE_NOT_FOUND', message: 'Ride not found or expired' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Check if the inviter is a Priyo Sathi of the current user
+      const { data: isFriend } = await supabaseAdmin
+        .from('priyo_sathi')
+        .select('id')
+        .or(`and(user_id.eq.${userId},companion_id.eq.${ride.user_id}),and(user_id.eq.${ride.user_id},companion_id.eq.${userId})`)
+        .eq('status', 'ACCEPTED')
+        .limit(1);
+
+      if (!isFriend || isFriend.length === 0) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'NOT_FRIENDS', message: 'You are not Priyo Sathi with the inviter' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Get the inviter's name
+      const { data: inviter } = await supabaseAdmin
+        .from('users')
+        .select('full_name, phone')
+        .eq('id', ride.user_id)
+        .single();
+
+      // Get pool details if exists
+      let poolInfo = null;
+      if (ride.pool_id) {
+        const { data: pool } = await supabaseAdmin
+          .from('pools')
+          .select('id, status, current_passengers, max_passengers, fare_per_person, destination_address')
+          .eq('id', ride.pool_id)
+          .single();
+        
+        if (pool) {
+          poolInfo = {
+            pool_id: pool.id,
+            status: pool.status,
+            current_passengers: pool.current_passengers,
+            max_passengers: pool.max_passengers,
+            fare_per_person: pool.fare_per_person,
+            destination_address: pool.destination_address,
+            can_join: ['WAITING_FOR_RIDERS'].includes(pool.status) && pool.current_passengers < pool.max_passengers,
+          };
+        }
+      }
+
+      res.json({
+        success: true,
+        data: {
+          ride_id: ride.id,
+          inviter_name: inviter?.full_name || inviter?.phone || 'Your friend',
+          destination: {
+            latitude: ride.dropoff_lat,
+            longitude: ride.dropoff_lng,
+            address: ride.dropoff_address,
+          },
+          pickup: {
+            latitude: ride.pickup_lat,
+            longitude: ride.pickup_lng,
+            address: ride.pickup_address,
+          },
+          vehicle_type: ride.vehicle_type,
+          gender_restriction: ride.gender_restriction,
+          ride_status: ride.status,
+          pool: poolInfo,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Accept a ride invite and join the friend's pool
+   * Creates a new ride for the accepting user and adds them to the pool
+   */
+  async acceptRideInvite(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { rideId } = req.params;
+      const { pickup_lat, pickup_lng, pickup_address } = req.body;
+
+      if (!pickup_lat || !pickup_lng) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'MISSING_PARAMS', message: 'pickup_lat and pickup_lng are required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Fetch the friend's ride
+      const { data: friendRide, error: rideError } = await supabaseAdmin
+        .from('rides')
+        .select(`
+          id,
+          user_id,
+          dropoff_lat,
+          dropoff_lng,
+          dropoff_address,
+          vehicle_type,
+          gender_restriction,
+          pool_id
+        `)
+        .eq('id', rideId)
+        .single();
+
+      if (rideError || !friendRide) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'RIDE_NOT_FOUND', message: 'Ride not found or expired' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      if (!friendRide.pool_id) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'NO_POOL', message: 'This ride does not have a pool to join' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Verify friendship
+      const { data: isFriend } = await supabaseAdmin
+        .from('priyo_sathi')
+        .select('id')
+        .or(`and(user_id.eq.${userId},companion_id.eq.${friendRide.user_id}),and(user_id.eq.${friendRide.user_id},companion_id.eq.${userId})`)
+        .eq('status', 'ACCEPTED')
+        .limit(1);
+
+      if (!isFriend || isFriend.length === 0) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'NOT_FRIENDS', message: 'You are not Priyo Sathi with the inviter' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Check pool status
+      const { data: pool, error: poolError } = await supabaseAdmin
+        .from('pools')
+        .select('id, status, current_passengers, max_passengers, vehicle_type, gender_restriction')
+        .eq('id', friendRide.pool_id)
+        .single();
+
+      if (poolError || !pool) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      if (pool.status !== 'WAITING_FOR_RIDERS') {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'POOL_NOT_AVAILABLE', message: 'Pool is no longer accepting riders' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      if (pool.current_passengers >= pool.max_passengers) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'POOL_FULL', message: 'Pool is full' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Create a new ride for the accepting user
+      const { data: newRide, error: createRideError } = await supabaseAdmin
+        .from('rides')
+        .insert({
+          user_id: userId,
+          pickup_lat: parseFloat(pickup_lat),
+          pickup_lng: parseFloat(pickup_lng),
+          pickup_address: pickup_address || 'Current Location',
+          dropoff_lat: friendRide.dropoff_lat,
+          dropoff_lng: friendRide.dropoff_lng,
+          dropoff_address: friendRide.dropoff_address,
+          vehicle_type: pool.vehicle_type,
+          gender_restriction: pool.gender_restriction,
+          status: 'MATCHED',
+          pool_id: friendRide.pool_id,
+        })
+        .select()
+        .single();
+
+      if (createRideError) {
+        logger.error('[PriyoSathi] Failed to create ride for invite accept:', createRideError);
+        throw createRideError;
+      }
+
+      // Join the pool using atomic operation
+      const { data: joinResult, error: joinError } = await supabaseAdmin.rpc('atomic_join_pool', {
+        p_pool_id: friendRide.pool_id,
+        p_user_id: userId,
+        p_ride_id: newRide.id,
+      });
+
+      if (joinError) {
+        // Rollback the ride creation
+        await supabaseAdmin.from('rides').delete().eq('id', newRide.id);
+        
+        if (joinError.message?.includes('POOL_FULL')) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'POOL_FULL', message: 'Pool is full' },
+            timestamp: new Date().toISOString(),
+          });
+        }
+        throw joinError;
+      }
+
+      // Notify the friend that their Priyo Sathi joined
+      const { data: currentUser } = await supabaseAdmin
+        .from('users')
+        .select('full_name, phone')
+        .eq('id', userId)
+        .single();
+
+      await notificationService.sendPushNotification(friendRide.user_id, {
+        title: 'Priyo Sathi Joined!',
+        message: `${currentUser?.full_name || currentUser?.phone || 'Your friend'} joined your pool!`,
+        type: 'POOL_MATCH',
+        metadata: { pool_id: friendRide.pool_id, joiner_id: userId },
+      });
+
+      logger.info(`[PriyoSathi] User ${userId} accepted ride invite and joined pool ${friendRide.pool_id}`);
+
+      res.json({
+        success: true,
+        data: {
+          ride_id: newRide.id,
+          pool_id: friendRide.pool_id,
+          message: 'Successfully joined your friend\'s pool!',
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async notifyCompanionsOnRideSearch(userId: string, rideId: string): Promise<number> {
     try {
       const { data: companions } = await supabaseAdmin
@@ -529,14 +826,14 @@ export class PriyoSathiController {
 
       const { data: user } = await supabaseAdmin
         .from('users')
-        .select('phone')
+        .select('phone, full_name')
         .eq('id', userId)
         .single();
 
       for (const c of companions) {
         await notificationService.sendPriyoSathiInviteNotification(
           c.companion_id,
-          user?.phone || 'Your Priyo Sathi',
+          user?.full_name || user?.phone || 'Your Priyo Sathi',
           rideId
         );
       }
