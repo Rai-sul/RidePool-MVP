@@ -175,7 +175,7 @@ class ApiClient {
         }
 
         const errorData = await response.json().catch(() => ({}));
-        console.error(`[ApiClient] Error response:`, errorData);
+        console.error(`[ApiClient] Error on ${endpoint}:`, JSON.stringify(errorData, null, 2));
         
         // Extract error message from various response formats
         let errorMessage = 'Request failed';

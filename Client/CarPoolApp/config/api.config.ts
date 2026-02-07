@@ -89,4 +89,14 @@ export const API_ENDPOINTS = {
     SHARE_TRIP: '/safety/share-trip',
     SOS: '/safety/sos',
   },
+  PRIYO_SATHI: {
+    LIST: '/priyo-sathi',
+    ADD: '/priyo-sathi',
+    REMOVE: (companionId: string) => `/priyo-sathi/${companionId}`,
+    BLOCK: (companionId: string) => `/priyo-sathi/${companionId}/block`,
+    PENDING_REQUESTS: '/priyo-sathi/requests',
+    RESPOND_REQUEST: (requestId: string) => `/priyo-sathi/requests/${requestId}/respond`,
+    INVITE_TO_RIDE: (companionId: string) => `/priyo-sathi/${companionId}/invite`,
+    NEARBY: '/priyo-sathi/nearby',
+  },
 };

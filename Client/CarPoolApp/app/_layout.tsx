@@ -3,8 +3,10 @@ import { Stack, usePathname } from 'expo-router';
 import { View, Text, TouchableOpacity } from 'react-native';
 import BottomNav from '../components/BottomNav';
 import ActiveTripButton from '../components/ActiveTripButton';
+import PriyoSathiRideInviteHandler from '../components/PriyoSathiRideInviteHandler';
 import { GlobalProvider, useGlobalContext } from '../contexts/GlobalContext';
 import { AuthProvider, useAuthContext } from '../contexts/AuthContext';
+import { NotificationProvider } from '../contexts/NotificationContext';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { StatusBar } from 'expo-status-bar';
@@ -66,6 +68,8 @@ function AppLayout() {
               </Stack>
               {showBottomNav && <BottomNav isFemale={userProfile?.gender === 'female'} />}
               {showActiveTripButton && <ActiveTripButton />}
+              {/* Global handler for Priyo Sathi ride invitations - shows popup when notification received */}
+              <PriyoSathiRideInviteHandler />
             </View>
         );
 }
@@ -78,9 +82,11 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <SafeAreaProvider>
         <AuthProvider>
-          <GlobalProvider>
-            <AppLayout />
-          </GlobalProvider>
+          <NotificationProvider>
+            <GlobalProvider>
+              <AppLayout />
+            </GlobalProvider>
+          </NotificationProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </ThemeProvider>

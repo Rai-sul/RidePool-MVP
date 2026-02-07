@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, Modal } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, Modal, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { User, MapPin, Settings, Shield, HelpCircle, ChevronRight, Heart, Star, Bell, Globe, LogOut } from './Icons';
+import { User, MapPin, Settings, Shield, HelpCircle, ChevronRight, Heart, Star, Bell, Globe, LogOut, Copy, Users } from './Icons';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Separator } from './ui/separator';
 import { Button } from './ui/button';
 import type { UserProfile } from '../contexts/GlobalContext';
-import { useRouter } from 'expo-router'; // Import useRouter
+import { useRouter } from 'expo-router';
 import LinearGradient from './LinearGradient';
 import { useAuthContext } from '../contexts/AuthContext';
 
@@ -21,6 +21,7 @@ const menuSections = [
     items: [
       { icon: User, label: 'Personal Info', badge: null, route: 'personal-info' },
       { icon: MapPin, label: 'Saved Places', badge: '3', route: 'saved-places' },
+      { icon: Users, label: 'Priyo Sathi (Friends)', badge: 'New', route: 'friends' },
       { icon: Star, label: 'All Ratings', badge: '4.8', route: 'your-ratings' },
     ],
   },
@@ -42,21 +43,42 @@ const menuSections = [
   },
 ];
 
-export default function ProfileScreen({ userProfile }: ProfileScreenProps) { // Remove onMenuItemClick from props
+export default function ProfileScreen({ userProfile }: ProfileScreenProps) {
   const initials = userProfile ? `${userProfile.firstName[0]}${userProfile.lastName[0]}` : 'U';
   const fullName = userProfile ? `${userProfile.firstName} ${userProfile.lastName}` : 'User';
   const isFemale = userProfile?.gender === 'female';
-  const headerGradientColors = isFemale 
+  const headerGradientColors: [string, string] = isFemale 
     ? ['#ec4899', '#e11d48'] 
     : ['#2563eb', '#06b6d4'];
   const emailColor = isFemale ? 'text-pink-100' : 'text-blue-100';
 
-  const router = useRouter(); // Initialize useRouter
-  const { logout } = useAuthContext();
+  const router = useRouter();
+  const { logout, user } = useAuthContext();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
+
+  // Get user ID - prefer from userProfile (set from auth), fallback to auth user directly
+  const userId = userProfile?.id || user?.id || '';
+
+  const handleCopyUserId = async () => {
+    if (userId) {
+      try {
+        // Use React Native Share as fallback since expo-clipboard needs native build
+        await Share.share({
+          message: userId,
+          title: 'Your Priyo Sathi ID',
+        });
+      } catch (err) {
+        // If share fails, show alert with the ID
+        Alert.alert('Your ID', userId, [{ text: 'OK' }]);
+      }
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 2000);
+    }
+  };
 
   const handleMenuItemClick = (route: string) => {
-    router.push(`/${route}`);
+    router.push(`/${route}` as any);
   };
 
   const handleLogout = () => {
@@ -90,11 +112,40 @@ export default function ProfileScreen({ userProfile }: ProfileScreenProps) { // 
               {initials}
             </AvatarFallback>
           </Avatar>
-          <View>
+          <View className="flex-1">
             <Text className="text-2xl text-white">{fullName}</Text>
             <Text className={emailColor}>{userProfile?.email}</Text>
           </View>
         </View>
+
+        {/* User ID Section for Priyo Sathi - Always show */}
+        <TouchableOpacity 
+          onPress={handleCopyUserId}
+          disabled={!userId}
+          className="mt-4 bg-white/20 rounded-xl p-3 flex-row items-center justify-between"
+          activeOpacity={0.7}
+        >
+          <View className="flex-1">
+            <Text className="text-white/70 text-xs mb-1">Your ID (for Priyo Sathi)</Text>
+            {userId ? (
+              <Text className="text-white text-sm font-mono" numberOfLines={1}>
+                {userId.slice(0, 8)}...{userId.slice(-4)}
+              </Text>
+            ) : (
+              <Text className="text-white/50 text-sm">Loading...</Text>
+            )}
+          </View>
+          <View className="flex-row items-center gap-2">
+            {copiedId ? (
+              <Text className="text-green-300 text-xs">Shared!</Text>
+            ) : userId ? (
+              <>
+                <Copy className="w-4 h-4 text-white/70" />
+                <Text className="text-white/70 text-xs">Tap to share</Text>
+              </>
+            ) : null}
+          </View>
+        </TouchableOpacity>
       </LinearGradient>
 
       {/* Stats */}

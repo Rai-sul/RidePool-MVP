@@ -29,6 +29,17 @@ export interface SearchTiming {
 
 export interface CreatePoolResponse {
   pool: Pool;
+  ride?: {
+    id: string;
+    user_id: string;
+    pickup_lat: number;
+    pickup_lng: number;
+    pickup_address?: string;
+    dropoff_lat: number;
+    dropoff_lng: number;
+    dropoff_address?: string;
+    status: string;
+  };
   search_timing: {
     initial_seconds: number;
     extended_seconds: number;

@@ -390,13 +390,21 @@ CREATE TABLE public.priyo_sathi (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   companion_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+  status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACCEPTED', 'REJECTED', 'BLOCKED')),
   created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id, companion_id),
   CHECK (user_id != companion_id)
 );
 
+-- Index for finding user's companions by status
 CREATE INDEX idx_priyo_sathi_user ON public.priyo_sathi(user_id, status);
+
+-- Index for finding pending requests (where user is the companion receiving request)
+CREATE INDEX idx_priyo_sathi_companion_pending ON public.priyo_sathi(companion_id, status) WHERE status = 'PENDING';
+
+-- Index for checking mutual relationships (for arePriyoSathi lookups)
+CREATE INDEX idx_priyo_sathi_mutual ON public.priyo_sathi(user_id, companion_id, status) WHERE status = 'ACCEPTED';
 
 -- ============================================
 -- SECTION 14: PAYMENTS

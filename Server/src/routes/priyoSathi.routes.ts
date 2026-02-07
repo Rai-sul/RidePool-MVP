@@ -5,13 +5,29 @@ import { validate, PriyoSathiAddSchema, CompanionIdParamSchema } from '../middle
 
 const router = Router();
 
+// Get all companions
 router.get('/', authenticate, priyoSathiController.getCompanions.bind(priyoSathiController));
-router.post('/', authenticate, validate(PriyoSathiAddSchema), priyoSathiController.addCompanion.bind(priyoSathiController));
-router.delete('/:companionId', authenticate, validate(CompanionIdParamSchema, 'params'), priyoSathiController.removeCompanion.bind(priyoSathiController));
 
+// Add a new companion (sends request)
+router.post('/', authenticate, validate(PriyoSathiAddSchema), priyoSathiController.addCompanion.bind(priyoSathiController));
+
+// Get pending requests (requests from others) - must be before /:companionId routes
 router.get('/requests', authenticate, priyoSathiController.getPendingRequests.bind(priyoSathiController));
+
+// Get nearby companions for pool matching preview - must be before /:companionId routes
+// Query params: pickup_lat, pickup_lng, destination_lat, destination_lng
+router.get('/nearby', authenticate, priyoSathiController.getNearbyCompanions.bind(priyoSathiController));
+
+// Respond to a pending request (accept/reject)
 router.post('/requests/:requestId/respond', authenticate, priyoSathiController.respondToRequest.bind(priyoSathiController));
 
+// Remove a companion
+router.delete('/:companionId', authenticate, validate(CompanionIdParamSchema, 'params'), priyoSathiController.removeCompanion.bind(priyoSathiController));
+
+// Block a companion
+router.post('/:companionId/block', authenticate, validate(CompanionIdParamSchema, 'params'), priyoSathiController.blockCompanion.bind(priyoSathiController));
+
+// Invite a companion to join current ride
 router.post('/:companionId/invite', authenticate, validate(CompanionIdParamSchema, 'params'), priyoSathiController.inviteToRide.bind(priyoSathiController));
 
 export default router;

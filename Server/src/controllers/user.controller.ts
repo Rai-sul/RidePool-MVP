@@ -430,6 +430,44 @@ export class UserController {
       next(error);
     }
   }
+
+  async deleteAccount(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Delete from public.users table first (handles related data via cascade/triggers)
+      const { error: dbError } = await supabaseAdmin
+        .from('users')
+        .delete()
+        .eq('id', userId);
+
+      if (dbError) {
+        throw dbError;
+      }
+
+      // Delete from auth.users using Admin API cd server then npx ts-node scripts/delete-all-users.ts
+      const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+
+      if (authError) {
+        throw authError;
+      }
+
+      res.json({
+        success: true,
+        data: { message: 'User account deleted successfully' },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const userController = new UserController();

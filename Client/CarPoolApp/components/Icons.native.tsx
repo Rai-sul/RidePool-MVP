@@ -110,3 +110,5 @@ export const Moon = createIcon(LucideIcons.Moon);
 export const Wifi = createIcon(LucideIcons.Wifi);
 export const Bot = createIcon(LucideIcons.Bot);
 export const Route = createIcon(LucideIcons.Route);
+export const UserX = createIcon(LucideIcons.UserX);
+export const UserMinus = createIcon(LucideIcons.UserMinus);

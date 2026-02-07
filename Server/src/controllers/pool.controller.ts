@@ -9,6 +9,7 @@ import { penaltyService } from '../services/penalty.service';
 import { notificationService } from '../services/notification.service';
 import { smartRouteService, PoolMemberRoute } from '../services/smartRoute.service';
 import { googleMapsService } from '../services/googleMaps.service';
+import { priyoSathiService } from '../services/priyoSathi.service';
 import { CreatePoolRequest, Pool, PoolStatus, Ride, RideStatus, Location, VehicleType } from '../types';
 import { h3Utils } from '../utils/h3.utils';
 import { logger } from '../utils/logger';
@@ -256,10 +257,30 @@ export class PoolController {
       // Start the 2-phase server-side timer (30s initial + 10s extended = 40s total)
       lookupTimeService.startLookupTimer(pool.id);
 
+      // Notify Priyo Sathi companions about the ride (async, don't block response)
+      const userPickup: Location = { latitude: poolData.pickup_lat, longitude: poolData.pickup_lng };
+      const userDestination: Location = { latitude: poolData.destination_lat, longitude: poolData.destination_lng };
+      
+      priyoSathiService.findAndNotifyCompanions(
+        userId,
+        userPickup,
+        userDestination,
+        creatorRide.id,
+        pool.id,
+        true // Send notifications when pool is actually created
+      ).then((priyoSathiResult) => {
+        if (priyoSathiResult.notifiedIds.length > 0) {
+          logger.info(`[Pool] Notified ${priyoSathiResult.notifiedIds.length} Priyo Sathi companions for pool ${pool.id}`);
+        }
+      }).catch((err) => {
+        logger.warn('[Pool] Failed to notify Priyo Sathi companions:', err);
+      });
+
       res.status(201).json({
         success: true,
         data: {
           pool,
+          ride: creatorRide,
           search_timing: {
             initial_seconds: SEARCH_TIMING.INITIAL_SECONDS,
             extended_seconds: SEARCH_TIMING.EXTENDED_SECONDS,
@@ -629,6 +650,17 @@ export class PoolController {
             metadata: { cooldown_ends_at: penaltyResult.cooldownEndsAt },
           });
         }
+      }
+
+      // Apply Priyo Sathi cancellation penalty (if applicable)
+      // Per requirements: "If one Priyo Sathi cancels, the other friend gets charged"
+      const priyoSathiPenalty = await priyoSathiService.applyPriyoSathiCancellationPenalty(
+        userId,
+        result.ride_id,
+        poolId
+      );
+      if (priyoSathiPenalty.penaltyApplied) {
+        logger.info(`[Pool] Priyo Sathi penalty applied: ${priyoSathiPenalty.reason}`);
       }
 
       // Check remaining active members (those who haven't left)

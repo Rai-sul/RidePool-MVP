@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MapPin, Clock, Users, Navigation, ChevronRight, ChevronLeft, Car, Taka, AlertCircle, Plus, RefreshCw } from './Icons';
+import { MapPin, Clock, Users, Navigation, ChevronRight, ChevronLeft, Car, Taka, AlertCircle, Plus, RefreshCw, UserPlus } from './Icons';
 import { Button } from './ui/button';
 import type { Destination, UserProfile, Pool, Location } from '../contexts/GlobalContext';
 import { usePools } from '../hooks/usePools';
 import { useRides } from '../hooks/useRides';
 import { rideService, RideEstimate, RideEstimateResponse, AlternativeRouteInfo } from '../services/ride.service';
 import { poolService } from '../services/pool.service';
+import { priyoSathiService } from '../services/priyoSathi.service';
 import LinearGradient from './LinearGradient';
 import GoogleMapView from './GoogleMapView';
 import AvailablePoolCard, { PoolSearchResultData, CoRiderInfo } from './AvailablePoolCard';
+import PriyoSathiInviteModal from './PriyoSathiInviteModal';
 
 type RideConfirmationProps = {
   pickupLocation?: Location | null;
@@ -44,6 +46,11 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
   const [estimateLoading, setEstimateLoading] = useState(false);
   const isFemale = userProfile?.gender === 'female';
 
+  // Priyo Sathi state
+  const [showPriyoSathiModal, setShowPriyoSathiModal] = useState(false);
+  const [priyoSathiCount, setPriyoSathiCount] = useState(0);
+  const [invitedFriends, setInvitedFriends] = useState<{ id: string; name: string }[]>([]);
+
   // Use the pools hook to search for real pools and create new ones
   const { searchPools, createPool, joinPool, searchResults, currentPool, loading, error, clearSearch } = usePools();
 
@@ -54,6 +61,37 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
   const availablePools = searchResults?.pools || [];
   const hasMatches = searchResults?.has_matches || false;
   const alternatives = searchResults?.alternatives || [];
+
+  // Fetch Priyo Sathi count on mount
+  useEffect(() => {
+    const fetchPriyoSathiCount = async () => {
+      try {
+        const res = await priyoSathiService.getCompanions();
+        if (res.success && res.data?.companions) {
+          const acceptedCount = res.data.companions.filter(c => c.status === 'ACCEPTED').length;
+          setPriyoSathiCount(acceptedCount);
+        }
+      } catch (err) {
+        // Silently fail - Priyo Sathi is optional
+        console.log('[RideConfirmation] Could not fetch Priyo Sathi count:', err);
+        setPriyoSathiCount(0);
+      }
+    };
+    fetchPriyoSathiCount();
+  }, []);
+
+  // Handle Priyo Sathi invite
+  const handlePriyoSathiInvite = useCallback((companionId: string, companionName: string) => {
+    setInvitedFriends(prev => {
+      if (prev.find(f => f.id === companionId)) return prev;
+      return [...prev, { id: companionId, name: companionName }];
+    });
+    Alert.alert(
+      'Invitation Queued',
+      `${companionName} will be notified when you create or join a pool.`,
+      [{ text: 'OK' }]
+    );
+  }, []);
 
   // Fetch ride estimate when locations and vehicle type are set
   useEffect(() => {
@@ -150,6 +188,17 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
       });
 
       if (result.success && result.data?.pool) {
+        // Send invites to queued Priyo Sathi friends
+        if (invitedFriends.length > 0 && result.data.ride?.id) {
+          for (const friend of invitedFriends) {
+            try {
+              await priyoSathiService.inviteToRide(friend.id, result.data.ride.id);
+              console.log(`[RideConfirmation] Invited ${friend.name} to ride`);
+            } catch (inviteErr) {
+              console.warn(`[RideConfirmation] Failed to invite ${friend.name}:`, inviteErr);
+            }
+          }
+        }
         // Pool created successfully - navigate to searching screen
         onPoolSelect(result.data.pool as Pool);
       }
@@ -158,7 +207,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
     } finally {
       setIsCreatingPool(false);
     }
-  }, [pickupLocation, destination, selectedVehicleType, isFemale, activeRideType, createPool, onPoolSelect]);
+  }, [pickupLocation, destination, selectedVehicleType, isFemale, activeRideType, createPool, onPoolSelect, invitedFriends]);
 
   // Delay showing the confirm button to prevent touch event overlap
   useEffect(() => {
@@ -466,6 +515,53 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
               </View>
             </View>
 
+            {/* Priyo Sathi Invite Section */}
+            {priyoSathiCount > 0 && (
+              <TouchableOpacity
+                onPress={() => setShowPriyoSathiModal(true)}
+                className={`mx-1 mb-4 p-4 rounded-xl border-2 ${
+                  isFemale ? 'bg-pink-50 border-pink-200' : 'bg-blue-50 border-blue-200'
+                }`}
+                activeOpacity={0.7}
+              >
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-row items-center gap-3">
+                    <View className={`w-10 h-10 rounded-full items-center justify-center ${
+                      isFemale ? 'bg-pink-200' : 'bg-blue-200'
+                    }`}>
+                      <UserPlus size={20} color={isFemale ? '#db2777' : '#2563eb'} />
+                    </View>
+                    <View>
+                      <Text className={`font-semibold ${isFemale ? 'text-pink-900' : 'text-blue-900'}`}>
+                        Invite Priyo Sathi
+                      </Text>
+                      <Text className={`text-xs ${isFemale ? 'text-pink-600' : 'text-blue-600'}`}>
+                        {invitedFriends.length > 0 
+                          ? `${invitedFriends.length} friend${invitedFriends.length > 1 ? 's' : ''} invited`
+                          : `${priyoSathiCount} friend${priyoSathiCount > 1 ? 's' : ''} available`
+                        }
+                      </Text>
+                    </View>
+                  </View>
+                  <ChevronRight size={20} color={isFemale ? '#db2777' : '#2563eb'} />
+                </View>
+                {invitedFriends.length > 0 && (
+                  <View className="flex-row flex-wrap gap-2 mt-3">
+                    {invitedFriends.map((friend) => (
+                      <View 
+                        key={`invited-${friend.id}`}
+                        className={`px-3 py-1 rounded-full ${isFemale ? 'bg-pink-200' : 'bg-blue-200'}`}
+                      >
+                        <Text className={`text-xs font-medium ${isFemale ? 'text-pink-800' : 'text-blue-800'}`}>
+                          {friend.name}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
+
             {/* Cost & Time - Now using real estimates */}
             <View className="flex flex-row items-center justify-center gap-4 py-3 px-4 bg-gray-50 rounded-xl mx-1 mb-4">
               {estimateLoading ? (
@@ -477,7 +573,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                       <Taka className="w-5 h-5 text-green-600" />
                       <Text className="font-semibold">৳{rideEstimate.estimatedFare}</Text>
                     </View>
-                    <Text className="text-xs text-gray-500">Fair (with pool)</Text>
+                    <Text className="text-xs text-gray-500">Fare (with pool)</Text>
                   </View>
                   <View className="w-px h-10 bg-gray-300"></View>
                   <View className="flex flex-col items-center">
@@ -1020,6 +1116,18 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
             </Button>
           </View>
         )}
+
+        {/* Priyo Sathi Invite Modal */}
+        <PriyoSathiInviteModal
+          visible={showPriyoSathiModal}
+          onClose={() => setShowPriyoSathiModal(false)}
+          onInvite={handlePriyoSathiInvite}
+          pickupLat={pickupLocation?.latitude}
+          pickupLng={pickupLocation?.longitude}
+          destinationLat={destination?.latitude}
+          destinationLng={destination?.longitude}
+          isFemale={isFemale}
+        />
       </View>
     </SafeAreaView>
   );

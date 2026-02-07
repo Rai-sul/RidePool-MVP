@@ -170,6 +170,7 @@ export class PriyoSathiController {
         .from('priyo_sathi')
         .select(`
           id,
+          companion_id,
           status,
           created_at,
           companion:users!companion_id(id, phone, average_rating)
@@ -380,6 +381,133 @@ export class PriyoSathiController {
       res.json({
         success: true,
         data: { message: 'Invitation sent to your Priyo Sathi' },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get nearby Priyo Sathi companions for pool matching
+   * Returns companions that could potentially join a ride based on proximity
+   */
+  async getNearbyCompanions(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { pickup_lat, pickup_lng, destination_lat, destination_lng } = req.query;
+
+      if (!pickup_lat || !pickup_lng || !destination_lat || !destination_lng) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'MISSING_PARAMS', message: 'pickup_lat, pickup_lng, destination_lat, destination_lng are required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const userPickup = {
+        latitude: parseFloat(pickup_lat as string),
+        longitude: parseFloat(pickup_lng as string),
+      };
+      const userDestination = {
+        latitude: parseFloat(destination_lat as string),
+        longitude: parseFloat(destination_lng as string),
+      };
+
+      // Import priyoSathiService here to avoid circular dependency
+      const { priyoSathiService } = await import('../services/priyoSathi.service');
+
+      // Find candidates without creating a ride - preview mode, don't send notifications
+      const result = await priyoSathiService.findAndNotifyCompanions(
+        userId,
+        userPickup,
+        userDestination,
+        'preview', // placeholder ride_id for preview mode
+        undefined,
+        false // Don't send notifications in preview mode
+      );
+
+      res.json({
+        success: true,
+        data: {
+          candidates: result.candidates.map(c => ({
+            companion_id: c.companionId,
+            name: c.companionName,
+            phone: c.companionPhone,
+            rating: c.companionRating,
+            distance_km: c.distanceFromUser > 0 ? c.distanceFromUser.toFixed(2) : null,
+            detour_minutes: c.detourMinutes > 0 ? c.detourMinutes : null,
+            is_on_route: c.isOnRoute,
+            can_auto_match: c.canAutoMatch,
+            match_reason: c.matchReason,
+          })),
+          auto_matchable_count: result.candidates.filter(c => c.canAutoMatch).length,
+          total_companions: result.candidates.length,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Block a user from being a Priyo Sathi
+   */
+  async blockCompanion(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { companionId } = req.params;
+
+      // Update existing relationship to BLOCKED or create new blocked entry
+      const { data: existing } = await supabaseAdmin
+        .from('priyo_sathi')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('companion_id', companionId)
+        .single();
+
+      if (existing) {
+        await supabaseAdmin
+          .from('priyo_sathi')
+          .update({ status: 'BLOCKED' })
+          .eq('id', existing.id);
+      } else {
+        await supabaseAdmin
+          .from('priyo_sathi')
+          .insert({
+            user_id: userId,
+            companion_id: companionId,
+            status: 'BLOCKED',
+          });
+      }
+
+      // Also remove any reverse relationship
+      await supabaseAdmin
+        .from('priyo_sathi')
+        .delete()
+        .eq('user_id', companionId)
+        .eq('companion_id', userId);
+
+      res.json({
+        success: true,
+        data: { message: 'User blocked from Priyo Sathi' },
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
