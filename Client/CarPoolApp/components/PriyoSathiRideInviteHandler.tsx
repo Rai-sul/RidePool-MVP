@@ -63,11 +63,15 @@ export default function PriyoSathiRideInviteHandler() {
 
     // Check if pool is joinable
     if (!inviteDetails.pool?.can_join) {
-      Alert.alert(
-        'Cannot Join',
-        inviteDetails.pool ? 'This pool is no longer accepting riders.' : 'No pool available to join.',
-        [{ text: 'OK', onPress: handleDismiss }]
-      );
+      let message = 'No pool available to join.';
+      if (inviteDetails.pool) {
+        if (inviteDetails.pool.current_passengers >= inviteDetails.pool.max_passengers) {
+          message = `Pool is full (${inviteDetails.pool.current_passengers}/${inviteDetails.pool.max_passengers} riders).`;
+        } else {
+          message = `Pool status is "${inviteDetails.pool.status}". Cannot join at this time.`;
+        }
+      }
+      Alert.alert('Cannot Join', message, [{ text: 'OK', onPress: handleDismiss }]);
       return;
     }
 
@@ -246,12 +250,24 @@ export default function PriyoSathiRideInviteHandler() {
                   Your current location will be used as pickup
                 </Text>
                 
-                {/* Pool not available warning */}
+                {/* Pool not available warning - show specific reason with retry option */}
                 {inviteDetails && !inviteDetails.pool?.can_join && (
                   <View className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3">
                     <Text className="text-amber-700 text-sm text-center">
-                      ⚠️ This pool is no longer accepting riders
+                      {!inviteDetails.pool 
+                        ? '⚠️ Pool is still being created. Please try again in a moment.'
+                        : inviteDetails.pool.current_passengers >= inviteDetails.pool.max_passengers
+                          ? `⚠️ Pool is full (${inviteDetails.pool.current_passengers}/${inviteDetails.pool.max_passengers} riders)`
+                          : `⚠️ Pool status: ${inviteDetails.pool.status}. Cannot join at this time.`
+                      }
                     </Text>
+                    {/* Refresh button to retry fetching pool details */}
+                    <TouchableOpacity
+                      onPress={() => priyoSathiInvite?.rideId && fetchInviteDetails(priyoSathiInvite.rideId)}
+                      className="mt-2 self-center"
+                    >
+                      <Text className="text-amber-600 font-medium text-sm underline">Tap to refresh</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
                 

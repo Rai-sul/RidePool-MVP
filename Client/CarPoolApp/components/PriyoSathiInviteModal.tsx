@@ -125,7 +125,7 @@ export default function PriyoSathiInviteModal({
                 <View>
                   <Text className="text-white text-lg font-semibold">Invite Priyo Sathi</Text>
                   <Text className="text-white/70 text-sm">
-                    {companions.length} friend{companions.length !== 1 ? 's' : ''} available
+                    {nearbyCompanions.length} friend{nearbyCompanions.length !== 1 ? 's' : ''} available nearby
                   </Text>
                 </View>
               </View>
@@ -152,102 +152,84 @@ export default function PriyoSathiInviteModal({
                   <Text className="text-blue-600 font-semibold">Tap to retry</Text>
                 </TouchableOpacity>
               </View>
-            ) : companions.length === 0 ? (
+            ) : nearbyCompanions.length === 0 ? (
               <View className="items-center py-12">
                 <View className="w-20 h-20 bg-gray-100 rounded-full items-center justify-center mb-4">
                   <UserPlus size={40} color="#9ca3af" />
                 </View>
-                <Text className="text-gray-900 font-semibold text-lg mb-2">No Priyo Sathi yet</Text>
+                <Text className="text-gray-900 font-semibold text-lg mb-2">No nearby friends</Text>
                 <Text className="text-gray-500 text-center px-4">
-                  Add friends from Profile → Priyo Sathi to invite them to ride together!
+                  {companions.length > 0 
+                    ? `You have ${companions.length} Priyo Sathi, but none are currently nearby with matching routes.`
+                    : 'Add friends from Profile → Priyo Sathi to invite them to ride together!'
+                  }
                 </Text>
               </View>
             ) : (
               <View className="space-y-3">
-                {/* Nearby Friends Section */}
-                {nearbyCompanions.length > 0 && (
-                  <View className="mb-4">
-                    <View className="flex-row items-center gap-2 mb-3">
-                      <MapPin size={16} color="#16a34a" />
-                      <Text className="text-green-700 font-semibold">Nearby Friends</Text>
-                    </View>
-                    <View className="bg-green-50 border border-green-200 rounded-xl p-3 mb-2">
-                      <Text className="text-green-700 text-sm">
-                        {nearbyCompanions.length} friend{nearbyCompanions.length !== 1 ? 's' : ''} found
-                        on or near your route!
-                      </Text>
-                    </View>
+                {/* Nearby Friends Section Header */}
+                <View className="mb-2">
+                  <View className="flex-row items-center gap-2 mb-3">
+                    <MapPin size={16} color="#16a34a" />
+                    <Text className="text-green-700 font-semibold">Nearby Friends on Your Route</Text>
                   </View>
-                )}
+                  <View className="bg-green-50 border border-green-200 rounded-xl p-3 mb-2">
+                    <Text className="text-green-700 text-sm">
+                      {nearbyCompanions.length} friend{nearbyCompanions.length !== 1 ? 's' : ''} found
+                      with matching pickup and destination!
+                    </Text>
+                  </View>
+                </View>
 
-                {/* Friends List */}
-                {companions.map((companion) => {
-                  const nearby = isNearby(companion.companion_id);
-                  const isInvited = invitedIds.has(companion.companion_id);
-                  const isInviting = invitingId === companion.companion_id;
+                {/* ONLY show nearby companions - users must have active ride with matching locations */}
+                {nearbyCompanions.map((nearby) => {
+                  const isInvited = invitedIds.has(nearby.companion_id);
+                  const isInviting = invitingId === nearby.companion_id;
+                  // Find companion details from companions list
+                  const companionDetails = companions.find(c => c.companion_id === nearby.companion_id);
 
                   return (
                     <View
-                      key={companion.id}
-                      className={`flex-row items-center gap-4 p-4 rounded-xl border ${
-                        nearby ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'
-                      }`}
+                      key={nearby.companion_id}
+                      className="flex-row items-center gap-4 p-4 rounded-xl border bg-green-50 border-green-200"
                     >
                       {/* Avatar */}
-                      <View
-                        className={`w-12 h-12 rounded-full items-center justify-center ${
-                          nearby ? 'bg-green-300' : 'bg-gray-300'
-                        }`}
-                      >
-                        <Text className={`text-lg font-semibold ${nearby ? 'text-green-800' : 'text-gray-800'}`}>
-                          {getInitial(companion.companion?.full_name, companion.companion?.phone)}
+                      <View className="w-12 h-12 rounded-full items-center justify-center bg-green-300">
+                        <Text className="text-lg font-semibold text-green-800">
+                          {getInitial(nearby.name, nearby.phone)}
                         </Text>
                       </View>
 
                       {/* Info */}
                       <View className="flex-1">
                         <Text className="text-gray-900 font-medium">
-                          {companion.companion?.full_name || companion.companion?.phone || 'Friend'}
+                          {nearby.name || nearby.phone || 'Friend'}
                         </Text>
-                        {nearby ? (
-                          <View className="flex-row items-center gap-1 mt-1">
-                            <MapPin size={12} color="#16a34a" />
-                            <Text className="text-green-600 text-xs">
-                              {nearby.distance_km ? `${nearby.distance_km} km away` : 'On your route'}
-                            </Text>
-                            {nearby.detour_minutes && nearby.detour_minutes > 0 && (
-                              <>
-                                <Text className="text-gray-400 text-xs mx-1">•</Text>
-                                <Clock size={12} color="#6b7280" />
-                                <Text className="text-gray-500 text-xs">
-                                  +{nearby.detour_minutes} min detour
-                                </Text>
-                              </>
-                            )}
-                          </View>
-                        ) : (
-                          companion.companion?.average_rating && (
-                            <Text className="text-gray-500 text-sm">
-                              ⭐ {companion.companion.average_rating.toFixed(1)}
-                            </Text>
-                          )
-                        )}
+                        <View className="flex-row items-center gap-1 mt-1">
+                          <MapPin size={12} color="#16a34a" />
+                          <Text className="text-green-600 text-xs">
+                            {nearby.distance_km ? `${nearby.distance_km} km away` : 'On your route'}
+                          </Text>
+                          {nearby.detour_minutes && nearby.detour_minutes > 0 && (
+                            <>
+                              <Text className="text-gray-400 text-xs mx-1">•</Text>
+                              <Clock size={12} color="#6b7280" />
+                              <Text className="text-gray-500 text-xs">
+                                +{nearby.detour_minutes} min detour
+                              </Text>
+                            </>
+                          )}
+                        </View>
                       </View>
 
                       {/* Invite Button */}
                       <TouchableOpacity
-                        onPress={() => handleInvite(companion)}
-                        disabled={isInviting || isInvited}
+                        onPress={() => companionDetails && handleInvite(companionDetails)}
+                        disabled={isInviting || isInvited || !companionDetails}
                         className={`px-4 py-2 rounded-lg ${
-                          isInvited
-                            ? 'bg-green-500'
-                            : nearby
-                            ? 'bg-green-600'
-                            : isFemale
-                            ? 'bg-pink-500'
-                            : 'bg-blue-600'
+                          isInvited ? 'bg-green-500' : 'bg-green-600'
                         }`}
-                        style={{ opacity: isInviting ? 0.7 : 1 }}
+                        style={{ opacity: isInviting || !companionDetails ? 0.7 : 1 }}
                       >
                         {isInviting ? (
                           <ActivityIndicator size="small" color="#ffffff" />

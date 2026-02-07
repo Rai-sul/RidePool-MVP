@@ -134,16 +134,20 @@ export class PriyoSathiService {
       // Check each companion for matching potential
       for (const companion of companions) {
         try {
-          // Check if companion has an active ride (meaning they are online and looking for a ride)
-          const companionLocation = await this.getCompanionLocation(companion.companion_id);
+          // FIX Issue 1: Check if companion has an active ride with BOTH pickup AND destination set
+          // A user must be logged in AND have set both locations to be visible
+          const companionRideLocations = await this.getCompanionRideLocations(companion.companion_id);
           
-          if (!companionLocation) {
-            // FIX: Companion has no active ride - they are offline/not looking for a ride
-            // Do NOT show them as "available" or send notifications to offline users
+          if (!companionRideLocations) {
+            // FIX: Companion has no active ride OR hasn't set both pickup and destination
+            // Do NOT show them as "available" or send notifications
             result.skippedIds.push(companion.companion_id);
-            logger.debug(`[PriyoSathi] Skipping companion ${companion.companion_id} - no active ride (offline)`);
+            logger.debug(`[PriyoSathi] Skipping companion ${companion.companion_id} - no active ride or missing pickup/destination`);
             continue;
           }
+
+          const companionLocation = companionRideLocations.pickup;
+          const companionDestination = companionRideLocations.destination;
 
           // Calculate distance from user's pickup to companion
           const distanceFromUser = calculateDistance(
@@ -158,9 +162,60 @@ export class PriyoSathiService {
             (distanceFromUser / PRIYO_SATHI_CONSTRAINTS.AVERAGE_CITY_SPEED_KMH) * 60
           );
 
-          // Check if companion is in same hexagon area
-          const companionH3 = h3Utils.latLngToH3(companionLocation, 9);
-          const isNearby = h3Utils.getH3Distance(userPickupH3, companionH3) <= 2;
+          // FIX: Visibility Rule - Check BOTH pickup AND destination hexagon proximity
+          // Friends can see each other only if BOTH:
+          // 1. Pickup/current location is in same or nearby area
+          // 2. Destination is in same or nearby area
+          // 
+          // Resolution 8 (~461m per hex) - for pickup, allow distance 2 = ~1.3km radius
+          // Resolution 7 (~5.2km per hex) - for destination, allow distance 2 = ~15km radius
+          const companionPickupH3 = h3Utils.latLngToH3(companionLocation, 8);
+          const companionDestH3 = h3Utils.latLngToH3(companionDestination, 7);
+          const userPickupH3Res8 = h3Utils.latLngToH3(userPickup, 8);
+          
+          const pickupHexDistance = h3Utils.getH3Distance(userPickupH3Res8, companionPickupH3);
+          const destHexDistance = h3Utils.getH3Distance(userDestH3, companionDestH3);
+          
+          // Log for debugging
+          logger.debug(`[PriyoSathi] Checking companion ${companion.companion_id}: pickupDist=${pickupHexDistance}, destDist=${destHexDistance}`);
+          
+          // If h3 distance calculation fails (returns -1), use distance-based fallback
+          let isPickupNearby = false;
+          let isDestNearby = false;
+          
+          if (pickupHexDistance >= 0) {
+            // Pickup must be within 2 hexagons at resolution 8 (~1.3km radius)
+            isPickupNearby = pickupHexDistance <= 2;
+          } else {
+            // Fallback: use actual distance calculation (allow within 2km)
+            isPickupNearby = distanceFromUser <= 2;
+          }
+          
+          if (destHexDistance >= 0) {
+            // Destination must be within 2 hexagons at resolution 7 (~15km radius)
+            isDestNearby = destHexDistance <= 2;
+          } else {
+            // Fallback: use actual distance calculation for destination
+            const destDistance = calculateDistance(
+              userDestination.latitude,
+              userDestination.longitude,
+              companionDestination.latitude,
+              companionDestination.longitude
+            );
+            isDestNearby = destDistance <= 15; // 15km radius for destination
+          }
+          
+          // FIX: Skip if pickup OR destination is not nearby
+          if (!isPickupNearby || !isDestNearby) {
+            result.skippedIds.push(companion.companion_id);
+            logger.debug(
+              `[PriyoSathi] Skipping companion ${companion.companion_id} - not in range ` +
+              `(pickupNearby: ${isPickupNearby}, destNearby: ${isDestNearby}, pickupHexDist: ${pickupHexDistance}, destHexDist: ${destHexDistance})`
+            );
+            continue;
+          }
+          
+          logger.info(`[PriyoSathi] Companion ${companion.companion_id} is nearby and matches route!`);
 
           // Check if companion is on the route (within 50m of route line)
           const isOnRoute = this.isLocationOnRoute(
@@ -172,7 +227,8 @@ export class PriyoSathiService {
 
           // Determine if auto-match is possible
           const canAutoMatch = 
-            isNearby &&
+            isPickupNearby &&
+            isDestNearby &&
             detourMinutes <= PRIYO_SATHI_CONSTRAINTS.MAX_DETOUR_MINUTES &&
             distanceFromUser <= PRIYO_SATHI_CONSTRAINTS.MAX_DETOUR_DISTANCE_KM;
 
@@ -231,33 +287,51 @@ export class PriyoSathiService {
   }
 
   /**
-   * Get companion's location ONLY if they have an active ride request.
-   * This ensures we only show companions who are actually looking for a ride.
+   * Get companion's pickup and destination locations ONLY if they have an active ride request
+   * with BOTH pickup AND destination set.
+   * This ensures we only show companions who are actually online and ready to match.
    * 
    * FIX: Previously this returned saved "Home" location even if user was offline,
    * which incorrectly showed offline users as "available and near route".
+   * 
+   * FIX: Now requires BOTH pickup AND destination to be set - a user should only
+   * be visible if they have completed setting up their ride request.
    */
-  private async getCompanionLocation(companionId: string): Promise<Location | null> {
-    // ONLY check if companion has an active ride - this means they are actually online and looking for a ride
+  private async getCompanionRideLocations(companionId: string): Promise<{
+    pickup: Location;
+    destination: Location;
+  } | null> {
+    // ONLY check if companion has an active ride with BOTH pickup AND destination set
     const { data: activeRide } = await supabaseAdmin
       .from('rides')
-      .select('pickup_lat, pickup_lng')
+      .select('pickup_lat, pickup_lng, dropoff_lat, dropoff_lng')
       .eq('user_id', companionId)
-      .in('status', ['CREATING_POOL', 'PENDING', 'MATCHED', 'WAITING_FOR_DRIVER'])
+      .in('status', ['CREATING_POOL', 'SEARCHING', 'PENDING', 'MATCHED', 'WAITING_FOR_DRIVER'])
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
 
-    if (activeRide?.pickup_lat && activeRide?.pickup_lng) {
+    // FIX: Require BOTH pickup AND destination to be set
+    // User should only be visible when they have set both locations
+    if (
+      activeRide?.pickup_lat && activeRide?.pickup_lng &&
+      activeRide?.dropoff_lat && activeRide?.dropoff_lng
+    ) {
       return {
-        latitude: activeRide.pickup_lat,
-        longitude: activeRide.pickup_lng,
+        pickup: {
+          latitude: activeRide.pickup_lat,
+          longitude: activeRide.pickup_lng,
+        },
+        destination: {
+          latitude: activeRide.dropoff_lat,
+          longitude: activeRide.dropoff_lng,
+        },
       };
     }
 
     // FIX: Do NOT fallback to saved Home location - this would show offline users as "available"
-    // A user should only be shown as "nearby" if they have an active ride request,
-    // meaning they are currently online and looking for a ride.
+    // A user should only be shown as "nearby" if they have an active ride request
+    // with both pickup and destination set.
     return null;
   }
 

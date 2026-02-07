@@ -349,9 +349,10 @@ export class PriyoSathiController {
         });
       }
 
+      // Fetch inviter's ride with pickup and destination
       const { data: ride, error: rideError } = await supabaseAdmin
         .from('rides')
-        .select('id, pool_id, dropoff_address')
+        .select('id, pool_id, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, dropoff_address')
         .eq('id', ride_id)
         .eq('user_id', userId)
         .single();
@@ -360,6 +361,69 @@ export class PriyoSathiController {
         return res.status(404).json({
           success: false,
           error: { code: 'RIDE_NOT_FOUND', message: 'Ride not found' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // FIX: Check if companion has an active ride with BOTH pickup AND destination set
+      const { data: companionRide } = await supabaseAdmin
+        .from('rides')
+        .select('pickup_lat, pickup_lng, dropoff_lat, dropoff_lng')
+        .eq('user_id', companionId)
+        .in('status', ['CREATING_POOL', 'PENDING', 'MATCHED', 'SEARCHING', 'WAITING_FOR_DRIVER'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!companionRide?.pickup_lat || !companionRide?.pickup_lng || 
+          !companionRide?.dropoff_lat || !companionRide?.dropoff_lng) {
+        return res.status(400).json({
+          success: false,
+          error: { 
+            code: 'COMPANION_NOT_AVAILABLE', 
+            message: 'Your friend is not currently looking for a ride or has not set their locations' 
+          },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // FIX: Check hexagon proximity - both pickup AND destination must be in range
+      // Resolution 8 (~461m per hex) for pickup, allow distance 2 = ~1.3km radius
+      // Resolution 7 (~5.2km per hex) for destination, allow distance 2 = ~15km radius
+      const { h3Utils } = await import('../utils/h3.utils');
+      const { calculateDistance } = await import('../utils/helper');
+      
+      const inviterPickupH3 = h3Utils.latLngToH3({ latitude: ride.pickup_lat, longitude: ride.pickup_lng }, 8);
+      const inviterDestH3 = h3Utils.latLngToH3({ latitude: ride.dropoff_lat, longitude: ride.dropoff_lng }, 7);
+      const companionPickupH3 = h3Utils.latLngToH3({ latitude: companionRide.pickup_lat, longitude: companionRide.pickup_lng }, 8);
+      const companionDestH3 = h3Utils.latLngToH3({ latitude: companionRide.dropoff_lat, longitude: companionRide.dropoff_lng }, 7);
+
+      const pickupHexDistance = h3Utils.getH3Distance(inviterPickupH3, companionPickupH3);
+      const destHexDistance = h3Utils.getH3Distance(inviterDestH3, companionDestH3);
+
+      // Calculate actual distances as fallback
+      const pickupDistance = calculateDistance(
+        ride.pickup_lat, ride.pickup_lng,
+        companionRide.pickup_lat, companionRide.pickup_lng
+      );
+      const destDistance = calculateDistance(
+        ride.dropoff_lat, ride.dropoff_lng,
+        companionRide.dropoff_lat, companionRide.dropoff_lng
+      );
+
+      // Check proximity with fallback to distance-based check
+      const isPickupNearby = pickupHexDistance >= 0 ? pickupHexDistance <= 2 : pickupDistance <= 2;
+      const isDestNearby = destHexDistance >= 0 ? destHexDistance <= 2 : destDistance <= 15;
+
+      logger.debug(`[PriyoSathi] Invite check: pickupHexDist=${pickupHexDistance}, destHexDist=${destHexDistance}, pickupDist=${pickupDistance.toFixed(2)}km, destDist=${destDistance.toFixed(2)}km`);
+
+      if (!isPickupNearby || !isDestNearby) {
+        return res.status(400).json({
+          success: false,
+          error: { 
+            code: 'NOT_IN_RANGE', 
+            message: 'Your friend is not on a matching route. Pickup or destination locations are too far apart.' 
+          },
           timestamp: new Date().toISOString(),
         });
       }
@@ -586,13 +650,21 @@ export class PriyoSathiController {
       // Get pool details if exists
       let poolInfo = null;
       if (ride.pool_id) {
-        const { data: pool } = await supabaseAdmin
+        const { data: pool, error: poolError } = await supabaseAdmin
           .from('pools')
           .select('id, status, current_passengers, max_passengers, fare_per_person, destination_address')
           .eq('id', ride.pool_id)
           .single();
         
         if (pool) {
+          // Log pool status for debugging
+          logger.debug(`[PriyoSathi] Pool ${pool.id} status: ${pool.status}, passengers: ${pool.current_passengers}/${pool.max_passengers}`);
+          
+          // FIX: Determine if pool is joinable
+          // Pool must be in WAITING_FOR_RIDERS or WAITING_FOR_DRIVER status AND have space
+          const isJoinableStatus = ['WAITING_FOR_RIDERS', 'WAITING_FOR_DRIVER'].includes(pool.status);
+          const hasSpace = pool.current_passengers < pool.max_passengers;
+          
           poolInfo = {
             pool_id: pool.id,
             status: pool.status,
@@ -600,9 +672,13 @@ export class PriyoSathiController {
             max_passengers: pool.max_passengers,
             fare_per_person: pool.fare_per_person,
             destination_address: pool.destination_address,
-            can_join: ['WAITING_FOR_RIDERS'].includes(pool.status) && pool.current_passengers < pool.max_passengers,
+            can_join: isJoinableStatus && hasSpace,
           };
+        } else if (poolError) {
+          logger.warn(`[PriyoSathi] Error fetching pool ${ride.pool_id}:`, poolError);
         }
+      } else {
+        logger.debug(`[PriyoSathi] Ride ${ride.id} has no pool_id yet`);
       }
 
       res.json({
@@ -721,7 +797,9 @@ export class PriyoSathiController {
         });
       }
 
-      if (pool.status !== 'WAITING_FOR_RIDERS') {
+      // FIX Issue 2: Allow joining if pool is WAITING_FOR_RIDERS OR WAITING_FOR_DRIVER
+      // Previously only checked WAITING_FOR_RIDERS, which incorrectly rejected join requests
+      if (!['WAITING_FOR_RIDERS', 'WAITING_FOR_DRIVER'].includes(pool.status)) {
         return res.status(400).json({
           success: false,
           error: { code: 'POOL_NOT_AVAILABLE', message: 'Pool is no longer accepting riders' },
@@ -812,37 +890,16 @@ export class PriyoSathiController {
     }
   }
 
+  /**
+   * Notify companions when user searches for a ride
+   * NOTE: This method is deprecated - use findAndNotifyCompanions from priyoSathiService instead
+   * which properly checks if companions are online and in hexagon range
+   */
   async notifyCompanionsOnRideSearch(userId: string, rideId: string): Promise<number> {
-    try {
-      const { data: companions } = await supabaseAdmin
-        .from('priyo_sathi')
-        .select('companion_id')
-        .eq('user_id', userId)
-        .eq('status', 'ACCEPTED');
-
-      if (!companions || companions.length === 0) {
-        return 0;
-      }
-
-      const { data: user } = await supabaseAdmin
-        .from('users')
-        .select('phone, full_name')
-        .eq('id', userId)
-        .single();
-
-      for (const c of companions) {
-        await notificationService.sendPriyoSathiInviteNotification(
-          c.companion_id,
-          user?.full_name || user?.phone || 'Your Priyo Sathi',
-          rideId
-        );
-      }
-
-      return companions.length;
-    } catch (error) {
-      logger.error('[PriyoSathi] Failed to notify companions:', error);
-      return 0;
-    }
+    // Deprecated - use priyoSathiService.findAndNotifyCompanions instead
+    // which properly validates companion locations and hexagon proximity
+    logger.warn('[PriyoSathi] notifyCompanionsOnRideSearch is deprecated, use findAndNotifyCompanions instead');
+    return 0;
   }
 }
 
