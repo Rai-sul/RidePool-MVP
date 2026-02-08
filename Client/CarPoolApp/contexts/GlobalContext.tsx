@@ -88,7 +88,7 @@ type GlobalContextType = {
   // New: Active trip management
   activeTrip: ActiveTripState | null;
   hasActiveTrip: boolean;
-  startTrip: (pool: Pool) => void;
+  startTrip: (pool: Pool, options?: { pickupLocation?: Location | null; destination?: Destination | null; rideType?: 'female-only' | 'regular' | null }) => void;
   updateTripStatus: (status: ActiveTripState['status']) => void;
   endTrip: () => void;
   cancelTrip: () => Promise<boolean>;
@@ -233,19 +233,35 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   }, [authUser]);
 
   // Start a new trip (when user creates or joins a pool)
-  const startTrip = async (pool: Pool) => {
+  const startTrip = async (
+    pool: Pool,
+    options?: { pickupLocation?: Location | null; destination?: Destination | null; rideType?: 'female-only' | 'regular' | null }
+  ) => {
+    const resolvedPickup = options?.pickupLocation ?? pickupLocation;
+    const resolvedDestination = options?.destination ?? selectedDestination;
+    const resolvedRideType = options?.rideType ?? selectedRideType;
+
     const trip: ActiveTripState = {
       poolId: pool.id,
       pool,
-      pickupLocation,
-      destination: selectedDestination,
-      rideType: selectedRideType,
+      pickupLocation: resolvedPickup || null,
+      destination: resolvedDestination || null,
+      rideType: resolvedRideType || null,
       createdAt: new Date().toISOString(),
       status: 'waiting',
     };
 
     setActiveTrip(trip);
     setSelectedPool(pool);
+    if (options?.pickupLocation) {
+      setPickupLocation(options.pickupLocation);
+    }
+    if (options?.destination) {
+      setSelectedDestination(options.destination);
+    }
+    if (options?.rideType !== undefined) {
+      setSelectedRideType(options.rideType);
+    }
 
     // Persist to storage
     try {

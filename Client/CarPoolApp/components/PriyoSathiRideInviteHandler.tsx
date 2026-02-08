@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as Location from 'expo-location';
 import { useNotificationContext } from '../contexts/NotificationContext';
-import { useGlobalContext } from '../contexts/GlobalContext';
+import { useGlobalContext, toDisplayPool } from '../contexts/GlobalContext';
 import { Users, X, Check, MapPin, Navigation } from './Icons';
 import LinearGradient from './LinearGradient';
 import { priyoSathiService, RideInviteDetails } from '../services/priyoSathi.service';
+import { poolService } from '../services/pool.service';
 
 export default function PriyoSathiRideInviteHandler() {
   const { priyoSathiInvite, clearPriyoSathiInvite } = useNotificationContext();
-  const { userProfile, setSelectedPool, startTrip } = useGlobalContext();
+  const { userProfile, startTrip, pickupLocation, selectedDestination, selectedRideType } = useGlobalContext();
   const router = useRouter();
   
   const [joining, setJoining] = useState(false);
@@ -61,8 +61,8 @@ export default function PriyoSathiRideInviteHandler() {
   const handleAccept = async () => {
     if (!inviteDetails || !priyoSathiInvite) return;
 
-    // If pool isn't joinable, refresh once to avoid stale data
-    if (!inviteDetails.pool?.can_join) {
+    // If pool exists but isn't joinable, refresh once to avoid stale data
+    if (inviteDetails.pool && !inviteDetails.pool.can_join) {
       try {
         const refreshed = await priyoSathiService.getRideInviteDetails(priyoSathiInvite.rideId);
         if (refreshed.success && refreshed.data) {
@@ -88,56 +88,119 @@ export default function PriyoSathiRideInviteHandler() {
       }
     }
 
-    setJoining(true);
-    try {
-      // Request location permission and get current location
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(
-          'Location Required',
-          'Please enable location access to join the ride.',
-          [{ text: 'OK' }]
-        );
-        setJoining(false);
-        return;
-      }
-
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-
-      // Get address for the current location
-      let pickupAddress = 'Current Location';
+    // If pool details are missing, try a single refresh but allow join attempt anyway
+    if (!inviteDetails.pool) {
       try {
-        const [address] = await Location.reverseGeocodeAsync({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
-        if (address) {
-          pickupAddress = [address.name, address.street, address.city]
-            .filter(Boolean)
-            .join(', ') || 'Current Location';
+        const refreshed = await priyoSathiService.getRideInviteDetails(priyoSathiInvite.rideId);
+        if (refreshed.success && refreshed.data?.pool) {
+          setInviteDetails(refreshed.data);
+          if (!refreshed.data.pool.can_join) {
+            Alert.alert(
+              'Cannot Join',
+              `This pool is not accepting riders. Status: ${refreshed.data.pool.status} (${refreshed.data.pool.current_passengers}/${refreshed.data.pool.max_passengers})`,
+              [{ text: 'OK', onPress: handleDismiss }]
+            );
+            return;
+          }
         }
       } catch {
-        // Use default address
+        // Continue and let server resolve pool from the invite
       }
+    }
+
+    if (!pickupLocation?.latitude || !pickupLocation?.longitude) {
+      Alert.alert(
+        'Pickup Location Required',
+        'Please set your pickup location before joining the pool.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    if (!selectedDestination?.latitude || !selectedDestination?.longitude) {
+      Alert.alert(
+        'Destination Required',
+        'Please set your destination before joining the pool.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    setJoining(true);
+    try {
+      const pickupAddress = pickupLocation.address || pickupLocation.name || 'Pickup Location';
+      const dropoffAddress = selectedDestination.address || selectedDestination.name || 'Destination';
+      const genderRestriction = selectedRideType === 'female-only' ? 'FEMALE_ONLY' : 'ANY';
 
       // Accept the invite and join the pool
       const response = await priyoSathiService.acceptRideInvite(
         priyoSathiInvite.rideId,
-        location.coords.latitude,
-        location.coords.longitude,
-        pickupAddress
+        pickupLocation.latitude,
+        pickupLocation.longitude,
+        pickupAddress,
+        selectedDestination.latitude,
+        selectedDestination.longitude,
+        dropoffAddress,
+        genderRestriction
       );
 
       if (response.success && response.data) {
-        // Update global context with new pool
-        if (setSelectedPool) {
-          setSelectedPool({
-            id: response.data.pool_id,
-            status: 'WAITING_FOR_DRIVER',
-          } as any);
+        const rideType = selectedRideType || (inviteDetails.gender_restriction === 'FEMALE_ONLY' ? 'female-only' : 'regular');
+        const pickupOverride = pickupLocation || {
+          name: inviteDetails.pickup.address || 'Pickup',
+          address: inviteDetails.pickup.address || 'Pickup',
+          latitude: inviteDetails.pickup.latitude,
+          longitude: inviteDetails.pickup.longitude,
+        };
+        const destinationOverride = selectedDestination || {
+          name: inviteDetails.destination.address || 'Destination',
+          address: inviteDetails.destination.address || 'Destination',
+          latitude: inviteDetails.destination.latitude,
+          longitude: inviteDetails.destination.longitude,
+        };
+
+        let poolToUse: any = null;
+        try {
+          const poolResponse = await poolService.getPoolById(response.data.pool_id);
+          if (poolResponse.success && poolResponse.data?.pool) {
+            poolToUse = toDisplayPool(poolResponse.data.pool);
+          }
+        } catch {
+          // Fall back to invite details
         }
+
+        if (!poolToUse) {
+          poolToUse = {
+            id: response.data.pool_id,
+            creator_user_id: '',
+            driver_id: null,
+            vehicle_id: null,
+            status: inviteDetails.pool?.status || 'WAITING_FOR_RIDERS',
+            destination_lat: inviteDetails.destination.latitude,
+            destination_lng: inviteDetails.destination.longitude,
+            destination_address: inviteDetails.destination.address || null,
+            destination_h3_index: '',
+            vehicle_type: inviteDetails.vehicle_type,
+            gender_restriction: inviteDetails.gender_restriction,
+            current_passengers: inviteDetails.pool?.current_passengers || 2,
+            max_passengers: inviteDetails.pool?.max_passengers || 4,
+            viability_score: null,
+            score_breakdown: null,
+            fare_per_person: inviteDetails.pool?.fare_per_person || null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            started_at: null,
+            completed_at: null,
+            deleted_at: null,
+          };
+        }
+
+        // Start trip with correct pool + locations so floating button works
+        startTrip(poolToUse, {
+          pickupLocation: pickupOverride,
+          destination: destinationOverride,
+          rideType,
+        });
 
         clearPriyoSathiInvite();
         setInviteDetails(null);
@@ -294,7 +357,7 @@ export default function PriyoSathiRideInviteHandler() {
                 </Text>
                 
                 {/* Pool not available warning */}
-                {inviteDetails && !inviteDetails.pool?.can_join && (
+                {inviteDetails?.pool && !inviteDetails.pool.can_join && (
                   <View className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3">
                     <Text className="text-amber-700 text-sm text-center">
                       ⚠️ This pool may not be accepting riders. Tap Join to refresh.
@@ -313,11 +376,11 @@ export default function PriyoSathiRideInviteHandler() {
                   
                   <TouchableOpacity
                     onPress={handleAccept}
-                    disabled={joining || !inviteDetails?.pool}
+                    disabled={joining || !inviteDetails}
                     className={`flex-1 py-3 rounded-xl items-center ${
                       isFemale ? 'bg-pink-500' : 'bg-blue-600'
                     }`}
-                    style={{ opacity: joining || !inviteDetails?.pool ? 0.5 : 1 }}
+                    style={{ opacity: joining || !inviteDetails ? 0.5 : 1 }}
                   >
                     {joining ? (
                       <ActivityIndicator size="small" color="#ffffff" />

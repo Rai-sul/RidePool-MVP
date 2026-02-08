@@ -7,9 +7,9 @@ import { smartRouteService, PoolMemberRoute } from './smartRoute.service';
 import { config } from '../config/env';
 
 // Timer configuration - single source of truth
-const INITIAL_SEARCH_MS = 120000; // 2 minutes initial search
-const EXTENDED_SEARCH_MS = 60000; // 1 minute extended search
-const TOTAL_SEARCH_MS = INITIAL_SEARCH_MS + EXTENDED_SEARCH_MS; // 3 minutes total
+const INITIAL_SEARCH_MS = 30000; // 30 seconds initial search
+const EXTENDED_SEARCH_MS = 10000; // 10 seconds extended search
+const TOTAL_SEARCH_MS = INITIAL_SEARCH_MS + EXTENDED_SEARCH_MS; // 40 seconds total
 const MIN_PASSENGERS_TO_START = 2;
 
 // Export constants for client to use via API
@@ -206,6 +206,73 @@ export class LookupTimeService {
     this.timers.delete(poolId);
     logger.info(`[LookupTime] Cancelled timer for pool ${poolId}`);
     return true;
+  }
+
+  /**
+   * Handle a member joining a pool.
+   * - If pool has enough passengers, transition immediately to WAITING_FOR_DRIVER
+   * - If already waiting for driver, refresh the combined route for all members
+   */
+  async handleMemberJoined(poolId: string): Promise<void> {
+    try {
+      const { data: pool, error: poolError } = await supabaseAdmin
+        .from('pools')
+        .select('id, status, current_passengers')
+        .eq('id', poolId)
+        .single();
+
+      if (poolError || !pool) {
+        logger.warn(`[LookupTime] Pool ${poolId} not found for member join handling`);
+        return;
+      }
+
+      // If pool is still searching and has enough passengers, transition now
+      if (pool.status === 'WAITING_FOR_RIDERS' && pool.current_passengers >= MIN_PASSENGERS_TO_START) {
+        this.cancelLookupTimer(poolId);
+        await this.transitionToWaitingForDriver(poolId);
+        return;
+      }
+
+      // If pool already waiting for driver, refresh cached route to include new member
+      if (['WAITING_FOR_DRIVER', 'READY_TO_START'].includes(pool.status) && pool.current_passengers >= MIN_PASSENGERS_TO_START) {
+        await smartRouteService.clearPoolRoute(poolId);
+
+        const { data: members } = await supabaseAdmin
+          .from('pool_members')
+          .select('ride_id')
+          .eq('pool_id', poolId)
+          .is('left_at', null);
+
+        const rideIds = (members || []).map((m: any) => m.ride_id).filter(Boolean);
+        if (rideIds.length === 0) {
+          return;
+        }
+
+        const { data: rides } = await supabaseAdmin
+          .from('rides')
+          .select('user_id, pickup_lat, pickup_lng, pickup_address, dropoff_lat, dropoff_lng, dropoff_address')
+          .in('id', rideIds);
+
+        if (rides && rides.length > 0) {
+          const memberRoutes: PoolMemberRoute[] = rides.map((ride: any) => ({
+            userId: ride.user_id,
+            pickup: { latitude: ride.pickup_lat, longitude: ride.pickup_lng },
+            dropoff: { latitude: ride.dropoff_lat, longitude: ride.dropoff_lng },
+            pickupAddress: ride.pickup_address,
+            dropoffAddress: ride.dropoff_address,
+          }));
+
+          await smartRouteService.calculateCombinedRoute(
+            memberRoutes,
+            { optimizeFor: 'balanced' },
+            poolId
+          );
+          logger.info(`[LookupTime] Refreshed route after member joined pool ${poolId} (${memberRoutes.length} members)`);
+        }
+      }
+    } catch (error) {
+      logger.warn(`[LookupTime] Failed to handle member join for pool ${poolId}:`, error);
+    }
   }
 
   private async cancelPool(poolId: string, creatorUserId: string): Promise<void> {

@@ -157,7 +157,11 @@ class PriyoSathiService {
     rideId: string,
     pickupLat: number,
     pickupLng: number,
-    pickupAddress?: string
+    pickupAddress?: string,
+    dropoffLat?: number,
+    dropoffLng?: number,
+    dropoffAddress?: string,
+    genderRestriction?: string
   ): Promise<AcceptRideInviteResponse> {
     return apiClient.post<AcceptRideInviteResponse>(
       API_ENDPOINTS.PRIYO_SATHI.ACCEPT_RIDE_INVITE(rideId),
@@ -165,6 +169,10 @@ class PriyoSathiService {
         pickup_lat: pickupLat,
         pickup_lng: pickupLng,
         pickup_address: pickupAddress,
+        dropoff_lat: dropoffLat,
+        dropoff_lng: dropoffLng,
+        dropoff_address: dropoffAddress,
+        gender_restriction: genderRestriction,
       }
     );
   }

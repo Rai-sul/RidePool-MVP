@@ -12,7 +12,7 @@ type SearchingDriverProps = {
   onSearchExpired?: () => void;
 };
 
-const SEARCH_TIMEOUT_SECONDS = 30;
+const SEARCH_TIMEOUT_SECONDS = 40;
 
 const statusMessages = [
   'Waiting for other riders...',

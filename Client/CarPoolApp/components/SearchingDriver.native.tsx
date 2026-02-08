@@ -12,7 +12,7 @@ type SearchingDriverProps = {
   onSearchExpired?: () => void;
 };
 
-const DEFAULT_TOTAL_SEARCH_SECONDS = 180;
+const DEFAULT_TOTAL_SEARCH_SECONDS = 40;
 
 const statusMessages = [
   'Waiting for other riders...',
@@ -133,7 +133,7 @@ export default function SearchingDriver({ onCancel, onDriverFound, onSearchExpir
         startTrip(result.data.pool);
         // Reset the search state
         setSearchExpired(false);
-        setRemainingSeconds(SEARCH_TIMEOUT_SECONDS);
+        setRemainingSeconds(DEFAULT_TOTAL_SEARCH_SECONDS);
       }
     } catch (err) {
       console.error('[SearchingDriver] Failed to create new pool:', err);

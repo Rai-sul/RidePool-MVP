@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, ScrollView, ActivityIndicator } from 'react-native';
-import { Users, X, UserPlus, Check, MapPin, Clock } from './Icons';
+import { Users, X, UserPlus, Check, MapPin, Clock, RefreshCw } from './Icons';
 import { priyoSathiService, Companion, NearbyCompanion } from '../services/priyoSathi.service';
 import LinearGradient from './LinearGradient';
 
@@ -137,12 +137,22 @@ export default function PriyoSathiInviteModal({
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity
-                onPress={onClose}
-                className="w-8 h-8 bg-white/20 rounded-full items-center justify-center"
-              >
-                <X size={18} color="#ffffff" />
-              </TouchableOpacity>
+              <View className="flex-row items-center gap-2">
+                <TouchableOpacity
+                  onPress={fetchData}
+                  disabled={loading}
+                  className="w-8 h-8 bg-white/20 rounded-full items-center justify-center"
+                  style={{ opacity: loading ? 0.6 : 1 }}
+                >
+                  <RefreshCw size={16} color="#ffffff" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={onClose}
+                  className="w-8 h-8 bg-white/20 rounded-full items-center justify-center"
+                >
+                  <X size={18} color="#ffffff" />
+                </TouchableOpacity>
+              </View>
             </View>
           </LinearGradient>
 
@@ -169,6 +179,14 @@ export default function PriyoSathiInviteModal({
                 <Text className="text-gray-500 text-center px-4">
                   None of your Priyo Sathi friends are currently looking for a ride nearby.
                 </Text>
+                <TouchableOpacity
+                  onPress={fetchData}
+                  className="mt-4 px-4 py-2 bg-gray-100 rounded-lg"
+                  disabled={loading}
+                  style={{ opacity: loading ? 0.6 : 1 }}
+                >
+                  <Text className="text-gray-700 font-semibold">Reload</Text>
+                </TouchableOpacity>
               </View>
             ) : (
               <View className="space-y-3">

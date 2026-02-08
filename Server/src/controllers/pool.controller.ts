@@ -414,6 +414,8 @@ export class PoolController {
         .eq('id', poolId)
         .single();
 
+      let creatorNotified = false;
+
       let farePerPerson = fareService.applyPoolDiscount(
         fareService.calculateBaseFare(ride.distance_km || 10, pool.vehicle_type),
         joinResult.current_passengers
@@ -469,17 +471,20 @@ export class PoolController {
                 type: 'POOL_MATCH',
                 metadata: { poolId, farePerPerson, newPassengers: joinResult.current_passengers },
               });
+              if (member.user_id === pool.creator_user_id) {
+                creatorNotified = true;
+              }
             }
           }
         }
       }
 
-      // Note: No need to clear/recalculate route here because:
-      // - Users can only join during WAITING_FOR_RIDERS status
-      // - Route is calculated when pool transitions to WAITING_FOR_DRIVER
-      // - At that point, all members are finalized
+      // Ensure pool transitions and smart route are refreshed when a member joins
+      await lookupTimeService.handleMemberJoined(poolId);
 
-      await notificationService.sendPoolFoundNotification(pool.creator_user_id, poolId);
+      if (!creatorNotified) {
+        await notificationService.sendPoolFoundNotification(pool.creator_user_id, poolId);
+      }
 
       res.json({
         success: true,

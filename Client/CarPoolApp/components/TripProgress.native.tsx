@@ -237,8 +237,8 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   const isPoolCreator = selectedPool?.creator_user_id === userProfile?.id;
 
   // Constants for search timing (server is source of truth)
-  const INITIAL_SECONDS = searchTiming?.initialSeconds ?? 120;
-  const TOTAL_SECONDS = searchTiming?.totalSeconds ?? 180;
+  const INITIAL_SECONDS = searchTiming?.initialSeconds ?? 30;
+  const TOTAL_SECONDS = searchTiming?.totalSeconds ?? 40;
 
   // Calculate search phase and remaining seconds from pool.created_at
   // This is the single source of truth - always calculated from creation time

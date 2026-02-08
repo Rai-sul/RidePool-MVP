@@ -4,6 +4,7 @@ import { h3Utils } from '../utils/h3.utils';
 import { calculateDistance } from '../utils/helper';
 import { logger } from '../utils/logger';
 import { memoryCacheService } from './memoryCache.service';
+import { config } from '../config/env';
 import { Location, Ride } from '../types';
 
 // Priyo Sathi matching constraints from requirements
@@ -14,7 +15,6 @@ const PRIYO_SATHI_CONSTRAINTS = {
   MAX_COMPANIONS: 5,           // Maximum Priyo Sathi per user
   AVERAGE_CITY_SPEED_KMH: 25,  // Average city speed for time calculations
   MAX_DISPLAY_DISTANCE_KM: 5,  // Maximum distance to show companion as "available"
-  MAX_H3_DISTANCE: 1,          // Max H3 cell distance (0=same, 1=adjacent)
 };
 
 const PRIYO_SATHI_INTENT_TTL_SECONDS = 300; // 5 minutes
@@ -113,15 +113,15 @@ export class PriyoSathiService {
     const companionPickupH3 = h3Utils.latLngToH3(companionRide.pickup, 9);
     const companionDestH3 = h3Utils.latLngToH3(companionRide.destination, 7);
 
-    const pickupH3Distance = h3Utils.getH3Distance(inviterPickupH3, companionPickupH3);
-    const destH3Distance = h3Utils.getH3Distance(inviterDestH3, companionDestH3);
+    const pickupRing = h3Utils.getH3Ring(inviterPickupH3, config.h3.searchRadiusPickup);
+    const destinationRing = h3Utils.getH3Ring(inviterDestH3, config.h3.searchRadiusDestination);
 
-    if (pickupH3Distance > PRIYO_SATHI_CONSTRAINTS.MAX_H3_DISTANCE) {
-      return { eligible: false, reason: 'Pickup locations are not in the same or adjacent hexagon' };
+    if (!pickupRing.includes(companionPickupH3)) {
+      return { eligible: false, reason: 'Pickup locations are not within search radius' };
     }
 
-    if (destH3Distance > PRIYO_SATHI_CONSTRAINTS.MAX_H3_DISTANCE) {
-      return { eligible: false, reason: 'Destinations are not in the same or adjacent hexagon' };
+    if (!destinationRing.includes(companionDestH3)) {
+      return { eligible: false, reason: 'Destinations are not within search radius' };
     }
 
     return { eligible: true };
@@ -213,6 +213,8 @@ export class PriyoSathiService {
 
       const userPickupH3 = h3Utils.latLngToH3(userPickup, 9);
       const userDestH3 = h3Utils.latLngToH3(userDestination, 7);
+      const pickupRing = h3Utils.getH3Ring(userPickupH3, config.h3.searchRadiusPickup);
+      const destinationRing = h3Utils.getH3Ring(userDestH3, config.h3.searchRadiusDestination);
 
       // Check each companion for matching potential
       for (const companion of companions) {
@@ -246,13 +248,11 @@ export class PriyoSathiService {
           // Check if companion pickup/current location is in same or adjacent hexagon (H3 res 9)
           // Distance <= 1 means same cell or adjacent cells
           const companionH3 = h3Utils.latLngToH3(companionLocation, 9);
-          const h3Distance = h3Utils.getH3Distance(userPickupH3, companionH3);
-          const isNearbyHexagon = h3Distance <= PRIYO_SATHI_CONSTRAINTS.MAX_H3_DISTANCE;
+          const isNearbyHexagon = pickupRing.includes(companionH3);
 
           // Check if companion destination is in same or adjacent hexagon (H3 res 7)
           const companionDestH3 = h3Utils.latLngToH3(companionDestination, 7);
-          const destH3Distance = h3Utils.getH3Distance(userDestH3, companionDestH3);
-          const isDestinationNearby = destH3Distance <= PRIYO_SATHI_CONSTRAINTS.MAX_H3_DISTANCE;
+          const isDestinationNearby = destinationRing.includes(companionDestH3);
 
           // Check if companion is on the route (within 50m of route line)
           const isOnRoute = this.isLocationOnRoute(
@@ -268,7 +268,7 @@ export class PriyoSathiService {
           if (!isWithinProximity) {
             // User is online but too far away - do NOT show them as available
             result.skippedIds.push(companion.companion_id);
-            logger.debug(`[PriyoSathi] Skipping companion ${companion.companion_id} - not within pickup/destination hex proximity (pickup h3Distance: ${h3Distance}, dest h3Distance: ${destH3Distance})`);
+            logger.debug(`[PriyoSathi] Skipping companion ${companion.companion_id} - not within pickup/destination hex proximity`);
             continue;
           }
 
