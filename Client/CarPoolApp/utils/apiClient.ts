@@ -175,7 +175,15 @@ class ApiClient {
         }
 
         const errorData = await response.json().catch(() => ({}));
-        console.error(`[ApiClient] Error on ${endpoint}:`, JSON.stringify(errorData, null, 2));
+        const errorCode = errorData?.error?.code as string | undefined;
+        const benignErrorCodes = new Set([
+          'ALREADY_INVITED_BY_COMPANION',
+        ]);
+        if (errorCode && benignErrorCodes.has(errorCode)) {
+          console.warn(`[ApiClient] Expected error on ${endpoint}:`, JSON.stringify(errorData, null, 2));
+        } else {
+          console.error(`[ApiClient] Error on ${endpoint}:`, JSON.stringify(errorData, null, 2));
+        }
         
         // Extract error message from various response formats
         let errorMessage = 'Request failed';
@@ -208,8 +216,16 @@ class ApiClient {
     } catch (error: any) {
       clearTimeout(timeoutId);
       
-      // Don't log expected auth errors as system errors
-      if (!(error instanceof ApiError && error.status === 401)) {
+      // Don't log expected auth errors or benign validation errors as system errors
+      if (error instanceof ApiError) {
+        const errorCode = error.data?.error?.code as string | undefined;
+        const benignErrorCodes = new Set([
+          'ALREADY_INVITED_BY_COMPANION',
+        ]);
+        if (error.status !== 401 && !(errorCode && benignErrorCodes.has(errorCode))) {
+          console.error(`[ApiClient] Request failed:`, error.message || error);
+        }
+      } else {
         console.error(`[ApiClient] Request failed:`, error.message || error);
       }
 

@@ -9,6 +9,7 @@ import { useRides } from '../hooks/useRides';
 import { rideService, RideEstimate, RideEstimateResponse, AlternativeRouteInfo } from '../services/ride.service';
 import { poolService } from '../services/pool.service';
 import { priyoSathiService } from '../services/priyoSathi.service';
+import { ApiError } from '../utils/apiClient';
 import LinearGradient from './LinearGradient';
 import GoogleMapView from './GoogleMapView';
 import AvailablePoolCard, { PoolSearchResultData, CoRiderInfo } from './AvailablePoolCard';
@@ -195,6 +196,9 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
               await priyoSathiService.inviteToRide(friend.id, result.data.ride.id);
               console.log(`[RideConfirmation] Invited ${friend.name} to ride`);
             } catch (inviteErr) {
+              if (inviteErr instanceof ApiError && inviteErr.data?.error?.code === 'ALREADY_INVITED_BY_COMPANION') {
+                Alert.alert('Already Invited', inviteErr.message);
+              }
               console.warn(`[RideConfirmation] Failed to invite ${friend.name}:`, inviteErr);
             }
           }

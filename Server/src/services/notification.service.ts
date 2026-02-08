@@ -376,13 +376,19 @@ export class NotificationService {
     userId: string,
     inviterName: string,
     rideId: string,
-    poolId?: string
+    poolId?: string,
+    inviterId?: string
   ): Promise<void> {
     await this.sendPushNotification(userId, {
       title: 'Ride Invite',
       message: `${inviterName} is looking for a ride. Join them?`,
       type: 'MESSAGE',
-      metadata: { ride_id: rideId, inviter: inviterName, pool_id: poolId || null },
+      metadata: {
+        ride_id: rideId,
+        inviter: inviterName,
+        inviter_id: inviterId || null,
+        pool_id: poolId || null,
+      },
     });
   }
 

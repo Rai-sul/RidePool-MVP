@@ -10,7 +10,7 @@ import { poolService } from '../services/pool.service';
 
 export default function PriyoSathiRideInviteHandler() {
   const { priyoSathiInvite, clearPriyoSathiInvite } = useNotificationContext();
-  const { userProfile, startTrip, pickupLocation, selectedDestination, selectedRideType } = useGlobalContext();
+  const { userProfile, startTrip, pickupLocation, selectedDestination, selectedRideType, activeTrip, cancelTrip } = useGlobalContext();
   const router = useRouter();
   
   const [joining, setJoining] = useState(false);
@@ -128,8 +128,23 @@ export default function PriyoSathiRideInviteHandler() {
 
     setJoining(true);
     try {
-      const pickupAddress = pickupLocation.address || pickupLocation.name || 'Pickup Location';
-      const dropoffAddress = selectedDestination.address || selectedDestination.name || 'Destination';
+      // If user already has an active pool, leave it first to avoid dual pools
+      if (activeTrip?.poolId && activeTrip.poolId !== inviteDetails?.pool?.pool_id) {
+        const left = await cancelTrip();
+        if (!left) {
+          Alert.alert(
+            'Cannot Join',
+            'Please cancel your current pool before joining this invite.',
+            [{ text: 'OK' }]
+          );
+          setJoining(false);
+          return;
+        }
+      }
+
+      // Prefer place name for friendlier display, fallback to address
+      const pickupAddress = pickupLocation.name || pickupLocation.address || 'Pickup Location';
+      const dropoffAddress = selectedDestination.name || selectedDestination.address || 'Destination';
       const genderRestriction = selectedRideType === 'female-only' ? 'FEMALE_ONLY' : 'ANY';
 
       // Accept the invite and join the pool
@@ -205,8 +220,8 @@ export default function PriyoSathiRideInviteHandler() {
         clearPriyoSathiInvite();
         setInviteDetails(null);
 
-        // Navigate to the searching/trip progress screen
-        router.push('/searching');
+        // Navigate directly to trip progress (same as normal join flow)
+        router.replace('/trip-progress');
 
         Alert.alert(
           'Joined Successfully! 🎉',

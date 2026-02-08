@@ -57,6 +57,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   // Use real-time pool updates
   const {
     pool: poolDetails,
+    members,
     searchTiming,
     coRiders,
     hasDriver,
@@ -68,6 +69,26 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
     refresh: refreshPool,
     clearUnreadMessages,
   } = usePoolRealtime(selectedPool?.id || null, userProfile?.id || null);
+
+  // Pool status info
+  const currentPassengers = poolDetails?.current_passengers || selectedPool?.current_passengers || 1;
+  const maxPassengers = poolDetails?.max_passengers || selectedPool?.max_passengers || 3;
+
+  // Use the current member's ride info (server source of truth) for per-user trip details
+  const currentMemberRide = useMemo(() => {
+    const poolMembers = (poolDetails?.pool_members || members || []) as Array<{
+      user_id: string;
+      ride?: {
+        pickup_lat?: number;
+        pickup_lng?: number;
+        dropoff_lat?: number;
+        dropoff_lng?: number;
+        pickup_address?: string;
+        dropoff_address?: string;
+      };
+    }>;
+    return poolMembers.find(m => m.user_id === userProfile?.id)?.ride || null;
+  }, [poolDetails?.pool_members, members, userProfile?.id]);
 
   // Reset fetch status when pool status changes (forces refetch)
   // This MUST run before the fetch effect
@@ -228,10 +249,6 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
     eta: `${selectedPool?.eta || 5} mins`,
     phone: ''
   };
-
-  // Pool status info
-  const currentPassengers = poolDetails?.current_passengers || selectedPool?.current_passengers || 1;
-  const maxPassengers = poolDetails?.max_passengers || selectedPool?.max_passengers || 3;
 
   // Check if current user is the pool creator
   const isPoolCreator = selectedPool?.creator_user_id === userProfile?.id;
@@ -401,44 +418,23 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   // When cancelled with expired search (no riders joined), show "No Riders Found" card
   // If only 1 person in pool, don't redirect - show appropriate UI instead
   useEffect(() => {
-    if (poolStatus !== 'CANCELLED' || !onPoolCancelled) {
+    if (poolStatus !== 'CANCELLED') {
       return;
     }
 
     // If pool creator and search expired with no riders, show the expired UI
-    // The server will set status to CANCELLED, but we show "No Riders Found" card
     if (isPoolCreator && searchPhase === 'expired' && currentPassengers < 2) {
-      // Stay on page to show "No Riders Found" card - don't redirect
       return;
     }
 
-    // If pool has only 1 person (the creator), don't redirect - show "No Riders Found" card
-    // This handles the case where riders left and only the creator remains
+    // If pool has only 1 person, stay on page and show the "No Riders Found" UI
     if (currentPassengers <= 1) {
-      // Stay on page - user can create a new pool
       return;
     }
 
-    // Pool was cancelled for other reasons with multiple passengers
-    // This shouldn't normally happen, but handle it gracefully
-    const message = isPoolCreator
-      ? 'Your pool was cancelled.'
-      : 'Your pool was cancelled. You will be redirected to the home screen.';
-
-    Alert.alert(
-      'Pool Cancelled',
-      message,
-      [
-        {
-          text: 'OK',
-          onPress: () => {
-            onPoolCancelled();
-          },
-        },
-      ],
-      { cancelable: false }
-    );
-  }, [poolStatus, onPoolCancelled, isPoolCreator, searchPhase, currentPassengers]);
+    // Pool cancelled with multiple passengers: stay on page (no auto-redirect)
+    Alert.alert('Pool Cancelled', 'Your pool was cancelled.');
+  }, [poolStatus, isPoolCreator, searchPhase, currentPassengers]);
 
   // Calculate progress based on pool status
   const getProgress = () => {
@@ -669,8 +665,8 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
             1. Search expired with no riders (searchPhase === 'expired' && currentPassengers < 2)
             2. Pool was CANCELLED with only 1 person (server cancelled due to timeout or riders left)
         */}
-        {isPoolCreator && (
-          (searchPhase === 'expired' && currentPassengers < 2) || 
+        {(
+          (isPoolCreator && searchPhase === 'expired' && currentPassengers < 2) ||
           (poolStatus === 'CANCELLED' && currentPassengers <= 1)
         ) && (
           <View className="mx-6 mt-4 bg-yellow-50 rounded-2xl p-5 border-2 border-yellow-300">
@@ -1143,14 +1139,14 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
             <View className="flex-row justify-between">
               <Text className="text-gray-600">Pickup</Text>
               <Text className="font-medium text-right flex-1 ml-4" numberOfLines={1}>
-              {pickupLocation?.name || pickupLocation?.address || 'N/A'}
+              {currentMemberRide?.pickup_address || pickupLocation?.name || pickupLocation?.address || 'N/A'}
               </Text>
             </View>
 
             <View className="flex-row justify-between">
               <Text className="text-gray-600">Destination</Text>
               <Text className="font-medium text-right flex-1 ml-4" numberOfLines={1}>
-                {destination?.name || destination?.address || 'N/A'}
+                {currentMemberRide?.dropoff_address || destination?.name || destination?.address || 'N/A'}
               </Text>
             </View>
           </View>

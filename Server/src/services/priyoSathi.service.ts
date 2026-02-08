@@ -309,7 +309,8 @@ export class PriyoSathiService {
               companion.companion_id,
               userData?.full_name || userData?.phone || 'Your Priyo Sathi',
               rideId,
-              poolId
+              poolId,
+              userId
             );
             result.notifiedIds.push(companion.companion_id);
           }

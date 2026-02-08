@@ -35,12 +35,6 @@ export default function PriyoSathiInviteModal({
   const accentColor = isFemale ? '#ec4899' : '#2563eb';
   const accentGradient: [string, string] = isFemale ? ['#ec4899', '#e11d48'] : ['#2563eb', '#1d4ed8'];
 
-  useEffect(() => {
-    if (visible) {
-      fetchData();
-    }
-  }, [visible, pickupLat, pickupLng, destinationLat, destinationLng]);
-
   const fetchData = async () => {
     setLoading(true);
     setError(null);
@@ -87,6 +81,14 @@ export default function PriyoSathiInviteModal({
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (visible) {
+      fetchData();
+    }
+  }, [visible, pickupLat, pickupLng, destinationLat, destinationLng]);
+
+  
 
   const handleInvite = async (companion: Companion) => {
     const companionId = companion.companion_id;

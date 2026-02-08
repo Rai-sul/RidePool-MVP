@@ -271,24 +271,8 @@ export class PoolController {
       // Start the 2-phase server-side timer (30s initial + 10s extended = 40s total)
       lookupTimeService.startLookupTimer(pool.id);
 
-      // Notify Priyo Sathi companions about the ride (async, don't block response)
-      const userPickup: Location = { latitude: poolData.pickup_lat, longitude: poolData.pickup_lng };
-      const userDestination: Location = { latitude: poolData.destination_lat, longitude: poolData.destination_lng };
-      
-      priyoSathiService.findAndNotifyCompanions(
-        userId,
-        userPickup,
-        userDestination,
-        creatorRide.id,
-        pool.id,
-        true // Send notifications when pool is actually created
-      ).then((priyoSathiResult) => {
-        if (priyoSathiResult.notifiedIds.length > 0) {
-          logger.info(`[Pool] Notified ${priyoSathiResult.notifiedIds.length} Priyo Sathi companions for pool ${pool.id}`);
-        }
-      }).catch((err) => {
-        logger.warn('[Pool] Failed to notify Priyo Sathi companions:', err);
-      });
+      // Do NOT auto-notify Priyo Sathi companions here.
+      // Priyo Sathi invites should only be sent explicitly by the user.
 
       res.status(201).json({
         success: true,

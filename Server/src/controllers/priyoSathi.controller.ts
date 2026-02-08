@@ -420,6 +420,33 @@ export class PriyoSathiController {
         });
       }
 
+      // Prevent reverse invites: if companion already invited this user recently, block
+      const reverseInviteWindow = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      const { data: reverseInvites } = await supabaseAdmin
+        .from('notifications')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('type', 'MESSAGE')
+        .gte('created_at', reverseInviteWindow)
+        .eq('metadata->>inviter_id', companionId)
+        .not('metadata->ride_id', 'is', null)
+        .limit(1);
+
+      if (reverseInvites && reverseInvites.length > 0) {
+        const { data: companionUser } = await supabaseAdmin
+          .from('users')
+          .select('full_name, phone')
+          .eq('id', companionId)
+          .single();
+        const companionName = companionUser?.full_name || companionUser?.phone || 'Your friend';
+
+        return res.status(400).json({
+          success: false,
+          error: { code: 'ALREADY_INVITED_BY_COMPANION', message: `${companionName} already invited you` },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       const { data: ride, error: rideError } = await supabaseAdmin
         .from('rides')
         .select('id, pool_id, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng')
@@ -531,7 +558,8 @@ export class PriyoSathiController {
         companionId,
         user?.full_name || user?.phone || 'A friend',
         ride_id,
-        poolId || undefined
+        poolId || undefined,
+        userId
       );
 
       logger.info(`[PriyoSathi] User ${userId} invited ${companionId} to ride ${ride_id}`);
@@ -1208,7 +1236,9 @@ export class PriyoSathiController {
         await notificationService.sendPriyoSathiInviteNotification(
           c.companion_id,
           user?.full_name || user?.phone || 'Your Priyo Sathi',
-          rideId
+          rideId,
+          undefined,
+          userId
         );
         notifiedCount++;
         logger.info(`[PriyoSathi] Notified companion ${c.companion_id} (${distance.toFixed(2)}km away)`);
