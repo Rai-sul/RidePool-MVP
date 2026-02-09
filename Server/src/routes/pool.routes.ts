@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
 import { poolController } from '../controllers/pool.controller';
-import { validate, CreatePoolSchema, JoinPoolSchema, PoolIdParamSchema, SearchPoolsSchema } from '../middleware/validation';
+import { validate, CreatePoolSchema, JoinPoolSchema, PoolIdParamSchema, SearchPoolsSchema, PoolPreviewSchema } from '../middleware/validation';
 
 const router = Router();
 
@@ -9,6 +9,7 @@ router.get('/search', authenticate, validate(SearchPoolsSchema, 'query'), (req, 
 router.post('/', authenticate, validate(CreatePoolSchema), (req, res, next) => poolController.createPool(req, res, next));
 router.post('/create', authenticate, validate(CreatePoolSchema), (req, res, next) => poolController.createPool(req, res, next));
 router.get('/:poolId', authenticate, validate(PoolIdParamSchema, 'params'), (req, res, next) => poolController.getPool(req, res, next));
+router.get('/:poolId/preview', authenticate, validate(PoolIdParamSchema, 'params'), validate(PoolPreviewSchema, 'query'), (req, res, next) => poolController.previewPool(req, res, next));
 router.get('/:poolId/route', authenticate, validate(PoolIdParamSchema, 'params'), (req, res, next) => poolController.getOptimizedRoute(req, res, next));
 router.get('/:poolId/combined-route', authenticate, validate(PoolIdParamSchema, 'params'), (req, res, next) => poolController.getCombinedRoute(req, res, next));
 router.post('/:poolId/combined-route/update', authenticate, validate(PoolIdParamSchema, 'params'), (req, res, next) => poolController.updateCombinedRoute(req, res, next));

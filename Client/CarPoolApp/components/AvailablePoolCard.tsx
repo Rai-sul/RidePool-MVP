@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
-import { MapPin, Clock, Users, Navigation, Car, Route } from './Icons';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { MapPin, Clock, Users, Navigation, Car, Route, Taka } from './Icons';
 import LinearGradient from './LinearGradient';
 
 export interface PoolSearchResultData {
@@ -44,6 +44,14 @@ interface AvailablePoolCardProps {
   isSelected: boolean;
   onPress: () => void;
   coRiders?: CoRiderInfo[];
+  userEstimate?: {
+    fare: number;
+    savings: number;
+    durationMinutes: number;
+    distanceKm?: number;
+  } | null;
+  previewLoading?: boolean;
+  previewError?: string | null;
 }
 
 export default function AvailablePoolCard({
@@ -51,6 +59,9 @@ export default function AvailablePoolCard({
   isSelected,
   onPress,
   coRiders = [],
+  userEstimate,
+  previewLoading = false,
+  previewError = null,
 }: AvailablePoolCardProps) {
   const currentPassengers = pool.currentPassengers || 1;
   const maxPassengers = pool.maxPassengers || 4;
@@ -230,6 +241,68 @@ export default function AvailablePoolCard({
           <Text style={{ fontSize: 11, color: '#6b7280', textAlign: 'center' }}>Route Match</Text>
         </View>
       </View>
+
+      {/* User-specific Estimate */}
+      {isSelected && (
+        <View
+          style={{
+            marginBottom: 12,
+            backgroundColor: '#f0f9ff',
+            borderRadius: 12,
+            padding: 12,
+            borderWidth: 1,
+            borderColor: '#bae6fd',
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: '#0284c7' }}>
+              Your estimate for this pool
+            </Text>
+            {previewLoading && <ActivityIndicator size="small" color="#0284c7" />}
+          </View>
+
+          {previewLoading ? (
+            <Text style={{ fontSize: 12, color: '#64748b' }}>Calculating your fare and time...</Text>
+          ) : previewError ? (
+            <Text style={{ fontSize: 12, color: '#b91c1c' }}>{previewError}</Text>
+          ) : userEstimate ? (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                  <Taka className="w-4 h-4 text-green-600" />
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#16a34a' }}>
+                    ৳{Math.round(userEstimate.fare)}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 11, color: '#64748b' }}>Your Fare</Text>
+              </View>
+
+              <View style={{ width: 1, backgroundColor: '#e2e8f0' }} />
+
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                  <Clock size={14} color="#0ea5e9" />
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#0ea5e9' }}>
+                    {Math.round(userEstimate.durationMinutes)} min
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 11, color: '#64748b' }}>Your Time</Text>
+              </View>
+
+              <View style={{ width: 1, backgroundColor: '#e2e8f0' }} />
+
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#16a34a', marginBottom: 2 }}>
+                  ৳{Math.round(userEstimate.savings)}
+                </Text>
+                <Text style={{ fontSize: 11, color: '#64748b' }}>You Save</Text>
+              </View>
+            </View>
+          ) : (
+            <Text style={{ fontSize: 12, color: '#64748b' }}>Tap to load your estimate.</Text>
+          )}
+        </View>
+      )}
 
       {/* Co-Riders Section */}
       {(coRiders.length > 0 || pool.poolPickupLocation?.name || pool.poolPickupLocation?.address || pool.poolDropoffLocation?.name || pool.poolDropoffLocation?.address) && (

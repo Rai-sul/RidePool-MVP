@@ -12,6 +12,9 @@ import { googleMapsService } from '../services/googleMaps.service';
 import { priyoSathiService } from '../services/priyoSathi.service';
 import { CreatePoolRequest, Pool, PoolStatus, Ride, RideStatus, Location, VehicleType } from '../types';
 import { h3Utils } from '../utils/h3.utils';
+import { calculateDistance } from '../utils/helper';
+import { unifiedCacheService } from '../services/unifiedCache.service';
+import crypto from 'crypto';
 import { logger } from '../utils/logger';
 
 /**
@@ -908,6 +911,299 @@ export class PoolController {
       res.json({
         success: true,
         data: { message: 'Pool cancelled successfully' },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Preview pool details for a prospective member before joining
+   * Returns estimated fare/time/savings for the current user and all pickup/dropoff stops
+   */
+  async previewPool(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { poolId } = req.params;
+      const query = (req as any).validatedQuery || req.query;
+      const PREVIEW_ROUTE_CACHE_TTL = 600;
+
+      const pickupLat = Number(query.pickup_lat);
+      const pickupLng = Number(query.pickup_lng);
+      const dropoffLat = Number(query.dropoff_lat);
+      const dropoffLng = Number(query.dropoff_lng);
+      const pickupName = query.pickup_name as string | undefined;
+      const pickupAddress = query.pickup_address as string | undefined;
+      const dropoffName = query.dropoff_name as string | undefined;
+      const dropoffAddress = query.dropoff_address as string | undefined;
+
+      // Get pool with members and their rides
+      const { data: pool, error: poolError } = await supabaseAdmin
+        .from('pools')
+        .select(`
+          *,
+          pool_members(user_id, ride_id, left_at)
+        `)
+        .eq('id', poolId)
+        .single();
+
+      if (poolError || !pool) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Fetch rides for existing pool members
+      const activeMembers = pool.pool_members?.filter((m: any) => m.left_at === null) || [];
+      const rideIds = activeMembers.map((m: any) => m.ride_id).filter(Boolean);
+      let members: PoolMemberLocation[] = [];
+      let memberRides: any[] = [];
+      const hasRouteGeometry = (route: any | null): boolean => {
+        return Boolean(route?.optimizedRoute?.encoded || (route?.optimizedRoute?.coordinates && route.optimizedRoute.coordinates.length > 0));
+      };
+
+      if (rideIds.length > 0) {
+        const { data: rides, error: ridesError } = await supabaseAdmin
+          .from('rides')
+          .select('*')
+          .in('id', rideIds);
+
+        if (ridesError || !rides) {
+          return res.status(500).json({
+            success: false,
+            error: { code: 'RIDES_FETCH_ERROR', message: 'Failed to fetch member rides' },
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        memberRides = rides;
+        members = rides.map((ride: any) => ({
+          userId: ride.user_id,
+          pickup: { latitude: ride.pickup_lat, longitude: ride.pickup_lng },
+          dropoff: { latitude: ride.dropoff_lat, longitude: ride.dropoff_lng },
+          pickupAddress: ride.pickup_address,
+          dropoffAddress: ride.dropoff_address,
+        }));
+      }
+
+      const currentMember: PoolMemberLocation = {
+        userId,
+        pickup: { latitude: pickupLat, longitude: pickupLng },
+        dropoff: { latitude: dropoffLat, longitude: dropoffLng },
+        pickupAddress: pickupName || pickupAddress,
+        dropoffAddress: dropoffName || dropoffAddress,
+      };
+
+      // Build member set for preview estimate (includes current user)
+      const membersWithUser = [...members];
+      const existingIndex = membersWithUser.findIndex((m) => m.userId === userId);
+      if (existingIndex >= 0) {
+        membersWithUser[existingIndex] = currentMember;
+      } else {
+        membersWithUser.push(currentMember);
+      }
+
+      // Calculate optimized route for existing members only (cost-optimized)
+      let existingRoute: any | null = null;
+      if (members.length > 0) {
+        const signature = memberRides
+          .map((ride) => ({
+            id: ride.id,
+            updated_at: ride.updated_at,
+            pickup_lat: ride.pickup_lat,
+            pickup_lng: ride.pickup_lng,
+            dropoff_lat: ride.dropoff_lat,
+            dropoff_lng: ride.dropoff_lng,
+          }))
+          .sort((a, b) => a.id.localeCompare(b.id));
+
+        const hash = crypto
+          .createHash('sha1')
+          .update(JSON.stringify(signature))
+          .digest('hex');
+
+        const cacheKey = `pool:preview:route:${poolId}:${pool.vehicle_type}:${hash}`;
+        const cached = await unifiedCacheService.get<any>(cacheKey);
+
+        if (cached && hasRouteGeometry(cached)) {
+          existingRoute = cached;
+        } else {
+          // Primary: combined route in a single API call (cost optimized)
+          existingRoute = await rideEstimationService.calculateOptimizedPoolRoute(
+            members,
+            pool.vehicle_type as VehicleType,
+            true,
+            false
+          );
+
+          // Fallback: per-leg routes if combined route fails (no straight lines)
+          if (!hasRouteGeometry(existingRoute)) {
+            existingRoute = await rideEstimationService.calculateOptimizedPoolRoute(
+              members,
+              pool.vehicle_type as VehicleType,
+              true,
+              false,
+              true
+            );
+          }
+
+          if (hasRouteGeometry(existingRoute)) {
+            await unifiedCacheService.set(cacheKey, existingRoute, PREVIEW_ROUTE_CACHE_TTL);
+          }
+        }
+      }
+
+      // Calculate optimized route for preview estimate (includes current user, cost-optimized)
+      const previewRoute = await rideEstimationService.calculateOptimizedPoolRoute(
+        membersWithUser,
+        pool.vehicle_type as VehicleType,
+        true,
+        false
+      );
+
+      // Calculate fare breakdown for the preview member set
+      const breakdown = fareService.calculateFullFare(
+        previewRoute.totalDistanceKm,
+        previewRoute.totalDurationMinutes,
+        pool.vehicle_type as VehicleType,
+        membersWithUser.length
+      );
+
+      const memberFares = membersWithUser.map((member) => {
+        const memberDistance = calculateDistance(
+          member.pickup.latitude,
+          member.pickup.longitude,
+          member.dropoff.latitude,
+          member.dropoff.longitude
+        );
+        const memberDuration = Math.ceil((memberDistance / 25) * 60);
+
+        // Solo fare for comparison
+        const soloFare = fareService.calculateFullFare(memberDistance, memberDuration, pool.vehicle_type as VehicleType, 1);
+
+        // Member's share (proportional to their distance)
+        const distanceRatio = previewRoute.totalDistanceKm > 0
+          ? memberDistance / previewRoute.totalDistanceKm
+          : 1 / Math.max(membersWithUser.length, 1);
+        const memberFare = Math.round(breakdown.farePerPerson * distanceRatio * membersWithUser.length);
+
+        return {
+          userId: member.userId,
+          fare: Math.max(memberFare, breakdown.farePerPerson),
+          distanceKm: Math.round(memberDistance * 10) / 10,
+          savings: Math.max(0, soloFare.displayedFare - breakdown.farePerPerson),
+        };
+      });
+
+      const userFare = memberFares.find((m) => m.userId === userId);
+
+      // Estimate user's in-ride time based on optimized stop order
+      const userPickupStop = previewRoute.stops.find(
+        (stop) => stop.userId === userId && stop.type === 'pickup'
+      );
+      const userDropoffStop = previewRoute.stops.find(
+        (stop) => stop.userId === userId && stop.type === 'dropoff'
+      );
+      let userDurationMinutes: number;
+
+      if (userPickupStop && userDropoffStop) {
+        userDurationMinutes = Math.max(0, userDropoffStop.estimatedArrival - userPickupStop.estimatedArrival);
+      } else {
+        const fallbackDistance = calculateDistance(pickupLat, pickupLng, dropoffLat, dropoffLng);
+        userDurationMinutes = Math.ceil((fallbackDistance / 25) * 60);
+      }
+
+      // Build stops for map: existing members + current user (avoid duplicates)
+      const existingStops = (existingRoute?.stops || []) as Array<{
+        type: 'pickup' | 'dropoff';
+        userId: string;
+        address?: string;
+        location: Location;
+        order: number;
+        estimatedArrival: number;
+      }>;
+      const fallbackStops = members.flatMap((member, idx) => ([
+        {
+          type: 'pickup' as const,
+          userId: member.userId,
+          address: member.pickupAddress,
+          location: member.pickup,
+          order: idx * 2,
+          estimatedArrival: 0,
+        },
+        {
+          type: 'dropoff' as const,
+          userId: member.userId,
+          address: member.dropoffAddress,
+          location: member.dropoff,
+          order: idx * 2 + 1,
+          estimatedArrival: 0,
+        },
+      ]));
+      const baseStops = existingStops.length > 0 ? existingStops : fallbackStops;
+      const stopsForMap = [
+        ...baseStops,
+        ...(baseStops.some((s) => s.userId === userId)
+          ? []
+          : [
+              {
+                location: currentMember.pickup,
+                address: currentMember.pickupAddress,
+                type: 'pickup' as const,
+                userId,
+                order: 0,
+                estimatedArrival: 0,
+              },
+              {
+                location: currentMember.dropoff,
+                address: currentMember.dropoffAddress,
+                type: 'dropoff' as const,
+                userId,
+                order: 0,
+                estimatedArrival: userDurationMinutes,
+              },
+            ]),
+      ];
+
+      res.json({
+        success: true,
+        data: {
+          poolId,
+          memberCount: membersWithUser.length,
+          userEstimate: {
+            fare: userFare?.fare ?? breakdown.farePerPerson,
+            savings: userFare?.savings ?? breakdown.savings,
+            durationMinutes: userDurationMinutes,
+            distanceKm: userFare?.distanceKm ?? Math.round(calculateDistance(pickupLat, pickupLng, dropoffLat, dropoffLng) * 10) / 10,
+          },
+          route: {
+            totalDistanceKm: existingRoute?.totalDistanceKm ?? 0,
+            totalDurationMinutes: existingRoute?.totalDurationMinutes ?? 0,
+            farePerPerson: breakdown.farePerPerson,
+            coordinates: existingRoute?.optimizedRoute?.coordinates || [],
+            encoded: existingRoute?.optimizedRoute?.encoded || '',
+          },
+          stops: stopsForMap.map((stop) => ({
+            type: stop.type,
+            userId: stop.userId,
+            address: stop.address,
+            location: stop.location,
+            order: stop.order,
+            estimatedArrival: stop.estimatedArrival,
+            isCurrentUser: stop.userId === userId,
+          })),
+        },
         timestamp: new Date().toISOString(),
       });
     } catch (error) {

@@ -41,6 +41,7 @@ export const API_ENDPOINTS = {
     CANCEL: (poolId: string) => `/pools/${poolId}/cancel`,
     SEARCH: '/pools/search',
     ROUTE: (poolId: string) => `/pools/${poolId}/route`,
+    PREVIEW: (poolId: string) => `/pools/${poolId}/preview`,
     COMBINED_ROUTE: (poolId: string) => `/pools/${poolId}/combined-route`,
     UPDATE_COMBINED_ROUTE: (poolId: string) => `/pools/${poolId}/combined-route/update`,
     FARE: (poolId: string) => `/pools/${poolId}/fare`,

@@ -218,7 +218,10 @@ export class RideEstimationService {
    */
   async calculateOptimizedPoolRoute(
     members: PoolMemberLocation[],
-    vehicleType: VehicleType
+    vehicleType: VehicleType,
+    useGoogleMaps: boolean = true,
+    includeFallbackLine: boolean = true,
+    forcePerLeg: boolean = false
   ): Promise<PoolRouteOptimization> {
     if (members.length === 0) {
       throw new Error('No members provided for route optimization');
@@ -226,7 +229,7 @@ export class RideEstimationService {
 
     // Single member - simple pickup to dropoff
     if (members.length === 1) {
-      return this.calculateSingleMemberRoute(members[0], vehicleType);
+      return this.calculateSingleMemberRoute(members[0], vehicleType, useGoogleMaps, includeFallbackLine);
     }
 
     // Multiple members - need to optimize stop order
@@ -237,7 +240,10 @@ export class RideEstimationService {
     let totalDurationMinutes = 0;
     const legs: RouteLeg[] = [];
     let allCoordinates: Array<{ lat: number; lng: number }> = [];
+    let encodedRoute = '';
     let currentMinutes = 0;
+    const shouldFetchFullRoute =
+      useGoogleMaps && !includeFallbackLine && googleMapsService.isAvailable() && !forcePerLeg;
 
     for (let i = 0; i < stops.length - 1; i++) {
       const from = stops[i].location;
@@ -246,7 +252,7 @@ export class RideEstimationService {
       let legDistance: number;
       let legDuration: number;
 
-      if (googleMapsService.isAvailable()) {
+      if (useGoogleMaps && googleMapsService.isAvailable() && !shouldFetchFullRoute) {
         const routeResult = await googleMapsService.getRoute(from, to);
         if (routeResult) {
           legDistance = routeResult.distance;
@@ -257,10 +263,22 @@ export class RideEstimationService {
         } else {
           legDistance = calculateDistance(from.latitude, from.longitude, to.latitude, to.longitude);
           legDuration = Math.ceil((legDistance / 25) * 60);
+          if (includeFallbackLine) {
+            if (allCoordinates.length === 0) {
+              allCoordinates.push({ lat: from.latitude, lng: from.longitude });
+            }
+            allCoordinates.push({ lat: to.latitude, lng: to.longitude });
+          }
         }
       } else {
         legDistance = calculateDistance(from.latitude, from.longitude, to.latitude, to.longitude);
         legDuration = Math.ceil((legDistance / 25) * 60);
+        if (includeFallbackLine) {
+          if (allCoordinates.length === 0) {
+            allCoordinates.push({ lat: from.latitude, lng: from.longitude });
+          }
+          allCoordinates.push({ lat: to.latitude, lng: to.longitude });
+        }
       }
 
       totalDistanceKm += legDistance;
@@ -281,6 +299,19 @@ export class RideEstimationService {
       });
     }
 
+    // If we intentionally avoided per-leg routes, fetch a single combined route polyline
+    if (shouldFetchFullRoute && stops.length >= 2) {
+      const origin = stops[0].location;
+      const destination = stops[stops.length - 1].location;
+      const waypoints = stops.slice(1, -1).map((stop) => stop.location);
+
+      const combinedRoute = await googleMapsService.getRoute(origin, destination, { waypoints });
+      if (combinedRoute?.geometry?.coordinates) {
+        allCoordinates = combinedRoute.geometry.coordinates;
+        encodedRoute = combinedRoute.geometry.encoded;
+      }
+    }
+
     // Calculate fare per person
     const fareBreakdown = fareService.calculateFullFare(
       totalDistanceKm,
@@ -291,7 +322,7 @@ export class RideEstimationService {
 
     return {
       optimizedRoute: {
-        encoded: '', // Would need to encode the full path
+        encoded: encodedRoute,
         coordinates: allCoordinates,
         legs,
       },
@@ -395,18 +426,22 @@ export class RideEstimationService {
    */
   private async calculateSingleMemberRoute(
     member: PoolMemberLocation,
-    vehicleType: VehicleType
+    vehicleType: VehicleType,
+    useGoogleMaps: boolean,
+    includeFallbackLine: boolean
   ): Promise<PoolRouteOptimization> {
     let distanceKm: number;
     let durationMinutes: number;
     let coordinates: Array<{ lat: number; lng: number }> = [];
+    let encoded = '';
 
-    if (googleMapsService.isAvailable()) {
+    if (useGoogleMaps && googleMapsService.isAvailable()) {
       const route = await googleMapsService.getRoute(member.pickup, member.dropoff);
       if (route) {
         distanceKm = route.distance;
         durationMinutes = route.duration;
         coordinates = route.geometry?.coordinates || [];
+        encoded = route.geometry?.encoded || '';
       } else {
         distanceKm = calculateDistance(
           member.pickup.latitude,
@@ -415,6 +450,12 @@ export class RideEstimationService {
           member.dropoff.longitude
         );
         durationMinutes = Math.ceil((distanceKm / 25) * 60);
+        if (includeFallbackLine) {
+          coordinates = [
+            { lat: member.pickup.latitude, lng: member.pickup.longitude },
+            { lat: member.dropoff.latitude, lng: member.dropoff.longitude },
+          ];
+        }
       }
     } else {
       distanceKm = calculateDistance(
@@ -424,13 +465,19 @@ export class RideEstimationService {
         member.dropoff.longitude
       );
       durationMinutes = Math.ceil((distanceKm / 25) * 60);
+      if (includeFallbackLine) {
+        coordinates = [
+          { lat: member.pickup.latitude, lng: member.pickup.longitude },
+          { lat: member.dropoff.latitude, lng: member.dropoff.longitude },
+        ];
+      }
     }
 
     const fareBreakdown = fareService.calculateFullFare(distanceKm, durationMinutes, vehicleType, 1);
 
     return {
       optimizedRoute: {
-        encoded: '',
+        encoded,
         coordinates,
         legs: [{
           from: member.pickup,

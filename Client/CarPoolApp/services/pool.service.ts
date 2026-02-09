@@ -145,6 +145,46 @@ export interface PoolRouteResponse {
   }>;
 }
 
+export interface PoolPreviewParams {
+  pickup_lat: number;
+  pickup_lng: number;
+  dropoff_lat: number;
+  dropoff_lng: number;
+  pickup_address?: string;
+  pickup_name?: string;
+  dropoff_address?: string;
+  dropoff_name?: string;
+}
+
+export interface PoolPreviewStop {
+  type: 'pickup' | 'dropoff';
+  userId: string;
+  address?: string;
+  location: { latitude: number; longitude: number };
+  order: number;
+  estimatedArrival: number;
+  isCurrentUser: boolean;
+}
+
+export interface PoolPreviewResponse {
+  poolId: string;
+  memberCount: number;
+  userEstimate: {
+    fare: number;
+    savings: number;
+    durationMinutes: number;
+    distanceKm: number;
+  };
+  route: {
+    totalDistanceKm: number;
+    totalDurationMinutes: number;
+    farePerPerson: number;
+    coordinates: Array<{ lat: number; lng: number }>;
+    encoded: string;
+  };
+  stops: PoolPreviewStop[];
+}
+
 export interface PoolFareResponse {
   poolId: string;
   farePerPerson: number;
@@ -323,6 +363,13 @@ export const poolService = {
    */
   async searchPools(params: SearchPoolsParams): Promise<ApiResponse<PoolSearchResult>> {
     return apiClient.get(API_ENDPOINTS.POOL.SEARCH, params);
+  },
+
+  /**
+   * Preview pool details and user-specific estimate before joining
+   */
+  async getPoolPreview(poolId: string, params: PoolPreviewParams): Promise<ApiResponse<PoolPreviewResponse>> {
+    return apiClient.get(API_ENDPOINTS.POOL.PREVIEW(poolId), params);
   },
 
   /**

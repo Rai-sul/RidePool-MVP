@@ -101,6 +101,17 @@ export const SearchPoolsSchema = z.object({
   gender_restriction: GenderPreferenceEnum.optional().default('ANY'),
 });
 
+export const PoolPreviewSchema = z.object({
+  pickup_lat: z.string().transform((val) => parseFloat(val)).pipe(z.number().min(-90).max(90)),
+  pickup_lng: z.string().transform((val) => parseFloat(val)).pipe(z.number().min(-180).max(180)),
+  dropoff_lat: z.string().transform((val) => parseFloat(val)).pipe(z.number().min(-90).max(90)),
+  dropoff_lng: z.string().transform((val) => parseFloat(val)).pipe(z.number().min(-180).max(180)),
+  pickup_address: z.string().max(500).optional(),
+  pickup_name: z.string().max(200).optional(),
+  dropoff_address: z.string().max(500).optional(),
+  dropoff_name: z.string().max(200).optional(),
+});
+
 export const ProcessPaymentSchema = z.object({
   ride_id: z.string().uuid(),
   amount: z.number().positive(),
