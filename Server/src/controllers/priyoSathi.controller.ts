@@ -625,6 +625,7 @@ export class PriyoSathiController {
       );
 
       // Check pending invites for each candidate (both directions)
+      // Only consider invites for rides that are still active (not cancelled)
       const recentWindow = new Date(Date.now() - 30 * 60 * 1000).toISOString();
       const candidateIds = result.candidates.map(c => c.companionId);
 
@@ -641,14 +642,6 @@ export class PriyoSathiController {
           .gte('created_at', recentWindow)
           .not('metadata->ride_id', 'is', null);
 
-        if (sentInvites) {
-          for (const inv of sentInvites) {
-            if ((inv.metadata as any)?.inviter_id === userId) {
-              invitesFromMe.add(inv.user_id);
-            }
-          }
-        }
-
         // Invites sent BY companions TO the current user
         const { data: receivedInvites } = await supabaseAdmin
           .from('notifications')
@@ -658,10 +651,45 @@ export class PriyoSathiController {
           .gte('created_at', recentWindow)
           .not('metadata->ride_id', 'is', null);
 
+        // Collect all ride IDs from invite notifications to batch-check status
+        const allRideIds = new Set<string>();
+        for (const inv of (sentInvites || [])) {
+          const rideId = (inv.metadata as any)?.ride_id;
+          if (rideId) allRideIds.add(rideId);
+        }
+        for (const inv of (receivedInvites || [])) {
+          const rideId = (inv.metadata as any)?.ride_id;
+          if (rideId) allRideIds.add(rideId);
+        }
+
+        // Batch-check which rides are still active (not cancelled)
+        const activeRideIds = new Set<string>();
+        if (allRideIds.size > 0) {
+          const { data: activeRides } = await supabaseAdmin
+            .from('rides')
+            .select('id')
+            .in('id', Array.from(allRideIds))
+            .not('status', 'eq', 'CANCELLED');
+
+          if (activeRides) {
+            for (const r of activeRides) activeRideIds.add(r.id);
+          }
+        }
+
+        if (sentInvites) {
+          for (const inv of sentInvites) {
+            const rideId = (inv.metadata as any)?.ride_id;
+            if ((inv.metadata as any)?.inviter_id === userId && rideId && activeRideIds.has(rideId)) {
+              invitesFromMe.add(inv.user_id);
+            }
+          }
+        }
+
         if (receivedInvites) {
           for (const inv of receivedInvites) {
             const inviterId = (inv.metadata as any)?.inviter_id;
-            if (inviterId && candidateIds.includes(inviterId)) {
+            const rideId = (inv.metadata as any)?.ride_id;
+            if (inviterId && candidateIds.includes(inviterId) && rideId && activeRideIds.has(rideId)) {
               invitesToMe.add(inviterId);
             }
           }

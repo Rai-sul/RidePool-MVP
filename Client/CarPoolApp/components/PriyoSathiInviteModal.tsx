@@ -113,7 +113,10 @@ export default function PriyoSathiInviteModal({
     };
   }, [visible, fetchData]);
 
-  
+  // Reset local invite state when locations change (new ride context)
+  useEffect(() => {
+    setInvitedIds(new Set());
+  }, [pickupLat, pickupLng, destinationLat, destinationLng]);
 
   const handleInvite = async (companion: Companion) => {
     const companionId = companion.companion_id;

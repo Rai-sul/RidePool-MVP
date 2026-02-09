@@ -109,6 +109,11 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
     return () => clearInterval(interval);
   }, [pickupLocation?.latitude, pickupLocation?.longitude, destination?.latitude, destination?.longitude]);
 
+  // Reset queued invites when locations change (new ride context)
+  useEffect(() => {
+    setInvitedFriends([]);
+  }, [pickupLocation?.latitude, pickupLocation?.longitude, destination?.latitude, destination?.longitude]);
+
   // Handle Priyo Sathi invite
   const handlePriyoSathiInvite = useCallback((companionId: string, companionName: string) => {
     setInvitedFriends(prev => {
