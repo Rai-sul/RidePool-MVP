@@ -420,19 +420,38 @@ export class PriyoSathiController {
         });
       }
 
-      // Prevent reverse invites: if companion already invited this user recently, block
+      // Prevent reverse invites: if companion already invited this user recently
+      // AND that ride is still active (not cancelled), block
       const reverseInviteWindow = new Date(Date.now() - 30 * 60 * 1000).toISOString();
       const { data: reverseInvites } = await supabaseAdmin
         .from('notifications')
-        .select('id')
+        .select('id, metadata')
         .eq('user_id', userId)
         .eq('type', 'MESSAGE')
         .gte('created_at', reverseInviteWindow)
         .eq('metadata->>inviter_id', companionId)
         .not('metadata->ride_id', 'is', null)
-        .limit(1);
+        .limit(5);
 
+      let hasActiveReverseInvite = false;
       if (reverseInvites && reverseInvites.length > 0) {
+        const reverseRideIds = reverseInvites
+          .map((n: any) => n.metadata?.ride_id)
+          .filter(Boolean);
+
+        if (reverseRideIds.length > 0) {
+          const { data: activeRides } = await supabaseAdmin
+            .from('rides')
+            .select('id')
+            .in('id', reverseRideIds)
+            .not('status', 'eq', 'CANCELLED')
+            .limit(1);
+
+          hasActiveReverseInvite = (activeRides?.length || 0) > 0;
+        }
+      }
+
+      if (hasActiveReverseInvite) {
         const { data: companionUser } = await supabaseAdmin
           .from('users')
           .select('full_name, phone')
