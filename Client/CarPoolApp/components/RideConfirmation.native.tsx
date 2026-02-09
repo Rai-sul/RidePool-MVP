@@ -81,6 +81,34 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
     fetchPriyoSathiCount();
   }, []);
 
+  // Register ride intent on the server as soon as locations are available.
+  // This ensures companions can discover this user immediately, not just when the modal opens.
+  useEffect(() => {
+    if (!pickupLocation?.latitude || !pickupLocation?.longitude ||
+        !destination?.latitude || !destination?.longitude) {
+      return;
+    }
+
+    // Register intent immediately
+    priyoSathiService.getNearbyCompanions(
+      pickupLocation.latitude,
+      pickupLocation.longitude,
+      destination.latitude,
+      destination.longitude
+    ).catch(() => {});
+
+    // Re-register every 30s to keep intent alive (TTL is 5 min)
+    const pLat = pickupLocation.latitude!;
+    const pLng = pickupLocation.longitude!;
+    const dLat = destination.latitude;
+    const dLng = destination.longitude;
+    const interval = setInterval(() => {
+      priyoSathiService.getNearbyCompanions(pLat, pLng, dLat, dLng).catch(() => {});
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [pickupLocation?.latitude, pickupLocation?.longitude, destination?.latitude, destination?.longitude]);
+
   // Handle Priyo Sathi invite
   const handlePriyoSathiInvite = useCallback((companionId: string, companionName: string) => {
     setInvitedFriends(prev => {

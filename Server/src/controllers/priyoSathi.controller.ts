@@ -624,6 +624,50 @@ export class PriyoSathiController {
         false // Don't send notifications in preview mode
       );
 
+      // Check pending invites for each candidate (both directions)
+      const recentWindow = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      const candidateIds = result.candidates.map(c => c.companionId);
+
+      let invitesFromMe: Set<string> = new Set();
+      let invitesToMe: Set<string> = new Set();
+
+      if (candidateIds.length > 0) {
+        // Invites sent BY the current user TO companions
+        const { data: sentInvites } = await supabaseAdmin
+          .from('notifications')
+          .select('user_id, metadata')
+          .in('user_id', candidateIds)
+          .eq('type', 'MESSAGE')
+          .gte('created_at', recentWindow)
+          .not('metadata->ride_id', 'is', null);
+
+        if (sentInvites) {
+          for (const inv of sentInvites) {
+            if ((inv.metadata as any)?.inviter_id === userId) {
+              invitesFromMe.add(inv.user_id);
+            }
+          }
+        }
+
+        // Invites sent BY companions TO the current user
+        const { data: receivedInvites } = await supabaseAdmin
+          .from('notifications')
+          .select('metadata')
+          .eq('user_id', userId)
+          .eq('type', 'MESSAGE')
+          .gte('created_at', recentWindow)
+          .not('metadata->ride_id', 'is', null);
+
+        if (receivedInvites) {
+          for (const inv of receivedInvites) {
+            const inviterId = (inv.metadata as any)?.inviter_id;
+            if (inviterId && candidateIds.includes(inviterId)) {
+              invitesToMe.add(inviterId);
+            }
+          }
+        }
+      }
+
       res.json({
         success: true,
         data: {
@@ -637,6 +681,8 @@ export class PriyoSathiController {
             is_on_route: c.isOnRoute,
             can_auto_match: c.canAutoMatch,
             match_reason: c.matchReason,
+            has_pending_invite_to: invitesFromMe.has(c.companionId),
+            has_pending_invite_from: invitesToMe.has(c.companionId),
           })),
           auto_matchable_count: result.candidates.filter(c => c.canAutoMatch).length,
           total_companions: result.candidates.length,
