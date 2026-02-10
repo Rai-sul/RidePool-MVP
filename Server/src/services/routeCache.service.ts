@@ -3,6 +3,7 @@ import { googleMapsService, GoogleMapsRoute } from './googleMaps.service';
 import { H3_RESOLUTION } from '../utils/h3.utils';
 import * as h3 from 'h3-js';
 import { logger } from '../utils/logger';
+import { AVERAGE_CITY_SPEED_KMH } from '../utils/helper';
 
 interface Location {
   latitude: number;
@@ -24,7 +25,7 @@ interface CachedRouteResult {
 }
 
 const ROUTE_CACHE_TTL = 3600;
-const FALLBACK_SPEED_KMH = 25;
+const FALLBACK_SPEED_KMH = AVERAGE_CITY_SPEED_KMH;
 
 class RouteCacheService {
   private requestCount = 0;

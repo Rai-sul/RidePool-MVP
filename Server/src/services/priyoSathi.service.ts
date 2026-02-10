@@ -1,7 +1,7 @@
 import { supabaseAdmin } from '../config/supabase';
 import { notificationService } from './notification.service';
 import { h3Utils } from '../utils/h3.utils';
-import { calculateDistance } from '../utils/helper';
+import { calculateDistance, AVERAGE_CITY_SPEED_KMH } from '../utils/helper';
 import { logger } from '../utils/logger';
 import { memoryCacheService } from './memoryCache.service';
 import { config } from '../config/env';
@@ -13,7 +13,7 @@ const PRIYO_SATHI_CONSTRAINTS = {
   MAX_DETOUR_DISTANCE_KM: 1,   // Maximum detour distance in km
   MAX_ROUTE_DEVIATION_M: 50,   // If friend is >50m from route, don't add
   MAX_COMPANIONS: 5,           // Maximum Priyo Sathi per user
-  AVERAGE_CITY_SPEED_KMH: 25,  // Average city speed for time calculations
+  AVERAGE_CITY_SPEED_KMH,  // Average city speed for time calculations
   MAX_DISPLAY_DISTANCE_KM: 5,  // Maximum distance to show companion as "available"
 };
 

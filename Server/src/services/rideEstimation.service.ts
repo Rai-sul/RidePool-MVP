@@ -1,7 +1,7 @@
 import { Location, VehicleType } from '../types';
 import { googleMapsService, GoogleMapsRoute, BestRouteResult, AlternativeRoute as GMAlternativeRoute } from './googleMaps.service';
 import { fareService, FareBreakdown } from './fare.service';
-import { calculateDistance } from '../utils/helper';
+import { calculateDistance, estimateTravelTime } from '../utils/helper';
 
 // ============================================
 // RIDE ESTIMATION TYPES
@@ -161,7 +161,7 @@ export class RideEstimationService {
             destination.latitude,
             destination.longitude
           );
-          durationMinutes = Math.ceil((distanceKm / 25) * 60); // 25 km/h average for Dhaka
+          durationMinutes = estimateTravelTime(distanceKm);
           durationInTraffic = durationMinutes;
           selectedRouteReason = 'Estimated route (offline)';
         }
@@ -174,7 +174,7 @@ export class RideEstimationService {
         destination.latitude,
         destination.longitude
       );
-      durationMinutes = Math.ceil((distanceKm / 25) * 60);
+      durationMinutes = estimateTravelTime(distanceKm);
       durationInTraffic = durationMinutes;
       selectedRouteReason = 'Estimated route (Maps API unavailable)';
     }
@@ -262,7 +262,7 @@ export class RideEstimationService {
           }
         } else {
           legDistance = calculateDistance(from.latitude, from.longitude, to.latitude, to.longitude);
-          legDuration = Math.ceil((legDistance / 25) * 60);
+          legDuration = estimateTravelTime(legDistance);
           if (includeFallbackLine) {
             if (allCoordinates.length === 0) {
               allCoordinates.push({ lat: from.latitude, lng: from.longitude });
@@ -272,7 +272,7 @@ export class RideEstimationService {
         }
       } else {
         legDistance = calculateDistance(from.latitude, from.longitude, to.latitude, to.longitude);
-        legDuration = Math.ceil((legDistance / 25) * 60);
+        legDuration = estimateTravelTime(legDistance);
         if (includeFallbackLine) {
           if (allCoordinates.length === 0) {
             allCoordinates.push({ lat: from.latitude, lng: from.longitude });
@@ -449,7 +449,7 @@ export class RideEstimationService {
           member.dropoff.latitude,
           member.dropoff.longitude
         );
-        durationMinutes = Math.ceil((distanceKm / 25) * 60);
+        durationMinutes = estimateTravelTime(distanceKm);
         if (includeFallbackLine) {
           coordinates = [
             { lat: member.pickup.latitude, lng: member.pickup.longitude },
@@ -464,7 +464,7 @@ export class RideEstimationService {
         member.dropoff.latitude,
         member.dropoff.longitude
       );
-      durationMinutes = Math.ceil((distanceKm / 25) * 60);
+      durationMinutes = estimateTravelTime(distanceKm);
       if (includeFallbackLine) {
         coordinates = [
           { lat: member.pickup.latitude, lng: member.pickup.longitude },
@@ -568,7 +568,7 @@ export class RideEstimationService {
           member.dropoff.latitude,
           member.dropoff.longitude
         );
-        const memberDuration = Math.ceil((memberDistance / 25) * 60);
+        const memberDuration = estimateTravelTime(memberDistance);
 
         // Solo fare for comparison
         const soloFare = fareService.calculateFullFare(memberDistance, memberDuration, vehicleType, 1);

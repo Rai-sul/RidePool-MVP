@@ -1,6 +1,8 @@
 
 import { Location, Ride, Pool } from '../types';
 
+export const AVERAGE_CITY_SPEED_KMH = 6.4;
+
 /**
  * Calculate great-circle distance between two geographic points
  * Uses Haversine formula
@@ -83,10 +85,13 @@ export const getDestinationDistance = (pool: Pool, ride: Ride): number => {
  * Estimate travel time based on distance and speed
  * 
  * @param distanceKm - Distance in kilometers
- * @param speedKmh - Average speed in km/h (default: 30)
+ * @param speedKmh - Average speed in km/h (default: AVERAGE_CITY_SPEED_KMH)
  * @returns Estimated time in minutes
  */
-export const estimateTravelTime = (distanceKm: number, speedKmh: number = 30): number => {
+export const estimateTravelTime = (
+  distanceKm: number,
+  speedKmh: number = AVERAGE_CITY_SPEED_KMH
+): number => {
   return Math.ceil((distanceKm / speedKmh) * 60);
 };
 
@@ -97,7 +102,7 @@ export const estimateTravelTime = (distanceKm: number, speedKmh: number = 30): n
  * @param currentLng - Current longitude
  * @param destLat - Destination latitude
  * @param destLng - Destination longitude
- * @param speedKmh - Average speed (default: 30 km/h)
+ * @param speedKmh - Average speed (default: AVERAGE_CITY_SPEED_KMH)
  * @returns Estimated time in minutes
  */
 export const estimateETA = (
@@ -105,7 +110,7 @@ export const estimateETA = (
   currentLng: number,
   destLat: number,
   destLng: number,
-  speedKmh: number = 30
+  speedKmh: number = AVERAGE_CITY_SPEED_KMH
 ): number => {
   const distanceKm = calculateDistance(currentLat, currentLng, destLat, destLng);
   return estimateTravelTime(distanceKm, speedKmh);

@@ -14,7 +14,7 @@ import {
   PoolSearchAnalytics,
   PoolSearchMetadata,
 } from "../types";
-import { calculateDistance } from "../utils/helper";
+import { calculateDistance, AVERAGE_CITY_SPEED_KMH } from "../utils/helper";
 import { h3Utils } from "../utils/h3.utils";
 import { CONSTANTS } from "../config/constants";
 import { supabase } from "../config/supabase";
@@ -333,9 +333,10 @@ export class PoolMatchingService {
 
         // Only include pools that meet minimum score threshold
         if (scoreResult.totalScore >= this.MINIMUM_MATCH_SCORE) {
-          // Calculate estimated detour time (assuming avg city speed of 25 km/h)
-          const AVERAGE_CITY_SPEED_KMH = 25;
-          const estimatedDetourMinutes = Math.round((Math.abs(destinationDistance) / AVERAGE_CITY_SPEED_KMH) * 60);
+          // Calculate estimated detour time based on average city speed
+          const estimatedDetourMinutes = Math.round(
+            (Math.abs(destinationDistance) / AVERAGE_CITY_SPEED_KMH) * 60
+          );
 
           matches.push({
             poolId: pool.id,
@@ -686,9 +687,6 @@ export class PoolMatchingService {
         let distanceToPoolKm: number | undefined;
         let pickupDetourMinutes: number | undefined;
 
-        // Average city speed for time calculations
-        const AVERAGE_CITY_SPEED_KMH = 25;
-
         if (poolPickupInfo?.lat && poolPickupInfo?.lng) {
           poolPickupLocation = {
             lat: poolPickupInfo.lat,
@@ -708,7 +706,9 @@ export class PoolMatchingService {
         }
 
         // Calculate estimated destination detour time
-        const estimatedDetourMinutes = Math.round((Math.abs(destinationDistance) / AVERAGE_CITY_SPEED_KMH) * 60);
+        const estimatedDetourMinutes = Math.round(
+          (Math.abs(destinationDistance) / AVERAGE_CITY_SPEED_KMH) * 60
+        );
 
         matches.push({
           poolId: pool.id,
@@ -1168,7 +1168,7 @@ export class PoolMatchingService {
     driverLng: number,
     pickupLat: number,
     pickupLng: number,
-    speedKmh: number = 30
+    speedKmh: number = AVERAGE_CITY_SPEED_KMH
   ): number {
     const distanceKm = calculateDistance(
       driverLat,

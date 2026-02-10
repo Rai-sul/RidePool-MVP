@@ -1,4 +1,5 @@
 import { VehicleType } from '../types';
+import { estimateTravelTime } from '../utils/helper';
 
 const PLATFORM_SURCHARGE_BDT = 10;
 const FULL_POOL_BONUS_PERCENT = 0.05;
@@ -122,7 +123,7 @@ export class FareService {
     estimatedPassengers: number = 2
   ): { minFare: number; maxFare: number; estimatedFare: number } {
     const baseFare = this.calculateBaseFare(distanceKm, vehicleType);
-    const estimatedDuration = Math.ceil((distanceKm / 25) * 60);
+    const estimatedDuration = estimateTravelTime(distanceKm);
     const timeFare = this.calculateTimeFare(estimatedDuration);
     const totalFare = baseFare + timeFare;
     

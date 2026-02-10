@@ -1,7 +1,7 @@
 import { Location, VehicleType } from '../types';
 import { googleMapsService, GoogleMapsRoute } from './googleMaps.service';
 import { unifiedCacheService } from './unifiedCache.service';
-import { calculateDistance } from '../utils/helper';
+import { calculateDistance, estimateTravelTime } from '../utils/helper';
 import { logger } from '../utils/logger';
 import * as h3 from 'h3-js';
 
@@ -664,7 +664,7 @@ export class SmartRouteService {
         from,
         to,
         distanceKm: distance,
-        durationMinutes: Math.ceil((distance / 25) * 60), // Assume 25 km/h average
+        durationMinutes: estimateTravelTime(distance),
         polyline: '',
         instruction: this.generateLegInstruction(from, to),
       });
@@ -688,7 +688,7 @@ export class SmartRouteService {
       wp.estimatedArrivalMinutes = Math.round(cumulativeMinutes);
     });
 
-    const totalDuration = Math.ceil((totalDistance / 25) * 60);
+    const totalDuration = estimateTravelTime(totalDistance);
 
     logger.info(`[SmartRoute] Fallback route generated: ${waypoints.length} waypoints, ${interpolatedCoordinates.length} coordinates, ${totalDistance.toFixed(1)}km`);
 

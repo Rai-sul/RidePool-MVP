@@ -12,7 +12,7 @@ import { googleMapsService } from '../services/googleMaps.service';
 import { priyoSathiService } from '../services/priyoSathi.service';
 import { CreatePoolRequest, Pool, PoolStatus, Ride, RideStatus, Location, VehicleType } from '../types';
 import { h3Utils } from '../utils/h3.utils';
-import { calculateDistance } from '../utils/helper';
+import { calculateDistance, estimateTravelTime } from '../utils/helper';
 import { unifiedCacheService } from '../services/unifiedCache.service';
 import crypto from 'crypto';
 import { logger } from '../utils/logger';
@@ -1087,7 +1087,7 @@ export class PoolController {
           member.dropoff.latitude,
           member.dropoff.longitude
         );
-        const memberDuration = Math.ceil((memberDistance / 25) * 60);
+        const memberDuration = estimateTravelTime(memberDistance);
 
         // Solo fare for comparison
         const soloFare = fareService.calculateFullFare(memberDistance, memberDuration, pool.vehicle_type as VehicleType, 1);
@@ -1121,7 +1121,7 @@ export class PoolController {
         userDurationMinutes = Math.max(0, userDropoffStop.estimatedArrival - userPickupStop.estimatedArrival);
       } else {
         const fallbackDistance = calculateDistance(pickupLat, pickupLng, dropoffLat, dropoffLng);
-        userDurationMinutes = Math.ceil((fallbackDistance / 25) * 60);
+        userDurationMinutes = estimateTravelTime(fallbackDistance);
       }
 
       // Build stops for map: existing members + current user (avoid duplicates)

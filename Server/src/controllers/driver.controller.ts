@@ -2,7 +2,7 @@ import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { supabaseAdmin } from '../config/supabase';
 import { h3Utils } from '../utils/h3.utils';
-import { calculateDistance } from '../utils/helper';
+import { calculateDistance, estimateTravelTime } from '../utils/helper';
 import { Pool, PoolStatus, Location } from '../types';
 import { CONSTANTS } from '../config/constants';
 import { config } from '../config/env';
@@ -407,7 +407,7 @@ export class DriverController {
           pool.destination_lat,
           pool.destination_lng
         );
-        const estimatedMinutes = Math.ceil((distance / 30) * 60);
+        const estimatedMinutes = estimateTravelTime(distance);
 
         return {
           id: pool.id,
