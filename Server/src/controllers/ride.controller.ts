@@ -161,7 +161,7 @@ export class RideController {
         });
       }
 
-      const { pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, vehicle_type } = req.query;
+      const { pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, vehicle_type, estimated_passengers } = req.query;
 
       if (!pickup_lat || !pickup_lng || !dropoff_lat || !dropoff_lng || !vehicle_type) {
         return res.status(400).json({
@@ -197,11 +197,15 @@ export class RideController {
       await priyoSathiService.setUserRideIntent(userId, pickup, dropoff);
 
       // Get ride estimate with ETA and fare
+      const estimatedPassengersRaw = Number(estimated_passengers);
+      const estimatedPassengers = Number.isFinite(estimatedPassengersRaw)
+        ? Math.min(4, Math.max(1, Math.round(estimatedPassengersRaw)))
+        : 2;
       const estimate = await rideEstimationService.getRideEstimate(
         pickup,
         dropoff,
         vehicle_type as VehicleType,
-        2 // Default to 2 passengers for estimate
+        estimatedPassengers
       );
 
       res.json({

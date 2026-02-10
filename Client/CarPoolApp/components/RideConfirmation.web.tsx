@@ -70,6 +70,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
           dropoff_lat: destination.latitude!,
           dropoff_lng: destination.longitude!,
           vehicle_type: selectedVehicleType,
+          estimated_passengers: 3,
         });
         
         if (response.success && response.data) {
@@ -437,7 +438,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                     <Taka className="w-5 h-5 text-green-600" />
                     <Text className="font-semibold">৳{rideEstimate.estimatedFare}</Text>
                   </View>
-                  <Text className="text-xs text-gray-500">per person (with pool)</Text>
+                  <Text className="text-xs text-gray-500">per person (3-person pool)</Text>
                 </View>
                 <View className="w-px h-10 bg-gray-300"></View>
                 <View className="flex flex-col items-center">
@@ -452,7 +453,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                     <View className="w-px h-10 bg-gray-300"></View>
                     <View className="flex flex-col items-center">
                       <Text className="font-semibold text-green-600">৳{rideEstimate.estimatedSavings}</Text>
-                      <Text className="text-xs text-gray-500">savings</Text>
+                      <Text className="text-xs text-gray-500">You Save (vs solo)</Text>
                     </View>
                   </>
                 )}

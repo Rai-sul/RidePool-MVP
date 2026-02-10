@@ -57,6 +57,7 @@ export interface GetRideEstimateParams {
   dropoff_lat: number;
   dropoff_lng: number;
   vehicle_type: VehicleType;
+  estimated_passengers?: number;
 }
 
 export const rideService = {

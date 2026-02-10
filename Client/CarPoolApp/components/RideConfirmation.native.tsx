@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MapPin, Users, ChevronRight, ChevronLeft, Car, AlertCircle, Plus, RefreshCw, UserPlus, Taka } from './Icons';
@@ -7,11 +7,11 @@ import type { Destination, UserProfile, Pool, Location } from '../contexts/Globa
 import { usePools } from '../hooks/usePools';
 import { useRides } from '../hooks/useRides';
 import { rideService, RideEstimate } from '../services/ride.service';
-import { poolService, PoolPreviewResponse } from '../services/pool.service';
+import { poolService, PoolPreviewResponse, PoolPreviewParams } from '../services/pool.service';
 import { priyoSathiService } from '../services/priyoSathi.service';
 import { ApiError } from '../utils/apiClient';
 import GoogleMapView from './GoogleMapView';
-import AvailablePoolCard, { PoolSearchResultData } from './AvailablePoolCard';
+import AvailablePoolCard, { PoolSearchResultData, CoRiderInfo } from './AvailablePoolCard';
 import PriyoSathiInviteModal from './PriyoSathiInviteModal';
 
 type RideConfirmationProps = {
@@ -44,6 +44,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
   const [poolPreviewLoadingId, setPoolPreviewLoadingId] = useState<string | null>(null);
   const [poolDetailsLoadingId, setPoolDetailsLoadingId] = useState<string | null>(null);
   const [poolDetailsAttempted, setPoolDetailsAttempted] = useState<Record<string, boolean>>({});
+  const [poolDetailsCache, setPoolDetailsCache] = useState<Record<string, any>>({});
   const [poolPreviewMarkers, setPoolPreviewMarkers] = useState<Record<string, Array<{
     id: string;
     latitude: number;
@@ -60,6 +61,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
     setPoolPreviewMarkers({});
     setPoolDetailsLoadingId(null);
     setPoolDetailsAttempted({});
+    setPoolDetailsCache({});
   }, [pickupLocation?.latitude, pickupLocation?.longitude, destination?.latitude, destination?.longitude, selectedVehicleType]);
 
   // Use the pools hook to search for real pools and create new ones
@@ -148,13 +150,86 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
   const selectedPoolPreviewError = selectedPoolId ? (poolPreviewErrors[selectedPoolId] || null) : null;
   const selectedPoolPreviewLoading = selectedPoolId ? poolPreviewLoadingId === selectedPoolId : false;
   const selectedPoolMarkers = selectedPoolId ? (poolPreviewMarkers[selectedPoolId] || []) : [];
+  const selectedPoolDetails = selectedPoolId ? poolDetailsCache[selectedPoolId] : null;
+  const formatCoordLabel = useCallback((latitude?: number, longitude?: number) => {
+    if (latitude === undefined || longitude === undefined) return 'Location';
+    return `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+  }, []);
 
-  const buildPreviewParams = useCallback(() => {
+  const buildCoRidersFromPoolDetails = useCallback((poolDetails: any): CoRiderInfo[] => {
+    const members = (poolDetails?.pool_members || []) as Array<{
+      user_id: string;
+      user?: { full_name?: string };
+      ride?: {
+        pickup_lat?: number;
+        pickup_lng?: number;
+        pickup_address?: string;
+        dropoff_lat?: number;
+        dropoff_lng?: number;
+        dropoff_address?: string;
+      };
+    }>;
+
+    return members
+      .filter((member) => !userProfile?.id || member.user_id !== userProfile.id)
+      .map((member) => {
+        const pickupLabel = member.ride?.pickup_address || formatCoordLabel(member.ride?.pickup_lat, member.ride?.pickup_lng);
+        const dropoffLabel = member.ride?.dropoff_address || formatCoordLabel(member.ride?.dropoff_lat, member.ride?.dropoff_lng);
+        return {
+          id: member.user_id,
+          name: member.user?.full_name,
+          pickupAddress: pickupLabel,
+          pickupName: pickupLabel,
+          dropoffAddress: dropoffLabel,
+          dropoffName: dropoffLabel,
+        };
+      });
+  }, [formatCoordLabel, userProfile?.id]);
+
+  const getCreatorRideFromPoolDetails = useCallback((poolDetails: any) => {
+    if (!poolDetails?.creator_user_id || !poolDetails?.pool_members) return null;
+    const creatorMember = (poolDetails.pool_members as any[]).find((member) => member.user_id === poolDetails.creator_user_id);
+    return creatorMember?.ride || null;
+  }, []);
+  const selectedPoolCoRiders = useMemo<CoRiderInfo[]>(() => {
+    if (selectedPoolDetails) {
+      return buildCoRidersFromPoolDetails(selectedPoolDetails);
+    }
+    if (selectedPoolPreview?.stops && selectedPoolPreview.stops.length > 0) {
+      const ridersById = new Map<string, { info: CoRiderInfo; firstOrder: number }>();
+      const orderedStops = [...selectedPoolPreview.stops].sort((a, b) => a.order - b.order);
+
+      for (const stop of orderedStops) {
+        if (stop.isCurrentUser) continue;
+        const existing = ridersById.get(stop.userId) || { info: { id: stop.userId }, firstOrder: stop.order };
+        existing.firstOrder = Math.min(existing.firstOrder, stop.order);
+        const fallbackLabel = formatCoordLabel(stop.location.latitude, stop.location.longitude);
+        if (stop.type === 'pickup') {
+          const label = stop.address || fallbackLabel;
+          existing.info.pickupAddress = label;
+          existing.info.pickupName = label;
+        } else if (stop.type === 'dropoff') {
+          const label = stop.address || fallbackLabel;
+          existing.info.dropoffAddress = label;
+          existing.info.dropoffName = label;
+        }
+        ridersById.set(stop.userId, existing);
+      }
+
+      return Array.from(ridersById.values())
+        .sort((a, b) => a.firstOrder - b.firstOrder)
+        .map((entry) => entry.info);
+    }
+
+    return [];
+  }, [selectedPoolDetails, selectedPoolPreview?.stops, buildCoRidersFromPoolDetails, formatCoordLabel]);
+
+  const buildPreviewParams = useCallback((): PoolPreviewParams | null => {
     if (!pickupLocation?.latitude || !pickupLocation?.longitude || !destination?.latitude || !destination?.longitude) {
       return null;
     }
 
-    const params: Record<string, string | number> = {
+    const params: PoolPreviewParams = {
       pickup_lat: pickupLocation.latitude,
       pickup_lng: pickupLocation.longitude,
       dropoff_lat: destination.latitude,
@@ -265,16 +340,18 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
 
     try {
       const response = await poolService.getPoolPreview(poolId, params);
-      if (response.success && response.data) {
-        setPoolPreviewCache(prev => ({ ...prev, [poolId]: response.data }));
-        if (response.data.stops?.length) {
-          buildMarkersFromStops(poolId, response.data.stops);
-        }
-      } else {
+      if (!response.success || !response.data) {
         setPoolPreviewErrors(prev => ({
           ...prev,
           [poolId]: response.message || 'Failed to load pool preview',
         }));
+        return;
+      }
+
+      const preview = response.data;
+      setPoolPreviewCache(prev => ({ ...prev, [poolId]: preview }));
+      if (preview.stops.length > 0) {
+        buildMarkersFromStops(poolId, preview.stops);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load pool preview';
@@ -292,29 +369,38 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
     fetchPoolPreview(selectedPoolId);
   }, [selectedPoolId, selectedPoolPreview, selectedPoolMarkers.length, fetchPoolPreview]);
 
-  // Fetch pool details once per pool to show member pickups/dropoffs
+  // Fetch pool details for all pools to show member pickups/dropoffs before tap
   useEffect(() => {
-    if (!selectedPoolId) return;
-    if (poolDetailsLoadingId === selectedPoolId) return;
-    if (poolDetailsAttempted[selectedPoolId]) return;
+    if (!filteredPools.length) return;
 
-    setPoolDetailsLoadingId(selectedPoolId);
-    setPoolDetailsAttempted(prev => ({ ...prev, [selectedPoolId]: true }));
-    poolService.getPoolById(selectedPoolId)
-      .then((response) => {
-        if (response.success && response.data?.pool) {
-          buildMarkersFromPoolDetails(selectedPoolId, response.data.pool);
-        }
-      })
-      .catch(() => {
-        // Ignore errors for map fallback
-      })
-      .finally(() => {
-        setPoolDetailsLoadingId(current => (current === selectedPoolId ? null : current));
-      });
+    filteredPools.forEach((poolResult: any) => {
+      const poolId = poolResult.poolId;
+      if (poolDetailsAttempted[poolId]) return;
+      if (poolDetailsCache[poolId]) return;
+
+      setPoolDetailsAttempted(prev => ({ ...prev, [poolId]: true }));
+      setPoolDetailsLoadingId(poolId);
+      poolService.getPoolById(poolId)
+        .then((response) => {
+          if (response.success && response.data?.pool) {
+            setPoolDetailsCache(prev => ({ ...prev, [poolId]: response.data.pool }));
+            if (selectedPoolId === poolId) {
+              buildMarkersFromPoolDetails(poolId, response.data.pool);
+            }
+          }
+        })
+        .catch(() => {
+          // Ignore errors for preview list
+        })
+        .finally(() => {
+          setPoolDetailsLoadingId(current => (current === poolId ? null : current));
+        });
+    });
   }, [
+    filteredPools,
+    poolDetailsAttempted,
+    poolDetailsCache,
     selectedPoolId,
-    poolDetailsLoadingId,
     buildMarkersFromPoolDetails,
   ]);
 
@@ -838,18 +924,35 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                   <ActivityIndicator size="small" color="#2563eb" />
                 ) : rideEstimate ? (
                   <>
-                    <View className="flex flex-col items-center">
-                      <View className="flex flex-row items-center gap-2">
-                        <Taka className="w-5 h-5 text-green-600" />
-                        <Text className="font-semibold">৳{rideEstimate.estimatedFare}</Text>
-                      </View>
-                      <Text className="text-xs text-gray-500">Estimated Fare</Text>
-                    </View>
-                    <View className="w-px h-10 bg-gray-300"></View>
-                    <View className="flex flex-col items-center">
-                      <Text className="font-semibold text-green-600">৳{Math.floor(rideEstimate.estimatedSavings)}</Text>
-                      <Text className="text-xs text-gray-500">You Save</Text>
-                    </View>
+                    {(() => {
+                      const soloFare = rideEstimate.fareEstimates?.solo;
+                      const fare2 = rideEstimate.fareEstimates?.with2Passengers ?? rideEstimate.estimatedFare;
+                      const fare3 = rideEstimate.fareEstimates?.with3Passengers ?? rideEstimate.estimatedFare;
+                      const savings2 = soloFare !== undefined ? Math.max(0, soloFare - fare2) : rideEstimate.estimatedSavings;
+                      const savings3 = soloFare !== undefined ? Math.max(0, soloFare - fare3) : rideEstimate.estimatedSavings;
+
+                      return (
+                        <>
+                          <View className="flex flex-col items-center">
+                            <View className="flex flex-row items-center gap-2">
+                              <Taka className="w-5 h-5 text-green-600" />
+                              <Text className="font-semibold">৳{Math.round(fare2)}</Text>
+                            </View>
+                            <Text className="text-xs text-gray-500">2-person pool</Text>
+                            <Text className="text-xs text-green-600">Save ৳{Math.floor(savings2)}</Text>
+                          </View>
+                          <View className="w-px h-10 bg-gray-300"></View>
+                          <View className="flex flex-col items-center">
+                            <View className="flex flex-row items-center gap-2">
+                              <Taka className="w-5 h-5 text-green-600" />
+                              <Text className="font-semibold">৳{Math.round(fare3)}</Text>
+                            </View>
+                            <Text className="text-xs text-gray-500">3-person pool</Text>
+                            <Text className="text-xs text-green-600">Save ৳{Math.floor(savings3)}</Text>
+                          </View>
+                        </>
+                      );
+                    })()}
                   </>
                 ) : (
                   <>
@@ -1135,6 +1238,29 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
 
                     {/* Pool Cards */}
                     {filteredPools.map((poolResult: any) => {
+                      const isSelected = selectedPoolId === poolResult.poolId;
+                      const poolDetails = poolDetailsCache[poolResult.poolId];
+                      const hasPoolDetails = Boolean(poolDetails);
+                      const creatorRide = hasPoolDetails
+                        ? getCreatorRideFromPoolDetails(poolDetails)
+                        : null;
+                      const hasPreviewCoRiders = isSelected && selectedPoolCoRiders.length > 0;
+                      const creatorPickupLocation = creatorRide?.pickup_lat !== undefined && creatorRide?.pickup_lng !== undefined
+                        ? {
+                            lat: creatorRide.pickup_lat,
+                            lng: creatorRide.pickup_lng,
+                            name: creatorRide.pickup_address,
+                            address: creatorRide.pickup_address,
+                          }
+                        : null;
+                      const creatorDropoffLocation = creatorRide?.dropoff_lat !== undefined && creatorRide?.dropoff_lng !== undefined
+                        ? {
+                            lat: creatorRide.dropoff_lat,
+                            lng: creatorRide.dropoff_lng,
+                            name: creatorRide.dropoff_address,
+                            address: creatorRide.dropoff_address,
+                          }
+                        : null;
                       const poolData: PoolSearchResultData = {
                         poolId: poolResult.poolId,
                         score: poolResult.score,
@@ -1144,13 +1270,15 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                         pickupDetourMinutes: poolResult.pickupDetourMinutes,
                         exactDistance: poolResult.exactDistance,
                         exactETA: poolResult.exactETA,
-                        poolPickupLocation: poolResult.poolPickupLocation,
-                        poolDropoffLocation: poolResult.poolDropoffLocation || (destination ? {
-                          lat: destination.latitude!,
-                          lng: destination.longitude!,
-                          name: destination.name,
-                          address: destination.address,
-                        } : undefined),
+                        poolPickupLocation: creatorPickupLocation || poolResult.poolPickupLocation,
+                        poolDropoffLocation: creatorDropoffLocation
+                          || poolResult.poolDropoffLocation
+                          || (!hasPreviewCoRiders && destination ? {
+                              lat: destination.latitude!,
+                              lng: destination.longitude!,
+                              name: destination.name,
+                              address: destination.address,
+                            } : undefined),
                         distanceToPoolKm: poolResult.distanceToPoolKm,
                         currentPassengers: poolResult.currentPassengers || 1,
                         maxPassengers: poolResult.maxPassengers || (selectedVehicleType === 'CNG' ? 2 : 4),
@@ -1160,11 +1288,14 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                         <AvailablePoolCard
                           key={poolResult.poolId}
                           pool={poolData}
-                          isSelected={selectedPoolId === poolResult.poolId}
+                          isSelected={isSelected}
                           onPress={() => handlePoolClick(poolResult)}
-                          userEstimate={selectedPoolId === poolResult.poolId ? selectedPoolPreview?.userEstimate || null : null}
-                          previewLoading={selectedPoolId === poolResult.poolId && selectedPoolPreviewLoading}
-                          previewError={selectedPoolId === poolResult.poolId ? selectedPoolPreviewError : null}
+                          coRiders={hasPoolDetails
+                            ? buildCoRidersFromPoolDetails(poolDetails)
+                            : (isSelected ? selectedPoolCoRiders : [])}
+                          userEstimate={isSelected ? selectedPoolPreview?.userEstimate || null : null}
+                          previewLoading={isSelected && selectedPoolPreviewLoading}
+                          previewError={isSelected ? selectedPoolPreviewError : null}
                         />
                       );
                     })}
