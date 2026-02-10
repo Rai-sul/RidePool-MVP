@@ -87,6 +87,13 @@ export interface PoolSearchResult {
       address?: string;
       name?: string;
     };
+    // Pool dropoff location (pool destination / creator dropoff)
+    poolDropoffLocation?: {
+      lat: number;
+      lng: number;
+      address?: string;
+      name?: string;
+    };
     // Distance from user's pickup to pool's current location
     distanceToPoolKm?: number;
   }>;

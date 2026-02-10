@@ -183,10 +183,6 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
   const selectedPoolPreviewLoading = selectedPoolId ? poolPreviewLoadingId === selectedPoolId : false;
   const selectedPoolMarkers = selectedPoolId ? (poolPreviewMarkers[selectedPoolId] || []) : [];
   const selectedPoolDetails = selectedPoolId ? poolDetailsCache[selectedPoolId] : null;
-  const formatCoordLabel = useCallback((latitude?: number, longitude?: number) => {
-    if (latitude === undefined || longitude === undefined) return 'Location';
-    return `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
-  }, []);
 
   const buildCoRidersFromPoolDetails = useCallback((poolDetails: any): CoRiderInfo[] => {
     const members = (poolDetails?.pool_members || []) as Array<{
@@ -205,18 +201,20 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
     return members
       .filter((member) => !userProfile?.id || member.user_id !== userProfile.id)
       .map((member) => {
-        const pickupLabel = member.ride?.pickup_address || formatCoordLabel(member.ride?.pickup_lat, member.ride?.pickup_lng);
-        const dropoffLabel = member.ride?.dropoff_address || formatCoordLabel(member.ride?.dropoff_lat, member.ride?.dropoff_lng);
         return {
           id: member.user_id,
           name: member.user?.full_name,
-          pickupAddress: pickupLabel,
-          pickupName: pickupLabel,
-          dropoffAddress: dropoffLabel,
-          dropoffName: dropoffLabel,
+          pickupAddress: member.ride?.pickup_address,
+          pickupName: member.ride?.pickup_address,
+          pickupLat: member.ride?.pickup_lat,
+          pickupLng: member.ride?.pickup_lng,
+          dropoffAddress: member.ride?.dropoff_address,
+          dropoffName: member.ride?.dropoff_address,
+          dropoffLat: member.ride?.dropoff_lat,
+          dropoffLng: member.ride?.dropoff_lng,
         };
       });
-  }, [formatCoordLabel, userProfile?.id]);
+  }, [userProfile?.id]);
 
   const getCreatorRideFromPoolDetails = useCallback((poolDetails: any) => {
     if (!poolDetails?.creator_user_id || !poolDetails?.pool_members) return null;
@@ -224,26 +222,41 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
     return creatorMember?.ride || null;
   }, []);
   const selectedPoolCoRiders = useMemo<CoRiderInfo[]>(() => {
-    if (selectedPoolDetails) {
-      return buildCoRidersFromPoolDetails(selectedPoolDetails);
-    }
     if (selectedPoolPreview?.stops && selectedPoolPreview.stops.length > 0) {
+      const nameByUserId = new Map<string, string>();
+      if (selectedPoolDetails?.pool_members) {
+        (selectedPoolDetails.pool_members as Array<{ user_id: string; user?: { full_name?: string } }>).forEach((member) => {
+          if (member.user?.full_name) {
+            nameByUserId.set(member.user_id, member.user.full_name);
+          }
+        });
+      }
+
       const ridersById = new Map<string, { info: CoRiderInfo; firstOrder: number }>();
       const orderedStops = [...selectedPoolPreview.stops].sort((a, b) => a.order - b.order);
 
       for (const stop of orderedStops) {
         if (stop.isCurrentUser) continue;
-        const existing = ridersById.get(stop.userId) || { info: { id: stop.userId }, firstOrder: stop.order };
+        const existing = ridersById.get(stop.userId) || {
+          info: { id: stop.userId, name: nameByUserId.get(stop.userId) },
+          firstOrder: stop.order,
+        };
         existing.firstOrder = Math.min(existing.firstOrder, stop.order);
-        const fallbackLabel = formatCoordLabel(stop.location.latitude, stop.location.longitude);
+
         if (stop.type === 'pickup') {
-          const label = stop.address || fallbackLabel;
-          existing.info.pickupAddress = label;
-          existing.info.pickupName = label;
+          if (stop.address) {
+            existing.info.pickupAddress = stop.address;
+            existing.info.pickupName = stop.address;
+          }
+          existing.info.pickupLat = stop.location.latitude;
+          existing.info.pickupLng = stop.location.longitude;
         } else if (stop.type === 'dropoff') {
-          const label = stop.address || fallbackLabel;
-          existing.info.dropoffAddress = label;
-          existing.info.dropoffName = label;
+          if (stop.address) {
+            existing.info.dropoffAddress = stop.address;
+            existing.info.dropoffName = stop.address;
+          }
+          existing.info.dropoffLat = stop.location.latitude;
+          existing.info.dropoffLng = stop.location.longitude;
         }
         ridersById.set(stop.userId, existing);
       }
@@ -253,8 +266,12 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
         .map((entry) => entry.info);
     }
 
+    if (selectedPoolDetails) {
+      return buildCoRidersFromPoolDetails(selectedPoolDetails);
+    }
+
     return [];
-  }, [selectedPoolDetails, selectedPoolPreview?.stops, buildCoRidersFromPoolDetails, formatCoordLabel]);
+  }, [selectedPoolDetails, selectedPoolPreview?.stops, buildCoRidersFromPoolDetails]);
 
   const buildPreviewParams = useCallback((): PoolPreviewParams | null => {
     if (!pickupLocation?.latitude || !pickupLocation?.longitude || !destination?.latitude || !destination?.longitude) {
@@ -1276,7 +1293,13 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                       const creatorRide = hasPoolDetails
                         ? getCreatorRideFromPoolDetails(poolDetails)
                         : null;
-                      const hasPreviewCoRiders = isSelected && selectedPoolCoRiders.length > 0;
+                      const creatorId = poolDetails?.creator_user_id;
+                      const creatorPreviewPickup = isSelected && creatorId && selectedPoolPreview?.stops
+                        ? selectedPoolPreview.stops.find((stop) => stop.userId === creatorId && stop.type === 'pickup')
+                        : undefined;
+                      const creatorPreviewDropoff = isSelected && creatorId && selectedPoolPreview?.stops
+                        ? selectedPoolPreview.stops.find((stop) => stop.userId === creatorId && stop.type === 'dropoff')
+                        : undefined;
                       const creatorPickupLocation = creatorRide?.pickup_lat !== undefined && creatorRide?.pickup_lng !== undefined
                         ? {
                             lat: creatorRide.pickup_lat,
@@ -1284,7 +1307,14 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                             name: creatorRide.pickup_address,
                             address: creatorRide.pickup_address,
                           }
-                        : null;
+                        : creatorPreviewPickup
+                          ? {
+                              lat: creatorPreviewPickup.location.latitude,
+                              lng: creatorPreviewPickup.location.longitude,
+                              name: creatorPreviewPickup.address,
+                              address: creatorPreviewPickup.address,
+                            }
+                          : null;
                       const creatorDropoffLocation = creatorRide?.dropoff_lat !== undefined && creatorRide?.dropoff_lng !== undefined
                         ? {
                             lat: creatorRide.dropoff_lat,
@@ -1292,7 +1322,28 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                             name: creatorRide.dropoff_address,
                             address: creatorRide.dropoff_address,
                           }
+                        : creatorPreviewDropoff
+                          ? {
+                              lat: creatorPreviewDropoff.location.latitude,
+                              lng: creatorPreviewDropoff.location.longitude,
+                              name: creatorPreviewDropoff.address,
+                              address: creatorPreviewDropoff.address,
+                            }
+                          : null;
+                      const poolDestinationLocation = poolDetails?.destination_lat !== undefined && poolDetails?.destination_lng !== undefined
+                        ? {
+                            lat: poolDetails.destination_lat,
+                            lng: poolDetails.destination_lng,
+                            name: poolDetails.destination_address || undefined,
+                            address: poolDetails.destination_address || undefined,
+                          }
                         : null;
+                      const coRidersForCard = isSelected && selectedPoolCoRiders.length > 0
+                        ? selectedPoolCoRiders
+                        : (hasPoolDetails ? buildCoRidersFromPoolDetails(poolDetails) : []);
+                      const coRidersWithoutCreator = creatorId
+                        ? coRidersForCard.filter((rider) => rider.id !== creatorId)
+                        : coRidersForCard;
                       const poolData: PoolSearchResultData = {
                         poolId: poolResult.poolId,
                         score: poolResult.score,
@@ -1303,14 +1354,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                         exactDistance: poolResult.exactDistance,
                         exactETA: poolResult.exactETA,
                         poolPickupLocation: creatorPickupLocation || poolResult.poolPickupLocation,
-                        poolDropoffLocation: creatorDropoffLocation
-                          || poolResult.poolDropoffLocation
-                          || (!hasPreviewCoRiders && destination ? {
-                              lat: destination.latitude!,
-                              lng: destination.longitude!,
-                              name: destination.name,
-                              address: destination.address,
-                            } : undefined),
+                        poolDropoffLocation: creatorDropoffLocation || poolDestinationLocation || poolResult.poolDropoffLocation,
                         distanceToPoolKm: poolResult.distanceToPoolKm,
                         currentPassengers: poolResult.currentPassengers || 1,
                         maxPassengers: poolResult.maxPassengers || (selectedVehicleType === 'CNG' ? 2 : 4),
@@ -1322,9 +1366,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                           pool={poolData}
                           isSelected={isSelected}
                           onPress={() => handlePoolClick(poolResult)}
-                          coRiders={hasPoolDetails
-                            ? buildCoRidersFromPoolDetails(poolDetails)
-                            : (isSelected ? selectedPoolCoRiders : [])}
+                          coRiders={coRidersWithoutCreator}
                           userEstimate={isSelected ? selectedPoolPreview?.userEstimate || null : null}
                           previewLoading={isSelected && selectedPoolPreviewLoading}
                           previewError={isSelected ? selectedPoolPreviewError : null}

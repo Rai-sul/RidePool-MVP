@@ -39,6 +39,13 @@ export interface ScoredMatchingResult extends H3MatchingResult {
     address?: string;
     name?: string;
   };
+  // Pool dropoff location (pool destination / creator dropoff)
+  poolDropoffLocation?: {
+    lat: number;
+    lng: number;
+    address?: string;
+    name?: string;
+  };
   // Distance from user's pickup to pool's current location
   distanceToPoolKm?: number;
   // Estimated time (in minutes) for driver to detour from pool pickup to user's pickup
@@ -684,6 +691,12 @@ export class PoolMatchingService {
         // Get pool pickup location from score_breakdown (creator's pickup)
         const poolPickupInfo = pool.score_breakdown?.creator_pickup;
         let poolPickupLocation: { lat: number; lng: number; address?: string; name?: string } | undefined;
+        const poolDropoffLocation = {
+          lat: pool.destination_lat,
+          lng: pool.destination_lng,
+          address: pool.destination_address,
+          name: pool.destination_address,
+        };
         let distanceToPoolKm: number | undefined;
         let pickupDetourMinutes: number | undefined;
 
@@ -723,6 +736,7 @@ export class PoolMatchingService {
           scoreBreakdown: scoreResult,
           routeOverlapPercentage: Math.round(routeOverlap * 100),
           poolPickupLocation,
+          poolDropoffLocation,
           distanceToPoolKm,
         });
       }
