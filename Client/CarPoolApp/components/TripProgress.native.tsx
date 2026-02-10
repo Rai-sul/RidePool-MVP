@@ -70,10 +70,6 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
     clearUnreadMessages,
   } = usePoolRealtime(selectedPool?.id || null, userProfile?.id || null);
 
-  // Pool status info
-  const currentPassengers = poolDetails?.current_passengers || selectedPool?.current_passengers || 1;
-  const maxPassengers = poolDetails?.max_passengers || selectedPool?.max_passengers || 3;
-
   // Use the current member's ride info (server source of truth) for per-user trip details
   const currentMemberRide = useMemo(() => {
     const poolMembers = (poolDetails?.pool_members || members || []) as Array<{
@@ -89,6 +85,24 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
     }>;
     return poolMembers.find(m => m.user_id === userProfile?.id)?.ride || null;
   }, [poolDetails?.pool_members, members, userProfile?.id]);
+
+  // Pool status info
+  const currentPassengers = poolDetails?.current_passengers || selectedPool?.current_passengers || 1;
+  const maxPassengers = poolDetails?.max_passengers || selectedPool?.max_passengers || 3;
+  const hasStableMemberCount =
+    typeof poolDetails?.current_passengers === 'number' &&
+    typeof selectedPool?.current_passengers === 'number'
+      ? poolDetails.current_passengers === selectedPool.current_passengers
+      : true;
+
+  const displayEtaMinutes = hasStableMemberCount
+    ? (selectedPool?.eta ?? (poolDetails?.score_breakdown?.base_duration_minutes ?? undefined))
+    : (poolDetails?.score_breakdown?.base_duration_minutes ?? selectedPool?.eta);
+
+  const displayFare = currentMemberRide?.fare
+    ?? (hasStableMemberCount
+      ? (selectedPool?.fare_per_person ?? poolDetails?.fare_per_person ?? undefined)
+      : (poolDetails?.fare_per_person ?? selectedPool?.fare_per_person ?? undefined));
 
   // Reset fetch status when pool status changes (forces refetch)
   // This MUST run before the fetch effect
@@ -1118,21 +1132,17 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
             <View className="flex-row justify-between">
               <Text className="text-gray-600">Estimated Time</Text>
               <Text className="font-medium">
-                {poolDetails?.score_breakdown?.base_duration_minutes
-                  ? `${Math.round(poolDetails.score_breakdown.base_duration_minutes)} mins`
-                  : selectedPool?.eta
-                    ? `${selectedPool.eta} mins`
-                    : 'Calculating...'}
+                {displayEtaMinutes !== undefined
+                  ? `${Math.round(displayEtaMinutes)} mins`
+                  : 'Calculating...'}
               </Text>
             </View>
             <View className="flex-row justify-between">
               <Text className="text-gray-600">Your Fare (with pool)</Text>
               <Text className={`font-semibold ${accentText}`}>
-                ৳ {poolDetails?.fare_per_person
-                  ? Math.round(poolDetails.fare_per_person)
-                  : selectedPool?.fare_per_person
-                    ? Math.round(selectedPool.fare_per_person as number)
-                    : 'Calculating...'}
+                ৳ {displayFare !== undefined
+                  ? Math.round(displayFare)
+                  : 'Calculating...'}
               </Text>
             </View>
 

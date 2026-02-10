@@ -1,18 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MapPin, Clock, Users, Navigation, ChevronRight, ChevronLeft, Car, Taka, AlertCircle, Plus, RefreshCw, UserPlus } from './Icons';
+import { MapPin, Users, ChevronRight, ChevronLeft, Car, AlertCircle, Plus, RefreshCw, UserPlus, Taka } from './Icons';
 import { Button } from './ui/button';
 import type { Destination, UserProfile, Pool, Location } from '../contexts/GlobalContext';
 import { usePools } from '../hooks/usePools';
 import { useRides } from '../hooks/useRides';
-import { rideService, RideEstimate, RideEstimateResponse, AlternativeRouteInfo } from '../services/ride.service';
-import { poolService } from '../services/pool.service';
+import { rideService, RideEstimate } from '../services/ride.service';
+import { poolService, PoolPreviewResponse } from '../services/pool.service';
 import { priyoSathiService } from '../services/priyoSathi.service';
 import { ApiError } from '../utils/apiClient';
-import LinearGradient from './LinearGradient';
 import GoogleMapView from './GoogleMapView';
-import AvailablePoolCard, { PoolSearchResultData, CoRiderInfo } from './AvailablePoolCard';
+import AvailablePoolCard, { PoolSearchResultData } from './AvailablePoolCard';
 import PriyoSathiInviteModal from './PriyoSathiInviteModal';
 
 type RideConfirmationProps = {
@@ -24,14 +23,6 @@ type RideConfirmationProps = {
   onBack: () => void;
 };
 
-type PoolStop = {
-  type: 'pickup' | 'dropoff';
-  name: string;
-  rider: string;
-  x: number;
-  y: number;
-};
-
 export default function RideConfirmation({ pickupLocation, destination, userProfile, rideType, onPoolSelect, onBack }: RideConfirmationProps) {
   const insets = useSafeAreaInsets();
   const [selectedPoolId, setSelectedPoolId] = useState<string | null>(null);
@@ -41,9 +32,6 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
   const [isCreatingPool, setIsCreatingPool] = useState(false);
   const [isJoiningPool, setIsJoiningPool] = useState(false);
   const [rideEstimate, setRideEstimate] = useState<RideEstimate | null>(null);
-  const [routeInfo, setRouteInfo] = useState<{ summary?: string; selectedReason?: string } | null>(null);
-  const [alternativeRoutes, setAlternativeRoutes] = useState<AlternativeRouteInfo[]>([]);
-  const [trafficInfo, setTrafficInfo] = useState<string>('');
   const [estimateLoading, setEstimateLoading] = useState(false);
   const isFemale = userProfile?.gender === 'female';
 
@@ -51,17 +39,37 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
   const [showPriyoSathiModal, setShowPriyoSathiModal] = useState(false);
   const [priyoSathiCount, setPriyoSathiCount] = useState(0);
   const [invitedFriends, setInvitedFriends] = useState<{ id: string; name: string }[]>([]);
+  const [poolPreviewCache, setPoolPreviewCache] = useState<Record<string, PoolPreviewResponse>>({});
+  const [poolPreviewErrors, setPoolPreviewErrors] = useState<Record<string, string>>({});
+  const [poolPreviewLoadingId, setPoolPreviewLoadingId] = useState<string | null>(null);
+  const [poolDetailsLoadingId, setPoolDetailsLoadingId] = useState<string | null>(null);
+  const [poolDetailsAttempted, setPoolDetailsAttempted] = useState<Record<string, boolean>>({});
+  const [poolPreviewMarkers, setPoolPreviewMarkers] = useState<Record<string, Array<{
+    id: string;
+    latitude: number;
+    longitude: number;
+    title: string;
+    icon: 'pickup' | 'dropoff' | 'pool';
+  }>>>({});
+
+  // Reset preview cache when core trip inputs change
+  useEffect(() => {
+    setPoolPreviewCache({});
+    setPoolPreviewErrors({});
+    setPoolPreviewLoadingId(null);
+    setPoolPreviewMarkers({});
+    setPoolDetailsLoadingId(null);
+    setPoolDetailsAttempted({});
+  }, [pickupLocation?.latitude, pickupLocation?.longitude, destination?.latitude, destination?.longitude, selectedVehicleType]);
 
   // Use the pools hook to search for real pools and create new ones
-  const { searchPools, createPool, joinPool, searchResults, currentPool, loading, error, clearSearch } = usePools();
+  const { searchPools, createPool, joinPool, searchResults, loading, error } = usePools();
 
   // Use the rides hook to create rides
   const { requestRide } = useRides();
 
   // Get available pools from search results
   const availablePools = searchResults?.pools || [];
-  const hasMatches = searchResults?.has_matches || false;
-  const alternatives = searchResults?.alternatives || [];
 
   // Fetch Priyo Sathi count on mount
   useEffect(() => {
@@ -81,6 +89,48 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
     fetchPriyoSathiCount();
   }, []);
 
+  // Fetch ride estimate when locations and vehicle type are set
+  useEffect(() => {
+    if (!pickupLocation || !destination?.latitude || !destination?.longitude || !selectedVehicleType) {
+      setRideEstimate(null);
+      return;
+    }
+
+    let isActive = true;
+
+    const fetchEstimate = async () => {
+      setEstimateLoading(true);
+      try {
+        const response = await rideService.getRideEstimate({
+          pickup_lat: pickupLocation.latitude,
+          pickup_lng: pickupLocation.longitude,
+          dropoff_lat: destination.latitude!,
+          dropoff_lng: destination.longitude!,
+          vehicle_type: selectedVehicleType,
+        });
+
+        if (isActive && response.success && response.data) {
+          setRideEstimate(response.data.estimate);
+        }
+      } catch (err) {
+        if (isActive) {
+          console.error('Failed to fetch ride estimate:', err);
+          setRideEstimate(null);
+        }
+      } finally {
+        if (isActive) {
+          setEstimateLoading(false);
+        }
+      }
+    };
+
+    fetchEstimate();
+
+    return () => {
+      isActive = false;
+    };
+  }, [pickupLocation, destination, selectedVehicleType]);
+
   // Handle Priyo Sathi invite
   const handlePriyoSathiInvite = useCallback((companionId: string, companionName: string) => {
     setInvitedFriends(prev => {
@@ -94,45 +144,179 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
     );
   }, []);
 
-  // Fetch ride estimate when locations and vehicle type are set
-  useEffect(() => {
-    if (!pickupLocation || !destination?.latitude || !destination?.longitude || !selectedVehicleType) {
-      setRideEstimate(null);
-      setRouteInfo(null);
-      setAlternativeRoutes([]);
-      setTrafficInfo('');
+  const selectedPoolPreview = selectedPoolId ? poolPreviewCache[selectedPoolId] : null;
+  const selectedPoolPreviewError = selectedPoolId ? (poolPreviewErrors[selectedPoolId] || null) : null;
+  const selectedPoolPreviewLoading = selectedPoolId ? poolPreviewLoadingId === selectedPoolId : false;
+  const selectedPoolMarkers = selectedPoolId ? (poolPreviewMarkers[selectedPoolId] || []) : [];
+
+  const buildPreviewParams = useCallback(() => {
+    if (!pickupLocation?.latitude || !pickupLocation?.longitude || !destination?.latitude || !destination?.longitude) {
+      return null;
+    }
+
+    const params: Record<string, string | number> = {
+      pickup_lat: pickupLocation.latitude,
+      pickup_lng: pickupLocation.longitude,
+      dropoff_lat: destination.latitude,
+      dropoff_lng: destination.longitude,
+    };
+
+    if (pickupLocation.address) params.pickup_address = pickupLocation.address;
+    if (pickupLocation.name) params.pickup_name = pickupLocation.name;
+    if (destination.address) params.dropoff_address = destination.address;
+    if (destination.name) params.dropoff_name = destination.name;
+
+    return params;
+  }, [pickupLocation, destination]);
+
+  const buildMarkersFromStops = useCallback((poolId: string, stops: Array<{
+    type: 'pickup' | 'dropoff';
+    userId: string;
+    location: { latitude?: number; longitude?: number; lat?: number; lng?: number };
+    isCurrentUser: boolean;
+  }>) => {
+    const markers = stops
+      .filter((stop) => !stop.isCurrentUser)
+      .map((stop, index) => {
+        const lat = stop.location.latitude ?? stop.location.lat;
+        const lng = stop.location.longitude ?? stop.location.lng;
+        if (lat === undefined || lng === undefined) {
+          return null;
+        }
+        return {
+          id: `pool-stop-${poolId}-${stop.userId}-${stop.type}-${index}`,
+          latitude: lat,
+          longitude: lng,
+          title: stop.type === 'pickup' ? 'Co-rider pickup' : 'Co-rider drop-off',
+          icon: stop.type === 'pickup' ? 'pickup' : 'dropoff',
+        };
+      })
+      .filter((marker): marker is { id: string; latitude: number; longitude: number; title: string; icon: 'pickup' | 'dropoff' } => Boolean(marker));
+
+    setPoolPreviewMarkers(prev => ({ ...prev, [poolId]: markers }));
+  }, []);
+
+  const buildMarkersFromPoolDetails = useCallback((poolId: string, pool: any) => {
+    const markers: Array<{
+      id: string;
+      latitude: number;
+      longitude: number;
+      title: string;
+      icon: 'pickup' | 'dropoff';
+    }> = [];
+
+    const members = (pool?.pool_members || []) as Array<{
+      user_id: string;
+      ride?: {
+        pickup_lat?: number;
+        pickup_lng?: number;
+        dropoff_lat?: number;
+        dropoff_lng?: number;
+        pickup_address?: string;
+        dropoff_address?: string;
+      };
+    }>;
+
+    members.forEach((member, index) => {
+      if (!member.ride) return;
+      if (userProfile?.id && member.user_id === userProfile.id) return;
+
+      if (member.ride.pickup_lat !== undefined && member.ride.pickup_lng !== undefined) {
+        markers.push({
+          id: `pool-member-${poolId}-${member.user_id}-pickup-${index}`,
+          latitude: member.ride.pickup_lat,
+          longitude: member.ride.pickup_lng,
+          title: member.ride.pickup_address || 'Co-rider pickup',
+          icon: 'pickup',
+        });
+      }
+
+      if (member.ride.dropoff_lat !== undefined && member.ride.dropoff_lng !== undefined) {
+        markers.push({
+          id: `pool-member-${poolId}-${member.user_id}-dropoff-${index}`,
+          latitude: member.ride.dropoff_lat,
+          longitude: member.ride.dropoff_lng,
+          title: member.ride.dropoff_address || 'Co-rider drop-off',
+          icon: 'dropoff',
+        });
+      }
+    });
+
+    if (markers.length > 0) {
+      setPoolPreviewMarkers(prev => ({ ...prev, [poolId]: markers }));
+    }
+  }, [userProfile?.id]);
+
+  const fetchPoolPreview = useCallback(async (poolId: string, options?: { force?: boolean }) => {
+    const params = buildPreviewParams();
+    if (!params) return;
+
+    if (!options?.force && (poolPreviewCache[poolId] || poolPreviewLoadingId === poolId)) {
       return;
     }
 
-    const fetchEstimate = async () => {
-      setEstimateLoading(true);
-      try {
-        const response = await rideService.getRideEstimate({
-          pickup_lat: pickupLocation.latitude,
-          pickup_lng: pickupLocation.longitude,
-          dropoff_lat: destination.latitude!,
-          dropoff_lng: destination.longitude!,
-          vehicle_type: selectedVehicleType,
-        });
+    setPoolPreviewLoadingId(poolId);
+    setPoolPreviewErrors(prev => {
+      if (!prev[poolId]) return prev;
+      const next = { ...prev };
+      delete next[poolId];
+      return next;
+    });
 
-        if (response.success && response.data) {
-          setRideEstimate(response.data.estimate);
-          setRouteInfo(response.data.route ? {
-            summary: response.data.route.summary,
-            selectedReason: response.data.route.selectedReason,
-          } : null);
-          setAlternativeRoutes(response.data.alternativeRoutes || []);
-          setTrafficInfo(response.data.trafficInfo || '');
+    try {
+      const response = await poolService.getPoolPreview(poolId, params);
+      if (response.success && response.data) {
+        setPoolPreviewCache(prev => ({ ...prev, [poolId]: response.data }));
+        if (response.data.stops?.length) {
+          buildMarkersFromStops(poolId, response.data.stops);
         }
-      } catch (err) {
-        console.error('Failed to fetch ride estimate:', err);
-      } finally {
-        setEstimateLoading(false);
+      } else {
+        setPoolPreviewErrors(prev => ({
+          ...prev,
+          [poolId]: response.message || 'Failed to load pool preview',
+        }));
       }
-    };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load pool preview';
+      setPoolPreviewErrors(prev => ({ ...prev, [poolId]: message }));
+    } finally {
+      setPoolPreviewLoadingId(current => (current === poolId ? null : current));
+    }
+  }, [buildPreviewParams, poolPreviewCache, poolPreviewLoadingId, buildMarkersFromStops]);
 
-    fetchEstimate();
-  }, [pickupLocation, destination, selectedVehicleType]);
+  // Fetch pool preview (user-specific fare/time + member stops) when a pool is selected
+  useEffect(() => {
+    if (!selectedPoolId) return;
+    if (selectedPoolPreview && selectedPoolMarkers.length > 0) return;
+
+    fetchPoolPreview(selectedPoolId);
+  }, [selectedPoolId, selectedPoolPreview, selectedPoolMarkers.length, fetchPoolPreview]);
+
+  // Fetch pool details once per pool to show member pickups/dropoffs
+  useEffect(() => {
+    if (!selectedPoolId) return;
+    if (poolDetailsLoadingId === selectedPoolId) return;
+    if (poolDetailsAttempted[selectedPoolId]) return;
+
+    setPoolDetailsLoadingId(selectedPoolId);
+    setPoolDetailsAttempted(prev => ({ ...prev, [selectedPoolId]: true }));
+    poolService.getPoolById(selectedPoolId)
+      .then((response) => {
+        if (response.success && response.data?.pool) {
+          buildMarkersFromPoolDetails(selectedPoolId, response.data.pool);
+        }
+      })
+      .catch(() => {
+        // Ignore errors for map fallback
+      })
+      .finally(() => {
+        setPoolDetailsLoadingId(current => (current === selectedPoolId ? null : current));
+      });
+  }, [
+    selectedPoolId,
+    poolDetailsLoadingId,
+    buildMarkersFromPoolDetails,
+  ]);
 
   // Search for pools when location/preferences change
   useEffect(() => {
@@ -225,24 +409,6 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
     }
   }, [selectedPoolId]);
 
-  // Generate dynamic stops based on pool data
-  const getPoolStops = (pool: any): PoolStop[] => {
-    const stops: PoolStop[] = [
-      { type: 'pickup', name: 'Your Pickup', rider: 'You', x: 25, y: 30 },
-    ];
-
-    // Add dropoff
-    stops.push({
-      type: 'dropoff',
-      name: destination?.name || 'Your Destination',
-      rider: 'You',
-      x: 75,
-      y: 75
-    });
-
-    return stops;
-  };
-
   // Filter pools based on gender preference
   const filteredPools = availablePools.filter((poolResult: any) => {
     // For now, show all pools from search results
@@ -251,7 +417,15 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
   });
 
   const handlePoolClick = (poolResult: any) => {
+    if (selectedPoolId === poolResult.poolId && poolPreviewErrors[poolResult.poolId]) {
+      setPoolPreviewErrors(prev => {
+        const next = { ...prev };
+        delete next[poolResult.poolId];
+        return next;
+      });
+    }
     setSelectedPoolId(poolResult.poolId);
+    fetchPoolPreview(poolResult.poolId, { force: selectedPoolId === poolResult.poolId });
   };
 
   // Handle joining an existing pool - creates a ride first, then joins the pool
@@ -309,14 +483,16 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
         max_passengers: selectedVehicleType === 'CNG' ? 2 : 4,
         viability_score: poolResult.score || null,
         score_breakdown: null,
-        fare_per_person: joinResult.farePerPerson || null,
+        fare_per_person: (selectedPoolPreview?.userEstimate?.fare ?? joinResult.farePerPerson) || null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         started_at: null,
         completed_at: null,
         deleted_at: null,
         // Display properties
-        eta: poolResult.exactETA || 5,
+        eta: selectedPoolPreview?.userEstimate?.durationMinutes
+          ? Math.round(selectedPoolPreview.userEstimate.durationMinutes)
+          : (poolResult.exactETA || 5),
         rating: 4.5,
       };
 
@@ -328,12 +504,10 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
       setIsJoiningPool(false);
     }
   }, [selectedPoolId, pickupLocation, destination, selectedVehicleType, isFemale, activeRideType,
-    filteredPools, requestRide, joinPool, onPoolSelect]);
+    filteredPools, requestRide, joinPool, onPoolSelect, selectedPoolPreview]);
 
   // Get stops for selected pool
   const selectedPoolResult = selectedPoolId ? filteredPools.find((p: any) => p.poolId === selectedPoolId) : null;
-  const currentStops = selectedPoolResult ? getPoolStops(selectedPoolResult) : [];
-
   // Use pickup location from props or default to Dhaka center
   const pickupCoords = pickupLocation
     ? { latitude: pickupLocation.latitude, longitude: pickupLocation.longitude }
@@ -359,15 +533,19 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
       icon: 'pickup' | 'dropoff' | 'pool';
     }> = [];
 
-    // Add pool location marker when a pool is selected
-    if (selectedPoolId && poolPickupCoords) {
-      markers.push({
-        id: 'pool-location',
-        latitude: poolPickupCoords.latitude,
-        longitude: poolPickupCoords.longitude,
-        title: `Pool Location${selectedPoolResult?.poolPickupLocation?.name ? ` - ${selectedPoolResult.poolPickupLocation.name}` : (selectedPoolResult?.poolPickupLocation?.address ? ` - ${selectedPoolResult.poolPickupLocation.address}` : '')}`,
-        icon: 'pool',
-      });
+    if (selectedPoolId) {
+      if (selectedPoolMarkers.length > 0) {
+        markers.push(...selectedPoolMarkers);
+      } else if (poolPickupCoords) {
+        // Fallback to pool creator's pickup if preview is unavailable
+        markers.push({
+          id: 'pool-location',
+          latitude: poolPickupCoords.latitude,
+          longitude: poolPickupCoords.longitude,
+          title: `Pool Location${selectedPoolResult?.poolPickupLocation?.name ? ` - ${selectedPoolResult.poolPickupLocation.name}` : (selectedPoolResult?.poolPickupLocation?.address ? ` - ${selectedPoolResult.poolPickupLocation.address}` : '')}`,
+          icon: 'pool',
+        });
+      }
     }
 
     return markers;
@@ -566,99 +744,6 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
               </TouchableOpacity>
             )}
 
-            {/* Cost & Time - Now using real estimates */}
-            <View className="flex flex-row items-center justify-center gap-4 py-3 px-4 bg-gray-50 rounded-xl mx-1 mb-4">
-              {estimateLoading ? (
-                <ActivityIndicator size="small" color="#2563eb" />
-              ) : rideEstimate ? (
-                <>
-                  <View className="flex flex-col items-center">
-                    <View className="flex flex-row items-center gap-2">
-                      <Taka className="w-5 h-5 text-green-600" />
-                      <Text className="font-semibold">৳{rideEstimate.estimatedFare}</Text>
-                    </View>
-                    <Text className="text-xs text-gray-500">Fare (with pool)</Text>
-                  </View>
-                  <View className="w-px h-10 bg-gray-300"></View>
-                  <View className="flex flex-col items-center">
-                    <View className="flex flex-row items-center gap-2">
-                      <Clock className="w-5 h-5 text-blue-600" />
-                      <Text className="font-semibold">{rideEstimate.durationInTraffic || rideEstimate.durationMinutes} mins</Text>
-                    </View>
-                    <Text className="text-xs text-gray-500">{rideEstimate.distanceKm} km</Text>
-                  </View>
-                  {rideEstimate.estimatedSavings > 0 && (
-                    <>
-                      <View className="w-px h-10 bg-gray-300"></View>
-                      <View className="flex flex-col items-center">
-                        <Text className="font-semibold text-green-600">৳{Math.floor(rideEstimate.estimatedSavings)}</Text>
-                        <Text className="text-xs text-gray-500">savings</Text>
-                      </View>
-                    </>
-                  )}
-                </>
-              ) : (
-                <>
-                  <View className="flex flex-row items-center gap-2">
-                    <Taka className="w-5 h-5 text-green-600" />
-                    <Text className="font-semibold text-gray-400">Select vehicle</Text>
-                  </View>
-                  <View className="w-px h-6 bg-gray-300"></View>
-                  <View className="flex flex-row items-center gap-2">
-                    <Clock className="w-5 h-5 text-blue-600" />
-                    <Text className="font-semibold text-gray-400">--</Text>
-                  </View>
-                </>
-              )}
-            </View>
-
-            {/* Best Route Info */}
-            {rideEstimate && routeInfo && (
-              <View className="mx-1 mb-4 p-3 bg-green-50 rounded-xl border border-green-200">
-                <View className="flex flex-row items-center gap-2 mb-2">
-                  <Navigation className="w-4 h-4 text-green-600" />
-                  <Text className="text-sm font-semibold text-green-800">Best Route Selected</Text>
-                </View>
-                {routeInfo.summary && (
-                  <Text className="text-sm text-green-700 font-medium">Via {routeInfo.summary}</Text>
-                )}
-                {routeInfo.selectedReason && (
-                  <Text className="text-xs text-green-600 mt-1">{routeInfo.selectedReason}</Text>
-                )}
-                <View className="flex flex-row items-center gap-2 mt-2">
-                  <Text className="text-xs font-medium text-gray-600">{trafficInfo}</Text>
-                </View>
-              </View>
-            )}
-
-            {/* Alternative Routes */}
-            {alternativeRoutes.length > 0 && (
-              <View className="mx-1 mb-4 p-3 bg-gray-50 rounded-xl">
-                <Text className="text-xs text-gray-600 font-medium mb-2">Other routes available:</Text>
-                {alternativeRoutes.slice(0, 2).map((alt, idx) => (
-                  <View key={idx} className="flex flex-row items-center justify-between py-1">
-                    <Text className="text-xs text-gray-500">{alt.description}</Text>
-                    <Text className="text-xs text-orange-600">
-                      +{alt.timeDifference} min {alt.trafficLevel === 'high' ? '🔴' : alt.trafficLevel === 'moderate' ? '🟡' : '🟢'}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* Fare breakdown info */}
-            {rideEstimate && (
-              <View className="mx-1 mb-4 p-3 bg-blue-50 rounded-xl">
-                <Text className="text-xs text-blue-700 font-medium mb-2">Fare varies with pool size:</Text>
-                <View className="flex flex-row justify-between">
-                  <Text className="text-xs text-blue-600">Solo: ৳{rideEstimate.fareEstimates.solo}</Text>
-                  <Text className="text-xs text-blue-600">2 riders: ৳{rideEstimate.fareEstimates.with2Passengers}</Text>
-                  <Text className="text-xs text-blue-600">3 riders: ৳{rideEstimate.fareEstimates.with3Passengers}</Text>
-                  <Text className="text-xs text-blue-600">4 riders: ৳{rideEstimate.fareEstimates.with4Passengers}</Text>
-                </View>
-              </View>
-            )}
-
             {/* Vehicle Type Selector */}
             <View className="mb-6">
               <View className="flex flex-row items-center gap-2 mb-3 mx-1">
@@ -745,6 +830,41 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                 <Text className="text-sm text-gray-500 text-center">Select a vehicle type to see available pools</Text>
               )}
             </View>
+
+            {/* Fare & Savings (Vehicle Estimate) */}
+            {selectedVehicleType && (
+              <View className="flex flex-row items-center justify-center gap-4 py-3 px-4 bg-gray-50 rounded-xl mx-1 mb-4">
+                {estimateLoading ? (
+                  <ActivityIndicator size="small" color="#2563eb" />
+                ) : rideEstimate ? (
+                  <>
+                    <View className="flex flex-col items-center">
+                      <View className="flex flex-row items-center gap-2">
+                        <Taka className="w-5 h-5 text-green-600" />
+                        <Text className="font-semibold">৳{rideEstimate.estimatedFare}</Text>
+                      </View>
+                      <Text className="text-xs text-gray-500">Estimated Fare</Text>
+                    </View>
+                    <View className="w-px h-10 bg-gray-300"></View>
+                    <View className="flex flex-col items-center">
+                      <Text className="font-semibold text-green-600">৳{Math.floor(rideEstimate.estimatedSavings)}</Text>
+                      <Text className="text-xs text-gray-500">You Save</Text>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <View className="flex flex-row items-center gap-2">
+                      <Taka className="w-5 h-5 text-green-600" />
+                      <Text className="font-semibold text-gray-400">--</Text>
+                    </View>
+                    <View className="w-px h-6 bg-gray-300"></View>
+                    <View className="flex flex-row items-center gap-2">
+                      <Text className="font-semibold text-gray-400">--</Text>
+                    </View>
+                  </>
+                )}
+              </View>
+            )}
 
             {/* Available Pools Section */}
             {selectedVehicleType && (
@@ -928,7 +1048,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                       No pools found nearby
                     </Text>
                     <Text style={{ fontSize: 14, color: '#3b82f6', textAlign: 'center', marginBottom: 20, lineHeight: 20 }}>
-                      Be the first to create a pool for this route and save money when others join!
+                      Be the first to create a pool for this route and share rides with others.
                     </Text>
 
                     <TouchableOpacity
@@ -1042,6 +1162,9 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                           pool={poolData}
                           isSelected={selectedPoolId === poolResult.poolId}
                           onPress={() => handlePoolClick(poolResult)}
+                          userEstimate={selectedPoolId === poolResult.poolId ? selectedPoolPreview?.userEstimate || null : null}
+                          previewLoading={selectedPoolId === poolResult.poolId && selectedPoolPreviewLoading}
+                          previewError={selectedPoolId === poolResult.poolId ? selectedPoolPreviewError : null}
                         />
                       );
                     })}

@@ -288,15 +288,6 @@ export default function AvailablePoolCard({
                 </View>
                 <Text style={{ fontSize: 11, color: '#64748b' }}>Your Time</Text>
               </View>
-
-              <View style={{ width: 1, backgroundColor: '#e2e8f0' }} />
-
-              <View style={{ flex: 1, alignItems: 'center' }}>
-                <Text style={{ fontSize: 15, fontWeight: '700', color: '#16a34a', marginBottom: 2 }}>
-                  ৳{Math.round(userEstimate.savings)}
-                </Text>
-                <Text style={{ fontSize: 11, color: '#64748b' }}>You Save</Text>
-              </View>
             </View>
           ) : (
             <Text style={{ fontSize: 12, color: '#64748b' }}>Tap to load your estimate.</Text>
