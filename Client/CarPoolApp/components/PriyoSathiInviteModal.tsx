@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Modal, ScrollView, ActivityIndicator } from 'react-native';
 import { Users, X, UserPlus, Check, MapPin, Clock, RefreshCw } from './Icons';
 import { priyoSathiService, Companion, NearbyCompanion } from '../services/priyoSathi.service';
@@ -35,8 +35,13 @@ export default function PriyoSathiInviteModal({
   const accentColor = isFemale ? '#ec4899' : '#2563eb';
   const accentGradient: [string, string] = isFemale ? ['#ec4899', '#e11d48'] : ['#2563eb', '#1d4ed8'];
 
-  const fetchData = async () => {
-    setLoading(true);
+  const isMountedRef = useRef(true);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -49,7 +54,7 @@ export default function PriyoSathiInviteModal({
           destinationLat,
           destinationLng
         );
-        if (nearbyRes.success) {
+        if (nearbyRes.success && isMountedRef.current) {
           const onlineCompanions = nearbyRes.data.candidates || [];
           setNearbyCompanions(onlineCompanions);
           
@@ -69,26 +74,49 @@ export default function PriyoSathiInviteModal({
           }));
           setCompanions(onlineCompanionList);
         }
-      } else {
+      } else if (isMountedRef.current) {
         // No location data - can't determine who is nearby, show empty
         setCompanions([]);
         setNearbyCompanions([]);
       }
     } catch (err: any) {
-      console.error('[PriyoSathiInvite] Error fetching data:', err);
-      setError(err.message || 'Failed to load friends');
+      if (isMountedRef.current) {
+        console.error('[PriyoSathiInvite] Error fetching data:', err);
+        if (!silent) {
+          setError(err.message || 'Failed to load friends');
+        }
+      }
     } finally {
-      setLoading(false);
+      if (isMountedRef.current && !silent) {
+        setLoading(false);
+      }
     }
-  };
+  }, [pickupLat, pickupLng, destinationLat, destinationLng]);
 
+  // Initial fetch + polling every 5 seconds when modal is visible
   useEffect(() => {
-    if (visible) {
-      fetchData();
-    }
-  }, [visible, pickupLat, pickupLng, destinationLat, destinationLng]);
+    isMountedRef.current = true;
 
-  
+    if (visible) {
+      fetchData(false);
+      pollingRef.current = setInterval(() => {
+        fetchData(true);
+      }, 5000);
+    }
+
+    return () => {
+      isMountedRef.current = false;
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, [visible, fetchData]);
+
+  // Reset local invite state when locations change (new ride context)
+  useEffect(() => {
+    setInvitedIds(new Set());
+  }, [pickupLat, pickupLng, destinationLat, destinationLng]);
 
   const handleInvite = async (companion: Companion) => {
     const companionId = companion.companion_id;
@@ -141,7 +169,7 @@ export default function PriyoSathiInviteModal({
               </View>
               <View className="flex-row items-center gap-2">
                 <TouchableOpacity
-                  onPress={fetchData}
+                  onPress={() => fetchData()}
                   disabled={loading}
                   className="w-8 h-8 bg-white/20 rounded-full items-center justify-center"
                   style={{ opacity: loading ? 0.6 : 1 }}
@@ -168,7 +196,7 @@ export default function PriyoSathiInviteModal({
             ) : error ? (
               <View className="items-center py-12">
                 <Text className="text-red-500">{error}</Text>
-                <TouchableOpacity onPress={fetchData} className="mt-4">
+                <TouchableOpacity onPress={() => fetchData()} className="mt-4">
                   <Text className="text-blue-600 font-semibold">Tap to retry</Text>
                 </TouchableOpacity>
               </View>
@@ -182,7 +210,7 @@ export default function PriyoSathiInviteModal({
                   None of your Priyo Sathi friends are currently looking for a ride nearby.
                 </Text>
                 <TouchableOpacity
-                  onPress={fetchData}
+                  onPress={() => fetchData()}
                   className="mt-4 px-4 py-2 bg-gray-100 rounded-lg"
                   disabled={loading}
                   style={{ opacity: loading ? 0.6 : 1 }}
@@ -211,6 +239,9 @@ export default function PriyoSathiInviteModal({
                   const nearby = isNearby(companion.companion_id);
                   const isInvited = invitedIds.has(companion.companion_id);
                   const isInviting = invitingId === companion.companion_id;
+                  const hasInviteFrom = nearby?.has_pending_invite_from ?? false;
+                  const hasInviteTo = nearby?.has_pending_invite_to ?? false;
+                  const isInviteLocked = isInvited || hasInviteFrom || hasInviteTo;
 
                   return (
                     <View
@@ -249,15 +280,17 @@ export default function PriyoSathiInviteModal({
                       {/* Invite Button */}
                       <TouchableOpacity
                         onPress={() => handleInvite(companion)}
-                        disabled={isInviting || isInvited}
+                        disabled={isInviting || isInviteLocked}
                         className={`px-4 py-2 rounded-lg ${
-                          isInvited ? 'bg-green-500' : 'bg-green-600'
+                          hasInviteFrom ? 'bg-amber-500' : isInvited || hasInviteTo ? 'bg-green-500' : 'bg-green-600'
                         }`}
-                        style={{ opacity: isInviting ? 0.5 : 1 }}
+                        style={{ opacity: isInviting || isInviteLocked ? 0.7 : 1 }}
                       >
                         {isInviting ? (
                           <ActivityIndicator size="small" color="#ffffff" />
-                        ) : isInvited ? (
+                        ) : hasInviteFrom ? (
+                          <Text className="text-white font-medium text-sm">Invited You</Text>
+                        ) : isInvited || hasInviteTo ? (
                           <View className="flex-row items-center gap-1">
                             <Check size={16} color="#ffffff" />
                             <Text className="text-white font-medium text-sm">Invited</Text>

@@ -24,6 +24,8 @@ export interface NearbyCompanion {
   is_on_route: boolean;
   can_auto_match: boolean;
   match_reason: string;
+  has_pending_invite_to?: boolean;
+  has_pending_invite_from?: boolean;
 }
 
 export interface NearbyCompanionsResponse {
