@@ -231,7 +231,7 @@ export default function AvailablePoolCard({
         <View style={{ width: 1, backgroundColor: '#e5e7eb' }} />
 
         {/* Route Match */}
-        <View style={{ flex: 1, alignItems: 'center' }}>
+        {/* <View style={{ flex: 1, alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
             <Route size={14} color="#10b981" />
             <Text style={{ fontSize: 15, fontWeight: '700', color: '#10b981' }}>
@@ -239,7 +239,7 @@ export default function AvailablePoolCard({
             </Text>
           </View>
           <Text style={{ fontSize: 11, color: '#6b7280', textAlign: 'center' }}>Route Match</Text>
-        </View>
+        </View> */}
       </View>
 
       {/* User-specific Estimate */}
