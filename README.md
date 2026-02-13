@@ -13,7 +13,7 @@ A destination-based carpooling platform designed for Dhaka city, enabling effici
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         CLIENTS                                  │
+│                         CLIENTS                                 │
 ├────────────────────────┬────────────────────────────────────────┤
 │     CarPoolApp         │           DriverApp                    │
 │   (Passenger App)      │         (Driver App)                   │
@@ -22,13 +22,13 @@ A destination-based carpooling platform designed for Dhaka city, enabling effici
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    API GATEWAY (Nginx)                           │
-│              Rate Limiting | Load Balancing | SSL                │
+│                    API GATEWAY (Nginx)                          │
+│              Rate Limiting | Load Balancing | SSL               │
 └────────────────────────────────────────────────────────────────-┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    EXPRESS.JS API SERVER                         │
+│                    EXPRESS.JS API SERVER                        │
 │  ┌─────────────┐  ┌──────────────┐  ┌───────────────┐           │
 │  │ Controllers │  │   Services   │  │  Middleware   │           │
 │  │  - auth     │  │ - poolMatch  │  │ - auth        │           │
@@ -41,10 +41,10 @@ A destination-based carpooling platform designed for Dhaka city, enabling effici
                               │
                     ┌─────────┴─────────┐
                     ▼                   ▼
-┌──────────────────────┐    ┌──────────────────────┐
-│   SUPABASE           │    │   REDIS              │
-│   (PostgreSQL + Auth)│    │   (Cache + Sessions) │
-└──────────────────────┘    └──────────────────────┘
+      ┌──────────────────────┐    ┌──────────────────────┐
+      │   SUPABASE           │    │   REDIS              │
+      │  (PostgreSQL + Auth) │    │   (Cache + Sessions) │
+      └──────────────────────┘    └──────────────────────┘
 ```
 
 ## 📁 Project Structure
