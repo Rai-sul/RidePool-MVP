@@ -1,0 +1,120 @@
+import React from 'react';
+import { View, Text, ScrollView } from 'react-native-web';
+import { ArrowLeft, MapPin, Volume2, Smartphone as Vibrate, Moon, Wifi } from './Icons';
+import { Button } from './ui/button';
+import { Switch } from './ui/switch';
+import { Separator } from './ui/separator';
+
+type SettingsScreenProps = {
+  onBack: () => void;
+};
+
+export default function SettingsScreen({ onBack }: SettingsScreenProps) {
+  return (
+    <ScrollView className="h-full w-full bg-gray-50 flex-1 pb-20">
+      {/* Header */}
+      <View className="bg-white border-b p-4 flex flex-row items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={onBack}>
+          <ArrowLeft className="w-6 h-6" />
+        </Button>
+        <Text className="text-xl">Settings</Text>
+      </View>
+
+      {/* Content */}
+      <View className="p-6 space-y-4">
+        {/* Sound & Notifications */}
+        <View className="bg-white rounded-2xl p-5 space-y-4">
+          <Text>Sound & Notifications</Text>
+          <Separator />
+          
+          <View className="flex flex-row items-center justify-between">
+            <View className="flex flex-row items-center gap-3">
+              <View className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                <Volume2 className="w-5 h-5 text-gray-600" />
+              </View>
+              <View>
+                <Text>Sound Effects</Text>
+                <Text className="text-sm text-gray-500">Enable in-app sounds</Text>
+              </View>
+            </View>
+            <Switch defaultChecked />
+          </View>
+
+          <View className="flex flex-row items-center justify-between">
+            <View className="flex flex-row items-center gap-3">
+              <View className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                <Vibrate className="w-5 h-5 text-gray-600" />
+              </View>
+              <View>
+                <Text>Vibration</Text>
+                <Text className="text-sm text-gray-500">Haptic feedback</Text>
+              </View>
+            </View>
+            <Switch defaultChecked />
+          </View>
+        </View>
+
+        {/* Display */}
+        <View className="bg-white rounded-2xl p-5 space-y-4">
+          <Text>Display</Text>
+          <Separator />
+          
+          <View className="flex flex-row items-center justify-between">
+            <View className="flex flex-row items-center gap-3">
+              <View className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                <Moon className="w-5 h-5 text-gray-600" />
+              </View>
+              <View>
+                <Text>Dark Mode</Text>
+                <Text className="text-sm text-gray-500">Use dark theme</Text>
+              </View>
+            </View>
+            <Switch />
+          </View>
+        </View>
+
+        {/* Location */}
+        <View className="bg-white rounded-2xl p-5 space-y-4">
+          <Text>Location</Text>
+          <Separator />
+          
+          <View className="flex flex-row items-center justify-between">
+            <View className="flex flex-row items-center gap-3">
+              <View className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                <MapPin className="w-5 h-5 text-gray-600" />
+              </View>
+              <View>
+                <Text>Location Services</Text>
+                <Text className="text-sm text-gray-500">Always allow</Text>
+              </View>
+            </View>
+            <Switch defaultChecked />
+          </View>
+        </View>
+
+        {/* Data & Storage */}
+        <View className="bg-white rounded-2xl p-5 space-y-4">
+          <Text>Data & Storage</Text>
+          <Separator />
+          
+          <View className="flex flex-row items-center justify-between">
+            <View className="flex flex-row items-center gap-3">
+              <View className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                <Wifi className="w-5 h-5 text-gray-600" />
+              </View>
+              <View>
+                <Text>Download Maps</Text>
+                <Text className="text-sm text-gray-500">Only on Wi-Fi</Text>
+              </View>
+            </View>
+            <Switch defaultChecked />
+          </View>
+        </View>
+
+        <Button variant="destructive" className="w-full">
+          Clear Cache
+        </Button>
+      </View>
+    </ScrollView>
+  );
+}
