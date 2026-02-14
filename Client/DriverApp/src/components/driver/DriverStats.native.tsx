@@ -10,7 +10,7 @@ interface DriverStatsProps {
   rating: number;
 }
 
-export function DriverStats({ todayEarnings, totalRides, onlineTime, rating }: DriverStatsProps) {
+export function DriverStats({ todayEarnings = 0, totalRides = 0, onlineTime = 0, rating = 0 }: DriverStatsProps) {
   const { colors } = useTheme();
 
   return (

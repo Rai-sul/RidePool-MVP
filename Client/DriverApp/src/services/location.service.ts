@@ -77,6 +77,14 @@ export const locationService = {
       timeInterval?: number;
     }
   ): Promise<LocationSubscription> {
+    const permissions = await this.checkPermissions();
+    if (!permissions.foreground) {
+      const granted = await this.requestForegroundPermission();
+      if (!granted) {
+        throw new Error('Location permission not granted');
+      }
+    }
+
     const subscription = await ExpoLocation.watchPositionAsync(
       {
         accuracy: options?.accuracy ?? ExpoLocation.Accuracy.High,

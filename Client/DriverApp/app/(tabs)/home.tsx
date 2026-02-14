@@ -57,13 +57,17 @@ export default function Home() {
     let subscription: { remove: () => void } | null = null;
 
     const startWatching = async () => {
-      subscription = await locationService.watchLocation(
-        (location) => {
-          setCurrentLocation(location);
-          driverService.updateLocation(location).catch(() => {});
-        },
-        { distanceInterval: 50, timeInterval: 10000 }
-      );
+      try {
+        subscription = await locationService.watchLocation(
+          (location) => {
+            setCurrentLocation(location);
+            driverService.updateLocation(location).catch(() => {});
+          },
+          { distanceInterval: 50, timeInterval: 10000 }
+        );
+      } catch (error) {
+        console.log('Error starting location watch:', error);
+      }
     };
 
     startWatching();

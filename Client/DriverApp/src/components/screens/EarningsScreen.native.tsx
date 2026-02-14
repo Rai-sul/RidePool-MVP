@@ -49,8 +49,9 @@ export function EarningsScreen() {
     fetchEarnings();
   }, [fetchEarnings]);
 
-  const weekEarnings = earningsHistory.reduce((sum, e) => sum + e.amount, 0);
-  const todayEarningsList = earningsHistory.filter(e => {
+  const safeEarningsHistory = Array.isArray(earningsHistory) ? earningsHistory : [];
+  const weekEarnings = safeEarningsHistory.reduce((sum, e) => sum + e.amount, 0);
+  const todayEarningsList = safeEarningsHistory.filter(e => {
     const today = new Date().toISOString().split('T')[0];
     return e.date === today;
   });
@@ -68,8 +69,8 @@ export function EarningsScreen() {
       >
         <View className="px-4 py-6 gap-6 mb-20">
           <DriverStats
-            todayEarnings={todayEarnings}
-            totalRides={todayRides}
+            todayEarnings={todayEarnings || 0}
+            totalRides={todayRides || 0}
             onlineTime={6}
             rating={4.8}
           />

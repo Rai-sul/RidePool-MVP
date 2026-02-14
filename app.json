@@ -1,3 +1,12 @@
 {
-  "expo": {}
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "8b89119d-27bc-4708-8b37-d65cbf954e8d"
+      }
+    },
+    "android": {
+      "package": "com.rai_sul.carpooldev"
+    }
+  }
 }
