@@ -1,0 +1,105 @@
+{
+  "expo": {
+    "name": "DriverApp",
+    "slug": "DriverApp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "driverapp",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "jsEngine": "hermes",
+      "bundleIdentifier": "com.ridepool.driverapp",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Allow DriverApp to use your location to find nearby ride requests and navigate to pickups.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow DriverApp to use your location to track your position while completing rides.",
+        "NSLocationAlwaysUsageDescription": "Allow DriverApp to use your location in the background for continuous ride tracking.",
+        "UIBackgroundModes": [
+          "location",
+          "fetch",
+          "remote-notification"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.ridepool.driverapp",
+      "adaptiveIcon": {
+        "backgroundColor": "#3B82F6",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "jsEngine": "hermes",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraMavenRepos": [
+              "https://maven.google.com"
+            ]
+          }
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location.",
+          "locationAlwaysPermission": "Allow $(PRODUCT_NAME) to use your location in the background for ride tracking.",
+          "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location to find nearby ride requests."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#3B82F6",
+          "defaultChannel": "default",
+          "enableBackgroundRemoteNotifications": true
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "backgroundColor": "#1F2937"
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "08e29fd4-606a-4674-9aa2-5a103937c406"
+      }
+    },
+    "owner": "ahsan99"
+  }
+}

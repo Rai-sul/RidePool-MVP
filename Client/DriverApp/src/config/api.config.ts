@@ -1,0 +1,51 @@
+export const API_CONFIG = {
+  BASE_URL: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api',
+  TIMEOUT: 30000,
+  RETRY_ATTEMPTS: 3,
+  RETRY_DELAY: 1000,
+};
+
+export const API_ENDPOINTS = {
+  AUTH: {
+    REGISTER: '/auth/register',
+    LOGIN: '/auth/login',
+    LOGOUT: '/auth/logout',
+    REFRESH: '/auth/refresh',
+    VERIFY_EMAIL: '/auth/verify-email',
+    RESET_PASSWORD: '/auth/reset-password',
+    CHANGE_PASSWORD: '/auth/change-password',
+    ME: '/auth/me',
+  },
+  USER: {
+    PROFILE: '/users/profile',
+    UPDATE_PROFILE: '/users/profile',
+    UPDATE_GENDER_PREFERENCE: '/users/gender-preference',
+    DEVICE_TOKEN: '/users/device-token',
+    NOTIFICATIONS: '/users/notifications',
+    NOTIFICATION_READ: (id: string) => `/users/notifications/${id}/read`,
+    NOTIFICATIONS_READ_ALL: '/users/notifications/read-all',
+    NOTIFICATION_PREFERENCES: '/users/notifications/preferences',
+  },
+  DRIVER: {
+    GO_ONLINE: '/driver/go-online',
+    GO_OFFLINE: '/driver/go-offline',
+    STATUS: '/driver/status',
+    UPDATE_LOCATION: '/driver/location',
+    AVAILABLE_POOLS: '/driver/available-pools',
+    ACCEPT_POOL: (poolId: string) => `/driver/pools/${poolId}/accept`,
+    REJECT_POOL: (poolId: string) => `/driver/pools/${poolId}/reject`,
+    ACTIVE_POOL: '/driver/active-pool',
+    START_RIDE: '/driver/ride/start',
+    COMPLETE_RIDE: '/driver/ride/complete',
+    PICKUP: (passengerId: string) => `/driver/pickup/${passengerId}`,
+    DROPOFF: (passengerId: string) => `/driver/dropoff/${passengerId}`,
+    EARNINGS_TODAY: '/driver/earnings/today',
+    EARNINGS_HISTORY: '/driver/earnings/history',
+    STATS: '/driver/stats',
+    PRIORITY_LOCATION: '/driver/priority-location',
+  },
+  POOL: {
+    GET_BY_ID: (poolId: string) => `/pools/${poolId}`,
+    ROUTE: (poolId: string) => `/pools/${poolId}/route`,
+  },
+};
