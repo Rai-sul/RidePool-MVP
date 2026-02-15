@@ -1,6 +1,6 @@
 import { apiClient } from '../utils/apiClient';
 import { API_ENDPOINTS } from '../config/api.config';
-import type { ApiResponse, User, AuthSession } from '../types';
+import type { ApiResponse, User, AuthSession, Vehicle } from '../types';
 
 export const authService = {
   async register(data: {
@@ -11,8 +11,12 @@ export const authService = {
     last_name: string;
     full_name?: string;
     gender: 'MALE' | 'FEMALE' | 'OTHER';
-  }): Promise<ApiResponse<{ user: User; token?: string; session?: AuthSession }>> {
-    const response = await apiClient.post<ApiResponse<{ user: User; token?: string; session?: AuthSession }>>(
+    vehicle_type?: 'CAR' | 'CNG';
+    vehicle_model?: string;
+    vehicle_plate?: string;
+    driving_license?: string;
+  }): Promise<ApiResponse<{ user: User; vehicle?: Vehicle; token?: string; session?: AuthSession }>> {
+    const response = await apiClient.post<ApiResponse<{ user: User; vehicle?: Vehicle; token?: string; session?: AuthSession }>>(
       API_ENDPOINTS.AUTH.REGISTER,
       data
     );
@@ -34,8 +38,8 @@ export const authService = {
   async login(data: {
     email: string;
     password: string;
-  }): Promise<ApiResponse<{ user: User; token?: string; session?: AuthSession }>> {
-    const response = await apiClient.post<ApiResponse<{ user: User; token?: string; session?: AuthSession }>>(
+  }): Promise<ApiResponse<{ user: User; vehicle?: Vehicle; token?: string; session?: AuthSession }>> {
+    const response = await apiClient.post<ApiResponse<{ user: User; vehicle?: Vehicle; token?: string; session?: AuthSession }>>(
       API_ENDPOINTS.AUTH.LOGIN,
       data
     );

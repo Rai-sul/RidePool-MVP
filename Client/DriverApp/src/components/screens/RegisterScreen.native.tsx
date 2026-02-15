@@ -24,6 +24,7 @@ export function RegisterScreen({ onBack, onSuccess }: RegisterScreenProps) {
     password: "",
     confirmPassword: "",
     gender: "MALE" as 'MALE' | 'FEMALE' | 'OTHER',
+    vehicleType: "CNG" as 'CAR' | 'CNG',
     vehicleModel: "",
     vehiclePlate: "",
     drivingLicense: "",
@@ -32,7 +33,7 @@ export function RegisterScreen({ onBack, onSuccess }: RegisterScreenProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [visitToken, setVisitToken] = useState<string | null>(null);
-  const { setUser } = useDriverStore();
+  const { setUser, setVehicle } = useDriverStore();
 
   const handleSubmit = async () => {
     setError(null);
@@ -49,15 +50,14 @@ export function RegisterScreen({ onBack, onSuccess }: RegisterScreenProps) {
       first_name: formData.firstName,
       last_name: formData.lastName,
       gender: formData.gender,
+      vehicle_type: formData.vehicleType,
+      vehicle_plate: formData.vehiclePlate,
+      vehicle_model: formData.vehicleModel,
+      driving_license: formData.drivingLicense,
     });
 
     if (!validation.success) {
       setError(validation.error.errors[0]?.message || 'Invalid input');
-      return;
-    }
-
-    if (!formData.vehicleModel || !formData.vehiclePlate || !formData.drivingLicense) {
-      setError("Please fill in all vehicle information");
       return;
     }
 
@@ -72,10 +72,17 @@ export function RegisterScreen({ onBack, onSuccess }: RegisterScreenProps) {
         last_name: formData.lastName,
         full_name: `${formData.firstName} ${formData.lastName}`,
         gender: formData.gender,
+        vehicle_type: formData.vehicleType,
+        vehicle_model: formData.vehicleModel,
+        vehicle_plate: formData.vehiclePlate,
+        driving_license: formData.drivingLicense,
       });
 
       if (response.success && response.data?.user) {
         setUser(response.data.user);
+        if (response.data.vehicle) {
+          setVehicle(response.data.vehicle);
+        }
         const token = `VT-${Date.now().toString().slice(-8)}`;
         setVisitToken(token);
       } else {
@@ -267,6 +274,24 @@ export function RegisterScreen({ onBack, onSuccess }: RegisterScreenProps) {
 
                 <View className="gap-4">
                   <Text className="text-lg font-semibold text-gray-900">Vehicle Information</Text>
+                  
+                  <View className="gap-2">
+                    <Label className="text-gray-900">Vehicle Type *</Label>
+                    <View className="flex-row gap-3">
+                      <Pressable
+                        onPress={() => setFormData({...formData, vehicleType: 'CNG'})}
+                        className={`flex-1 h-12 rounded-lg border-2 items-center justify-center ${formData.vehicleType === 'CNG' ? 'border-amber-700 bg-amber-50' : 'border-gray-300 bg-white'}`}
+                      >
+                        <Text className={`font-semibold ${formData.vehicleType === 'CNG' ? 'text-amber-700' : 'text-gray-600'}`}>CNG</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => setFormData({...formData, vehicleType: 'CAR'})}
+                        className={`flex-1 h-12 rounded-lg border-2 items-center justify-center ${formData.vehicleType === 'CAR' ? 'border-amber-700 bg-amber-50' : 'border-gray-300 bg-white'}`}
+                      >
+                        <Text className={`font-semibold ${formData.vehicleType === 'CAR' ? 'text-amber-700' : 'text-gray-600'}`}>Car</Text>
+                      </Pressable>
+                    </View>
+                  </View>
                   
                   <View className="gap-2">
                     <Label className="text-gray-900">Vehicle Model *</Label>

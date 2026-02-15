@@ -1,5 +1,7 @@
 import { supabaseAdmin } from '../config/supabase';
 import { logger } from '../utils/logger';
+import { h3Utils, H3_RESOLUTION } from '../utils/h3.utils';
+import { config } from '../config/env';
 
 interface NotificationPayload {
   title: string;
@@ -428,6 +430,98 @@ export class NotificationService {
       .eq('is_read', false);
 
     return error ? 0 : (count || 0);
+  }
+
+  async notifyNearbyDrivers(poolId: string, pool: {
+    destination_lat: number;
+    destination_lng: number;
+    destination_address?: string;
+    vehicle_type: string;
+    fare_per_person: number;
+    current_passengers: number;
+    score_breakdown?: any;
+  }): Promise<{ notified: number }> {
+    try {
+      const pickupLat = pool.score_breakdown?.creator_pickup?.lat || pool.destination_lat;
+      const pickupLng = pool.score_breakdown?.creator_pickup?.lng || pool.destination_lng;
+
+      const pickupH3 = h3Utils.latLngToH3(
+        { latitude: pickupLat, longitude: pickupLng },
+        H3_RESOLUTION.DRIVER_SEARCH
+      );
+      const searchHexagons = h3Utils.getH3Ring(pickupH3, config.h3.searchRadius + 2);
+
+      const { data: nearbyDrivers } = await supabaseAdmin
+        .from('vehicle_locations')
+        .select('driver_id, vehicle_id, h3_index_res8')
+        .eq('is_active', true)
+        .eq('is_available', true)
+        .is('pool_id', null)
+        .in('h3_index_res8', searchHexagons);
+
+      if (!nearbyDrivers || nearbyDrivers.length === 0) {
+        logger.info(`[Notification] No nearby available drivers found for pool ${poolId}`);
+        return { notified: 0 };
+      }
+
+      const vehicleIds = nearbyDrivers.map(d => d.vehicle_id);
+      const { data: vehicles } = await supabaseAdmin
+        .from('vehicles')
+        .select('id, driver_id, vehicle_type')
+        .in('id', vehicleIds)
+        .eq('vehicle_type', pool.vehicle_type)
+        .eq('is_active', true);
+
+      if (!vehicles || vehicles.length === 0) {
+        logger.info(`[Notification] No drivers with matching vehicle type ${pool.vehicle_type} for pool ${poolId}`);
+        return { notified: 0 };
+      }
+
+      const eligibleDriverIds = vehicles.map(v => v.driver_id);
+
+      const { data: activePools } = await supabaseAdmin
+        .from('pools')
+        .select('driver_id')
+        .in('driver_id', eligibleDriverIds)
+        .in('status', ['READY_TO_START', 'STARTED']);
+
+      const busyDriverIds = new Set((activePools || []).map(p => p.driver_id));
+      const availableDriverIds = eligibleDriverIds.filter(id => !busyDriverIds.has(id));
+
+      if (availableDriverIds.length === 0) {
+        logger.info(`[Notification] All matching drivers are busy for pool ${poolId}`);
+        return { notified: 0 };
+      }
+
+      const pickupAddress = pool.score_breakdown?.creator_pickup?.address || 'Nearby';
+      const estimatedEarnings = pool.fare_per_person * pool.current_passengers * 0.8;
+
+      const payload: NotificationPayload = {
+        title: 'New Pool Request!',
+        message: `${pool.current_passengers} passengers waiting near ${pickupAddress}. ${pool.vehicle_type} ride → Est. ৳${Math.round(estimatedEarnings)}`,
+        type: 'POOL_REQUEST',
+        metadata: {
+          pool_id: poolId,
+          vehicle_type: pool.vehicle_type,
+          passengers: pool.current_passengers,
+          estimated_earnings: estimatedEarnings,
+          pickup_lat: pickupLat,
+          pickup_lng: pickupLng,
+          destination_lat: pool.destination_lat,
+          destination_lng: pool.destination_lng,
+          destination_address: pool.destination_address,
+          action: 'VIEW_POOL',
+        },
+      };
+
+      const result = await this.sendBulkNotification(availableDriverIds, payload);
+
+      logger.info(`[Notification] Notified ${result.sent}/${availableDriverIds.length} drivers for pool ${poolId} (${pool.vehicle_type})`);
+      return { notified: result.sent };
+    } catch (error) {
+      logger.error(`[Notification] Failed to notify nearby drivers for pool ${poolId}:`, error);
+      return { notified: 0 };
+    }
   }
 }
 

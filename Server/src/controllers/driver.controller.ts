@@ -7,6 +7,7 @@ import { Pool, PoolStatus, Location } from '../types';
 import { CONSTANTS } from '../config/constants';
 import { config } from '../config/env';
 import { smartRouteService } from '../services/smartRoute.service';
+import { logger } from '../utils/logger';
 
 interface DriverSession {
   id: string;
@@ -31,7 +32,7 @@ export class DriverController {
         });
       }
 
-      const { lat, lng, vehicle_id, heading } = req.body;
+      const { lat, lng, vehicle_id: providedVehicleId, heading } = req.body;
 
       const { data: user, error: userError } = await supabaseAdmin
         .from('users')
@@ -47,13 +48,29 @@ export class DriverController {
         });
       }
 
-      const { data: vehicle, error: vehicleError } = await supabaseAdmin
-        .from('vehicles')
-        .select('*')
-        .eq('id', vehicle_id)
-        .eq('driver_id', userId)
-        .eq('is_active', true)
-        .single();
+      let vehicle;
+      let vehicleError;
+
+      if (providedVehicleId) {
+        const result = await supabaseAdmin
+          .from('vehicles')
+          .select('*')
+          .eq('id', providedVehicleId)
+          .eq('driver_id', userId)
+          .eq('is_active', true)
+          .single();
+        vehicle = result.data;
+        vehicleError = result.error;
+      } else {
+        const result = await supabaseAdmin
+          .from('vehicles')
+          .select('*')
+          .eq('driver_id', userId)
+          .eq('is_active', true)
+          .single();
+        vehicle = result.data;
+        vehicleError = result.error;
+      }
 
       if (vehicleError || !vehicle) {
         return res.status(404).json({
@@ -62,6 +79,8 @@ export class DriverController {
           timestamp: new Date().toISOString(),
         });
       }
+
+      const vehicle_id = vehicle.id;
 
       const h3IndexRes8 = h3Utils.latLngToH3({ latitude: lat, longitude: lng }, 8);
       const h3IndexRes9 = h3Utils.latLngToH3({ latitude: lat, longitude: lng }, 9);
@@ -364,7 +383,7 @@ export class DriverController {
 
       const { data: driverLocation } = await supabaseAdmin
         .from('vehicle_locations')
-        .select('lat, lng, h3_index_res8')
+        .select('lat, lng, h3_index_res8, vehicle_id')
         .eq('driver_id', userId)
         .eq('is_active', true)
         .single();
@@ -377,13 +396,41 @@ export class DriverController {
         });
       }
 
-      const driverH3 = h3Utils.latLngToH3(
+      const { data: vehicle } = await supabaseAdmin
+        .from('vehicles')
+        .select('vehicle_type')
+        .eq('id', driverLocation.vehicle_id)
+        .eq('is_active', true)
+        .single();
+
+      const driverVehicleType = vehicle?.vehicle_type || null;
+
+      const driverH3Dest = h3Utils.latLngToH3(
         { latitude: driverLocation.lat, longitude: driverLocation.lng },
         7
       );
-      const searchHexagons = h3Utils.getH3Ring(driverH3, config.h3.searchRadius + 1);
+      const destinationHexagons = h3Utils.getH3Ring(driverH3Dest, config.h3.searchRadius + 1);
 
-      const { data: pools, error } = await supabaseAdmin
+      const driverH3Pickup = h3Utils.latLngToH3(
+        { latitude: driverLocation.lat, longitude: driverLocation.lng },
+        9
+      );
+      const pickupHexagons = h3Utils.getH3Ring(driverH3Pickup, config.h3.searchRadiusPickup);
+
+      let { data: priorityLocation } = await supabaseAdmin
+        .from('users')
+        .select('driver_priority_lat, driver_priority_lng, driver_priority_h3_index')
+        .eq('id', userId)
+        .single();
+
+      let priorityHexagons: string[] = [];
+      if (priorityLocation?.driver_priority_h3_index) {
+        priorityHexagons = h3Utils.getH3Ring(priorityLocation.driver_priority_h3_index, config.h3.searchRadius + 1);
+      }
+
+      const allDestinationHexagons = Array.from(new Set([...destinationHexagons, ...priorityHexagons]));
+
+      let query = supabaseAdmin
         .from('pools')
         .select(`
           *,
@@ -392,25 +439,60 @@ export class DriverController {
         `)
         .in('status', ['WAITING_FOR_DRIVER'] as PoolStatus[])
         .is('driver_id', null)
-        .in('destination_h3_index', searchHexagons)
         .gte('current_passengers', 2)
         .order('created_at', { ascending: true });
+
+      if (driverVehicleType) {
+        query = query.eq('vehicle_type', driverVehicleType);
+      }
+
+      const { data: pools, error } = await query;
 
       if (error) {
         throw error;
       }
 
-      const poolsWithDistance = (pools || []).map((pool) => {
-        const distance = calculateDistance(
+      const destHexSet = new Set(allDestinationHexagons);
+      const pickupHexSet = new Set(pickupHexagons);
+
+      const filteredPools = (pools || []).filter((pool) => {
+        const destMatch = pool.destination_h3_index && destHexSet.has(pool.destination_h3_index);
+
+        const pickupH3 = pool.score_breakdown?.creator_pickup?.h3_index;
+        const pickupMatch = pickupH3 && pickupHexSet.has(pickupH3);
+
+        return destMatch || pickupMatch;
+      });
+
+      const poolsWithDistance = filteredPools.map((pool) => {
+        const pickupDistance = pool.score_breakdown?.creator_pickup
+          ? calculateDistance(
+              driverLocation.lat,
+              driverLocation.lng,
+              pool.score_breakdown.creator_pickup.lat,
+              pool.score_breakdown.creator_pickup.lng
+            )
+          : null;
+
+        const destDistance = calculateDistance(
           driverLocation.lat,
           driverLocation.lng,
           pool.destination_lat,
           pool.destination_lng
         );
-        const estimatedMinutes = estimateTravelTime(distance);
+
+        const relevantDistance = pickupDistance !== null ? pickupDistance : destDistance;
+        const estimatedMinutes = estimateTravelTime(relevantDistance);
 
         return {
           id: pool.id,
+          pickup: pool.score_breakdown?.creator_pickup
+            ? {
+                lat: pool.score_breakdown.creator_pickup.lat,
+                lng: pool.score_breakdown.creator_pickup.lng,
+                address: pool.score_breakdown.creator_pickup.address,
+              }
+            : null,
           destination: {
             lat: pool.destination_lat,
             lng: pool.destination_lng,
@@ -421,13 +503,18 @@ export class DriverController {
           current_passengers: pool.current_passengers,
           max_passengers: pool.max_passengers,
           fare_per_person: pool.fare_per_person,
-          distance_km: Math.round(distance * 10) / 10,
+          pickup_distance_km: pickupDistance !== null ? Math.round(pickupDistance * 10) / 10 : null,
+          distance_km: Math.round(destDistance * 10) / 10,
           estimated_arrival_minutes: estimatedMinutes,
           created_at: pool.created_at,
         };
       });
 
-      poolsWithDistance.sort((a, b) => a.distance_km - b.distance_km);
+      poolsWithDistance.sort((a, b) => {
+        const distA = a.pickup_distance_km ?? a.distance_km;
+        const distB = b.pickup_distance_km ?? b.distance_km;
+        return distA - distB;
+      });
 
       res.json({
         success: true,
@@ -487,6 +574,31 @@ export class DriverController {
           error: { code: 'NOT_ONLINE', message: 'Driver must be online to accept pools' },
           timestamp: new Date().toISOString(),
         });
+      }
+
+      const { data: poolToAccept } = await supabaseAdmin
+        .from('pools')
+        .select('vehicle_type')
+        .eq('id', poolId)
+        .single();
+
+      if (poolToAccept) {
+        const { data: driverVehicle } = await supabaseAdmin
+          .from('vehicles')
+          .select('vehicle_type')
+          .eq('id', vehicle.vehicle_id)
+          .single();
+
+        if (driverVehicle && poolToAccept.vehicle_type !== driverVehicle.vehicle_type) {
+          return res.status(400).json({
+            success: false,
+            error: {
+              code: 'VEHICLE_TYPE_MISMATCH',
+              message: `Pool requires ${poolToAccept.vehicle_type} but your vehicle is ${driverVehicle.vehicle_type}`,
+            },
+            timestamp: new Date().toISOString(),
+          });
+        }
       }
 
       const { data: result, error: rpcError } = await supabaseAdmin.rpc('atomic_accept_pool', {
@@ -1194,6 +1306,81 @@ export class DriverController {
       res.json({
         success: true,
         data: { message: 'Priority location cleared' },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async registerVehicle(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { vehicle_type, vehicle_number, model, color } = req.body;
+
+      const { data: existingVehicle } = await supabaseAdmin
+        .from('vehicles')
+        .select('id')
+        .eq('driver_id', userId)
+        .eq('is_active', true)
+        .single();
+
+      if (existingVehicle) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VEHICLE_EXISTS', message: 'Driver already has an active vehicle' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const maxPassengers = vehicle_type === 'CNG' ? 3 : 4;
+
+      const { data: vehicle, error } = await supabaseAdmin
+        .from('vehicles')
+        .insert({
+          driver_id: userId,
+          vehicle_type,
+          vehicle_number,
+          model: model || null,
+          color: color || null,
+          max_passengers: maxPassengers,
+          is_active: true,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      const { error: driverUpdateError } = await supabaseAdmin
+        .from('users')
+        .update({ is_driver: true })
+        .eq('id', userId);
+
+      if (driverUpdateError) {
+        logger.error(`Failed to set is_driver for user ${userId}: ${driverUpdateError.message}`);
+        return res.status(500).json({
+          success: false,
+          error: { code: 'UPDATE_FAILED', message: 'Vehicle created but driver status update failed' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      res.status(201).json({
+        success: true,
+        data: {
+          vehicle,
+          is_driver: true,
+        },
         timestamp: new Date().toISOString(),
       });
     } catch (error) {

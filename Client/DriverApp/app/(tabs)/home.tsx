@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import * as Notifications from 'expo-notifications';
 import { HomeScreen } from '../../src/components/home/HomeScreen.native';
 import { driverService } from '../../src/services/driver.service';
 import { locationService } from '../../src/services/location.service';
@@ -50,7 +51,17 @@ export default function Home() {
       fetchAvailablePools();
     }, 30000);
 
-    return () => clearInterval(interval);
+    const notificationSub = Notifications.addNotificationReceivedListener((notification) => {
+      const data = notification.request.content.data;
+      if (data?.action === 'VIEW_POOL' || data?.pool_id) {
+        fetchAvailablePools();
+      }
+    });
+
+    return () => {
+      clearInterval(interval);
+      notificationSub.remove();
+    };
   }, [initLocation, fetchAvailablePools]);
 
   useEffect(() => {

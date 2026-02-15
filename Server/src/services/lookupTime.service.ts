@@ -386,6 +386,16 @@ export class LookupTimeService {
       }
     }
 
+    const { data: fullPool } = await supabaseAdmin
+      .from('pools')
+      .select('destination_lat, destination_lng, destination_address, vehicle_type, fare_per_person, current_passengers, score_breakdown')
+      .eq('id', poolId)
+      .single();
+
+    if (fullPool) {
+      await notificationService.notifyNearbyDrivers(poolId, fullPool);
+    }
+
     logger.info(`[LookupTime] Pool ${poolId} transitioned, ${members?.length || 0} riders notified`);
   }
 

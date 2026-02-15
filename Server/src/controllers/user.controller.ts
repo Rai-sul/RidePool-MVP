@@ -7,7 +7,6 @@ import { z } from 'zod';
 const UpdateProfileSchema = z.object({
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
   gender_preference: z.enum(['FEMALE_ONLY', 'ANY']).optional(),
-  is_driver: z.boolean().optional(),
   driver_priority_lat: z.number().min(-90).max(90).optional(),
   driver_priority_lng: z.number().min(-180).max(180).optional(),
   driver_priority_address: z.string().max(500).optional(),
@@ -58,10 +57,22 @@ export class UserController {
 
       const requiresGenderPreference = user.gender === 'FEMALE' && !user.gender_preference;
 
+      let vehicle = null;
+      if (user.is_driver) {
+        const { data: vehicleData } = await supabaseAdmin
+          .from('vehicles')
+          .select('id, vehicle_type, vehicle_number, model, max_passengers')
+          .eq('driver_id', userId)
+          .eq('is_active', true)
+          .single();
+        vehicle = vehicleData;
+      }
+
       res.json({
         success: true,
         data: {
           user,
+          vehicle,
           requires_gender_preference: requiresGenderPreference,
         },
         timestamp: new Date().toISOString(),

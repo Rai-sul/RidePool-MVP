@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { User, Pool, Location, DriverStatus, EarningEntry } from '../types';
+import type { User, Pool, Location, DriverStatus, EarningEntry, Vehicle } from '../types';
 
 interface DriverState {
   user: User | null;
+  vehicle: Vehicle | null;
   isAuthenticated: boolean;
   driverStatus: DriverStatus;
   currentLocation: Location | null;
@@ -20,6 +21,7 @@ interface DriverState {
 
 interface DriverActions {
   setUser: (user: User | null) => void;
+  setVehicle: (vehicle: Vehicle | null) => void;
   setAuthenticated: (isAuthenticated: boolean) => void;
   setDriverStatus: (status: DriverStatus) => void;
   setCurrentLocation: (location: Location | null) => void;
@@ -39,6 +41,7 @@ type DriverStore = DriverState & DriverActions;
 
 const initialState: DriverState = {
   user: null,
+  vehicle: null,
   isAuthenticated: false,
   driverStatus: 'OFFLINE',
   currentLocation: null,
@@ -58,6 +61,7 @@ export const useDriverStore = create<DriverStore>()(
       ...initialState,
 
       setUser: (user) => set({ user, isAuthenticated: !!user }),
+      setVehicle: (vehicle) => set({ vehicle }),
       setAuthenticated: (isAuthenticated) => set({ isAuthenticated }),
       setDriverStatus: (driverStatus) => set({ driverStatus }),
       setCurrentLocation: (currentLocation) => set({ currentLocation }),
@@ -72,6 +76,7 @@ export const useDriverStore = create<DriverStore>()(
 
       logout: () => set({
         user: null,
+        vehicle: null,
         isAuthenticated: false,
         driverStatus: 'OFFLINE',
         activePool: null,
@@ -85,6 +90,7 @@ export const useDriverStore = create<DriverStore>()(
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         user: state.user,
+        vehicle: state.vehicle,
         isAuthenticated: state.isAuthenticated,
         priorityLocation: state.priorityLocation,
       }),

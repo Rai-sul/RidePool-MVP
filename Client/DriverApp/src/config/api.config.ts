@@ -43,6 +43,7 @@ export const API_ENDPOINTS = {
     EARNINGS_HISTORY: '/driver/earnings/history',
     STATS: '/driver/stats',
     PRIORITY_LOCATION: '/driver/priority-location',
+    REGISTER_VEHICLE: '/driver/vehicle',
   },
   POOL: {
     GET_BY_ID: (poolId: string) => `/pools/${poolId}`,

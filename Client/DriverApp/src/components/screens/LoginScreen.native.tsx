@@ -23,7 +23,7 @@ export function LoginScreen({ onLogin, onRegister }: LoginScreenProps) {
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { setUser } = useDriverStore();
+  const { setUser, setVehicle } = useDriverStore();
 
   const handleSubmit = async () => {
     setError(null);
@@ -40,6 +40,9 @@ export function LoginScreen({ onLogin, onRegister }: LoginScreenProps) {
       const response = await authService.login({ email, password });
       if (response.success && response.data?.user) {
         setUser(response.data.user);
+        if (response.data.vehicle) {
+          setVehicle(response.data.vehicle);
+        }
         onLogin();
       } else {
         setError(response.message || 'Login failed');

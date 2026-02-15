@@ -71,6 +71,10 @@ export const RegisterRequestSchema = z.object({
   first_name: z.string().min(1, 'First name is required'),
   last_name: z.string().min(1, 'Last name is required'),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
+  vehicle_type: z.enum(['CAR', 'CNG']),
+  vehicle_plate: z.string().min(1, 'Vehicle plate is required'),
+  vehicle_model: z.string().min(1, 'Vehicle model is required'),
+  driving_license: z.string().min(1, 'Driving license is required'),
 });
 
 export type Location = z.infer<typeof LocationSchema>;
@@ -87,6 +91,14 @@ export interface AuthSession {
   refresh_token: string;
   expires_at: number;
   expires_in?: number;
+}
+
+export interface Vehicle {
+  id: string;
+  vehicle_type: 'CAR' | 'CNG';
+  vehicle_number: string;
+  model?: string;
+  max_passengers?: number;
 }
 
 export interface User {

@@ -18,9 +18,17 @@ export interface DriverStats {
 export const driverService = {
   async goOnline(data: {
     current_location: Location;
+    vehicle_id?: string;
     vehicle_type?: string;
   }): Promise<ApiResponse> {
-    return apiClient.post<ApiResponse>(API_ENDPOINTS.DRIVER.GO_ONLINE, data);
+    const payload: Record<string, unknown> = {
+      lat: data.current_location.latitude,
+      lng: data.current_location.longitude,
+    };
+    if (data.vehicle_id) {
+      payload.vehicle_id = data.vehicle_id;
+    }
+    return apiClient.post<ApiResponse>(API_ENDPOINTS.DRIVER.GO_ONLINE, payload);
   },
 
   async goOffline(): Promise<ApiResponse> {
@@ -92,5 +100,14 @@ export const driverService = {
 
   async clearPriorityLocation(): Promise<ApiResponse> {
     return apiClient.delete<ApiResponse>(API_ENDPOINTS.DRIVER.PRIORITY_LOCATION);
+  },
+
+  async registerVehicle(data: {
+    vehicle_type: 'CAR' | 'CNG';
+    vehicle_number: string;
+    model?: string;
+    color?: string;
+  }): Promise<ApiResponse> {
+    return apiClient.post<ApiResponse>(API_ENDPOINTS.DRIVER.REGISTER_VEHICLE, data);
   },
 };

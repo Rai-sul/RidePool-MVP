@@ -62,7 +62,7 @@ export const JoinPoolSchema = z.object({
 export const GoOnlineSchema = z.object({
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
-  vehicle_id: z.string().uuid(),
+  vehicle_id: z.string().uuid().optional(),
   heading: z.number().min(0).max(360).optional(),
 });
 
@@ -79,6 +79,13 @@ export const SetPriorityLocationSchema = z.object({
   priority_address: z.string().max(500).optional(),
 });
 
+export const RegisterVehicleSchema = z.object({
+  vehicle_type: z.enum(['CAR', 'CNG']),
+  vehicle_number: z.string().min(1).max(20),
+  model: z.string().max(100).optional(),
+  color: z.string().max(50).optional(),
+});
+
 export const CancelRideSchema = z.object({
   reason: z.string().max(500).optional(),
 });
@@ -86,7 +93,7 @@ export const CancelRideSchema = z.object({
 export const UpdateProfileSchema = z.object({
   gender: GenderEnum.optional(),
   gender_preference: GenderPreferenceEnum.optional(),
-  is_driver: z.boolean().optional(),
+  full_name: z.string().min(2).max(100).optional(),
   driver_priority_lat: z.number().min(-90).max(90).optional(),
   driver_priority_lng: z.number().min(-180).max(180).optional(),
   driver_priority_address: z.string().max(500).optional(),

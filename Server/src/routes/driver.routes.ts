@@ -8,6 +8,7 @@ import {
   SetPriorityLocationSchema,
   PoolIdParamSchema,
   PassengerIdParamSchema,
+  RegisterVehicleSchema,
 } from '../middleware/validation';
 
 const router = Router();
@@ -34,5 +35,7 @@ router.get('/stats', authenticate, driverController.getStats.bind(driverControll
 router.post('/priority-location', authenticate, validate(SetPriorityLocationSchema), driverController.setPriorityLocation.bind(driverController));
 router.get('/priority-location', authenticate, driverController.getPriorityLocation.bind(driverController));
 router.delete('/priority-location', authenticate, driverController.clearPriorityLocation.bind(driverController));
+
+router.post('/vehicle', authenticate, validate(RegisterVehicleSchema), driverController.registerVehicle.bind(driverController));
 
 export default router;
