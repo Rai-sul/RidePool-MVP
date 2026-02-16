@@ -43,6 +43,7 @@ export const API_ENDPOINTS = {
     EARNINGS_HISTORY: '/driver/earnings/history',
     STATS: '/driver/stats',
     PRIORITY_LOCATION: '/driver/priority-location',
+    SEARCH_ZONE: '/driver/search-zone',
     REGISTER_VEHICLE: '/driver/vehicle',
   },
   POOL: {

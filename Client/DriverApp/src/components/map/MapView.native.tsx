@@ -44,12 +44,13 @@ const getLocationCoord = (locationName: string): { lat: number; lng: number } =>
 
 export function MapView({ 
   driverLocation: propDriverLocation, 
-  pools, 
+  pools: poolsProp, 
   selectedPool, 
   onPoolSelect, 
   navigationMode, 
   activePool 
 }: MapViewProps) {
+  const pools = Array.isArray(poolsProp) ? poolsProp : [];
   const { colors } = useTheme();
   const mapRef = useRef<MapViewComponent>(null);
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(

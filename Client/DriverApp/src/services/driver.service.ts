@@ -40,7 +40,10 @@ export const driverService = {
   },
 
   async updateLocation(location: Location): Promise<ApiResponse> {
-    return apiClient.put<ApiResponse>(API_ENDPOINTS.DRIVER.UPDATE_LOCATION, location);
+    return apiClient.put<ApiResponse>(API_ENDPOINTS.DRIVER.UPDATE_LOCATION, {
+      lat: location.latitude,
+      lng: location.longitude,
+    });
   },
 
   async getAvailablePools(): Promise<ApiResponse<Pool[]>> {
@@ -100,6 +103,22 @@ export const driverService = {
 
   async clearPriorityLocation(): Promise<ApiResponse> {
     return apiClient.delete<ApiResponse>(API_ENDPOINTS.DRIVER.PRIORITY_LOCATION);
+  },
+
+  async setSearchZone(data: {
+    destination_lat: number;
+    destination_lng: number;
+    destination_address?: string;
+  }): Promise<ApiResponse> {
+    return apiClient.post<ApiResponse>(API_ENDPOINTS.DRIVER.SEARCH_ZONE, data);
+  },
+
+  async getSearchZone(): Promise<ApiResponse<{ search_zone: { lat: number; lng: number; address?: string; set_at: string } | null }>> {
+    return apiClient.get<ApiResponse<{ search_zone: { lat: number; lng: number; address?: string; set_at: string } | null }>>(API_ENDPOINTS.DRIVER.SEARCH_ZONE);
+  },
+
+  async clearSearchZone(): Promise<ApiResponse> {
+    return apiClient.delete<ApiResponse>(API_ENDPOINTS.DRIVER.SEARCH_ZONE);
   },
 
   async registerVehicle(data: {

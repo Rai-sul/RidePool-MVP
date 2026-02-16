@@ -3,6 +3,12 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { User, Pool, Location, DriverStatus, EarningEntry, Vehicle } from '../types';
 
+interface SearchZone {
+  lat: number;
+  lng: number;
+  address?: string;
+}
+
 interface DriverState {
   user: User | null;
   vehicle: Vehicle | null;
@@ -10,6 +16,7 @@ interface DriverState {
   driverStatus: DriverStatus;
   currentLocation: Location | null;
   priorityLocation: Location | null;
+  searchZone: SearchZone | null;
   availablePools: Pool[];
   activePool: Pool | null;
   todayEarnings: number;
@@ -17,6 +24,7 @@ interface DriverState {
   earningsHistory: EarningEntry[];
   isLoading: boolean;
   error: string | null;
+  incomingPoolRequest: Pool | null;
 }
 
 interface DriverActions {
@@ -26,6 +34,7 @@ interface DriverActions {
   setDriverStatus: (status: DriverStatus) => void;
   setCurrentLocation: (location: Location | null) => void;
   setPriorityLocation: (location: Location | null) => void;
+  setSearchZone: (zone: SearchZone | null) => void;
   setAvailablePools: (pools: Pool[]) => void;
   setActivePool: (pool: Pool | null) => void;
   setTodayEarnings: (earnings: number) => void;
@@ -33,6 +42,7 @@ interface DriverActions {
   setEarningsHistory: (earnings: EarningEntry[]) => void;
   setLoading: (isLoading: boolean) => void;
   setError: (error: string | null) => void;
+  setIncomingPoolRequest: (pool: Pool | null) => void;
   logout: () => void;
   reset: () => void;
 }
@@ -46,6 +56,7 @@ const initialState: DriverState = {
   driverStatus: 'OFFLINE',
   currentLocation: null,
   priorityLocation: null,
+  searchZone: null,
   availablePools: [],
   activePool: null,
   todayEarnings: 0,
@@ -53,6 +64,7 @@ const initialState: DriverState = {
   earningsHistory: [],
   isLoading: false,
   error: null,
+  incomingPoolRequest: null,
 };
 
 export const useDriverStore = create<DriverStore>()(
@@ -66,6 +78,7 @@ export const useDriverStore = create<DriverStore>()(
       setDriverStatus: (driverStatus) => set({ driverStatus }),
       setCurrentLocation: (currentLocation) => set({ currentLocation }),
       setPriorityLocation: (priorityLocation) => set({ priorityLocation }),
+      setSearchZone: (searchZone) => set({ searchZone }),
       setAvailablePools: (availablePools) => set({ availablePools }),
       setActivePool: (activePool) => set({ activePool }),
       setTodayEarnings: (todayEarnings) => set({ todayEarnings }),
@@ -73,6 +86,7 @@ export const useDriverStore = create<DriverStore>()(
       setEarningsHistory: (earningsHistory) => set({ earningsHistory }),
       setLoading: (isLoading) => set({ isLoading }),
       setError: (error) => set({ error }),
+      setIncomingPoolRequest: (incomingPoolRequest) => set({ incomingPoolRequest }),
 
       logout: () => set({
         user: null,
@@ -81,6 +95,8 @@ export const useDriverStore = create<DriverStore>()(
         driverStatus: 'OFFLINE',
         activePool: null,
         availablePools: [],
+        searchZone: null,
+        incomingPoolRequest: null,
       }),
 
       reset: () => set(initialState),

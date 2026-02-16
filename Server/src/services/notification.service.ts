@@ -449,7 +449,8 @@ export class NotificationService {
         { latitude: pickupLat, longitude: pickupLng },
         H3_RESOLUTION.DRIVER_SEARCH
       );
-      const searchHexagons = h3Utils.getH3Ring(pickupH3, config.h3.searchRadius + 2);
+      // Use ring 5 at Res 8 (~461m edge) ≈ 2.3km to match driver's ~2.1km pickup search radius
+      const searchHexagons = h3Utils.getH3Ring(pickupH3, 5);
 
       const { data: nearbyDrivers } = await supabaseAdmin
         .from('vehicle_locations')
@@ -507,6 +508,7 @@ export class NotificationService {
           estimated_earnings: estimatedEarnings,
           pickup_lat: pickupLat,
           pickup_lng: pickupLng,
+          pickup_address: pickupAddress,
           destination_lat: pool.destination_lat,
           destination_lng: pool.destination_lng,
           destination_address: pool.destination_address,
