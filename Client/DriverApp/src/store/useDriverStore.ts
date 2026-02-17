@@ -3,20 +3,12 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { User, Pool, Location, DriverStatus, EarningEntry, Vehicle } from '../types';
 
-interface SearchZone {
-  lat: number;
-  lng: number;
-  address?: string;
-}
-
 interface DriverState {
   user: User | null;
   vehicle: Vehicle | null;
   isAuthenticated: boolean;
   driverStatus: DriverStatus;
   currentLocation: Location | null;
-  priorityLocation: Location | null;
-  searchZone: SearchZone | null;
   availablePools: Pool[];
   activePool: Pool | null;
   todayEarnings: number;
@@ -33,8 +25,6 @@ interface DriverActions {
   setAuthenticated: (isAuthenticated: boolean) => void;
   setDriverStatus: (status: DriverStatus) => void;
   setCurrentLocation: (location: Location | null) => void;
-  setPriorityLocation: (location: Location | null) => void;
-  setSearchZone: (zone: SearchZone | null) => void;
   setAvailablePools: (pools: Pool[]) => void;
   setActivePool: (pool: Pool | null) => void;
   setTodayEarnings: (earnings: number) => void;
@@ -55,8 +45,6 @@ const initialState: DriverState = {
   isAuthenticated: false,
   driverStatus: 'OFFLINE',
   currentLocation: null,
-  priorityLocation: null,
-  searchZone: null,
   availablePools: [],
   activePool: null,
   todayEarnings: 0,
@@ -77,8 +65,6 @@ export const useDriverStore = create<DriverStore>()(
       setAuthenticated: (isAuthenticated) => set({ isAuthenticated }),
       setDriverStatus: (driverStatus) => set({ driverStatus }),
       setCurrentLocation: (currentLocation) => set({ currentLocation }),
-      setPriorityLocation: (priorityLocation) => set({ priorityLocation }),
-      setSearchZone: (searchZone) => set({ searchZone }),
       setAvailablePools: (availablePools) => set({ availablePools }),
       setActivePool: (activePool) => set({ activePool }),
       setTodayEarnings: (todayEarnings) => set({ todayEarnings }),
@@ -95,7 +81,6 @@ export const useDriverStore = create<DriverStore>()(
         driverStatus: 'OFFLINE',
         activePool: null,
         availablePools: [],
-        searchZone: null,
         incomingPoolRequest: null,
       }),
 
@@ -108,7 +93,6 @@ export const useDriverStore = create<DriverStore>()(
         user: state.user,
         vehicle: state.vehicle,
         isAuthenticated: state.isAuthenticated,
-        priorityLocation: state.priorityLocation,
       }),
     }
   )

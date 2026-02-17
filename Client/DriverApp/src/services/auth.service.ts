@@ -87,7 +87,7 @@ export const userService = {
   },
 
   async registerDeviceToken(token: string): Promise<ApiResponse> {
-    return apiClient.post<ApiResponse>(API_ENDPOINTS.USER.DEVICE_TOKEN, { token });
+    return apiClient.post<ApiResponse>(API_ENDPOINTS.USER.DEVICE_TOKEN, { token, app_type: 'driver' });
   },
 
   async unregisterDeviceToken(): Promise<ApiResponse> {

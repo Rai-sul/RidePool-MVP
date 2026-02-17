@@ -44,6 +44,7 @@ export const notificationService = {
       await apiClient.post(API_ENDPOINTS.USER.DEVICE_TOKEN, {
         token,
         platform: Platform.OS,
+        app_type: 'driver',
       });
 
       return token;

@@ -16,6 +16,7 @@ const UpdateProfileSchema = z.object({
 const RegisterDeviceTokenSchema = z.object({
   token: z.string().min(10),
   platform: z.enum(['ios', 'android', 'web']),
+  app_type: z.enum(['rider', 'driver']).default('rider'),
 });
 
 const SetGenderPreferenceSchema = z.object({
@@ -251,9 +252,9 @@ export class UserController {
         });
       }
 
-      const { token, platform } = parseResult.data;
+      const { token, platform, app_type } = parseResult.data;
 
-      const success = await notificationService.registerDeviceToken(userId, token, platform);
+      const success = await notificationService.registerDeviceToken(userId, token, platform, app_type);
 
       if (!success) {
         return res.status(500).json({

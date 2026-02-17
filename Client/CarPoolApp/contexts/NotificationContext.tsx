@@ -116,6 +116,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       await apiClient.post(API_ENDPOINTS.USER.DEVICE_TOKEN, {
         token,
         platform: Platform.OS,
+        app_type: 'rider',
       });
       console.log('[Notifications] Token registered with server');
     } catch (error) {

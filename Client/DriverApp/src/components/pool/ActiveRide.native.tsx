@@ -5,50 +5,50 @@ import { Badge } from "../ui/badge";
 import { Phone, CheckCircle, X, Navigation, MessageCircle, Star } from "lucide-react-native";
 import { useState } from "react";
 import { PassengerBillingDialog } from "./PassengerBillingDialog.native";
-import type { Pool, Customer } from "../../types";
+import type { Pool } from "../../types";
 
 interface ActiveRideProps {
   pool: Pool;
   onComplete: () => void;
   onCancel: () => void;
   onOpenNavigation: () => void;
-  onPassengerDropped?: (customerId: string, earnings: number) => void;
+  onPassengerDropped?: (passengerId: string, earnings: number) => void;
 }
 
 export function ActiveRide({ pool, onComplete, onCancel, onOpenNavigation, onPassengerDropped }: ActiveRideProps) {
-  const [completedCustomers, setCompletedCustomers] = useState<Set<string>>(new Set());
-  const [billingPassenger, setBillingPassenger] = useState<Pool["customers"][0] | null>(null);
+  const passengers = pool.passengers || [];
+  const [completedPassengers, setCompletedPassengers] = useState<Set<string>>(new Set());
+  const [billingPassenger, setBillingPassenger] = useState<Pool["passengers"][0] | null>(null);
   const [billingEarnings, setBillingEarnings] = useState(0);
   const [billingDistance, setBillingDistance] = useState(0);
 
-  const toggleCustomerComplete = (customerId: string) => {
-    const newCompleted = new Set(completedCustomers);
+  const togglePassengerComplete = (passengerId: string) => {
+    const newCompleted = new Set(completedPassengers);
     
-    if (newCompleted.has(customerId)) {
-      newCompleted.delete(customerId);
+    if (newCompleted.has(passengerId)) {
+      newCompleted.delete(passengerId);
     } else {
-      newCompleted.add(customerId);
+      newCompleted.add(passengerId);
       
-      const earningsPerPassenger = Math.round(pool.totalEarnings / pool.customers.length);
-      const distancePerPassenger = Number((pool.distance / pool.customers.length).toFixed(1));
-      const customer = pool.customers.find((c: Customer) => c.id === customerId);
+      const earningsPerPassenger = Math.round((pool.total_earnings || 0) / passengers.length);
+      const distancePerPassenger = Number(((pool.nearest_pickup_km || 0) / passengers.length).toFixed(1));
+      const passenger = passengers.find((p) => p.user_id === passengerId);
       
-      if (customer) {
-        setBillingPassenger(customer);
+      if (passenger) {
+        setBillingPassenger(passenger);
         setBillingEarnings(earningsPerPassenger);
         setBillingDistance(distancePerPassenger);
       }
       
-      // Call callback if provided
       if (onPassengerDropped) {
-        onPassengerDropped(customerId, earningsPerPassenger);
+        onPassengerDropped(passengerId, earningsPerPassenger);
       }
     }
     
-    setCompletedCustomers(newCompleted);
+    setCompletedPassengers(newCompleted);
   };
 
-  const allCompleted = completedCustomers.size === pool.customers.length;
+  const allCompleted = completedPassengers.size === passengers.length;
 
   return (
     <ScrollView className="flex-1">
@@ -59,7 +59,7 @@ export function ActiveRide({ pool, onComplete, onCancel, onOpenNavigation, onPas
             <View>
               <Text className="text-2xl text-white mb-1">Active Pool Ride</Text>
               <Text className="text-sm text-white opacity-90">
-                {completedCustomers.size}/{pool.customers.length} passengers completed
+                {completedPassengers.size}/{passengers.length} passengers completed
               </Text>
             </View>
             <Badge className="bg-white px-3 py-1">
@@ -69,12 +69,14 @@ export function ActiveRide({ pool, onComplete, onCancel, onOpenNavigation, onPas
           <View className="flex-row gap-4 mt-4">
             <View className="flex-1">
               <Text className="text-sm text-white opacity-90">Total Earnings</Text>
-              <Text className="text-3xl text-white">৳{pool.totalEarnings}</Text>
+              <Text className="text-3xl text-white">৳{pool.total_earnings}</Text>
             </View>
-            <View className="flex-1">
-              <Text className="text-sm text-white opacity-90">Distance</Text>
-              <Text className="text-3xl text-white">{pool.distance}km</Text>
-            </View>
+            {pool.nearest_pickup_km !== null && pool.nearest_pickup_km !== undefined && (
+              <View className="flex-1">
+                <Text className="text-sm text-white opacity-90">Distance</Text>
+                <Text className="text-3xl text-white">{pool.nearest_pickup_km}km</Text>
+              </View>
+            )}
           </View>
         </Card>
 
@@ -88,29 +90,31 @@ export function ActiveRide({ pool, onComplete, onCancel, onOpenNavigation, onPas
 
         {/* Passengers List */}
         <View>
-          <Text className="mb-3 text-lg font-semibold">Passengers ({pool.customers.length})</Text>
+          <Text className="mb-3 text-lg font-semibold">Passengers ({passengers.length})</Text>
           <View className="space-y-3">
-            {pool.customers.map((customer) => {
-              const isCompleted = completedCustomers.has(customer.id);
+            {passengers.map((passenger) => {
+              const isCompleted = completedPassengers.has(passenger.user_id);
               
               return (
                 <Card 
-                  key={customer.id} 
+                  key={passenger.user_id} 
                   className={`p-4 ${isCompleted ? 'bg-gray-50 opacity-60' : 'bg-white'}`}
                 >
                   <View className="flex-row items-start justify-between gap-3 mb-3">
                     <View className="flex-row items-center gap-3 flex-1">
                       <View className="w-12 h-12 rounded-full bg-blue-600 items-center justify-center">
                         <Text className="text-white text-lg">
-                          {customer.name.charAt(0)}
+                          {passenger.name.charAt(0)}
                         </Text>
                       </View>
                       <View className="flex-1">
-                        <Text className="font-semibold mb-1">{customer.name}</Text>
-                        <View className="flex-row items-center gap-1">
-                          <Star size={12} color="#EAB308" fill="#EAB308" />
-                          <Text className="text-sm">{customer.rating}</Text>
-                        </View>
+                        <Text className="font-semibold mb-1">{passenger.name}</Text>
+                        {passenger.rating !== undefined && passenger.rating > 0 && (
+                          <View className="flex-row items-center gap-1">
+                            <Star size={12} color="#EAB308" fill="#EAB308" />
+                            <Text className="text-sm">{passenger.rating}</Text>
+                          </View>
+                        )}
                       </View>
                     </View>
                     <View className="flex-row gap-2">
@@ -136,18 +140,18 @@ export function ActiveRide({ pool, onComplete, onCancel, onOpenNavigation, onPas
                   <View className="space-y-2 bg-gray-50 rounded-lg p-3 mb-3">
                     <View className="flex-row items-start gap-2">
                       <Text className="text-green-700 font-medium">↑ Pickup:</Text>
-                      <Text className="text-gray-700 flex-1">{customer.pickup}</Text>
+                      <Text className="text-gray-700 flex-1">{passenger.pickup?.address || 'N/A'}</Text>
                     </View>
                     <View className="flex-row items-start gap-2">
                       <Text className="text-red-700 font-medium">↓ Drop:</Text>
-                      <Text className="text-gray-700 flex-1">{customer.destination}</Text>
+                      <Text className="text-gray-700 flex-1">{passenger.dropoff?.address || 'N/A'}</Text>
                     </View>
                   </View>
 
                   <Button
                     variant={isCompleted ? "secondary" : "default"}
                     className={`w-full h-11 ${!isCompleted && 'bg-green-600'}`}
-                    onPress={() => toggleCustomerComplete(customer.id)}
+                    onPress={() => togglePassengerComplete(passenger.user_id)}
                   >
                     <View className="flex-row items-center">
                       {isCompleted ? (

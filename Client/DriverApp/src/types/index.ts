@@ -6,24 +6,33 @@ export const LocationSchema = z.object({
   address: z.string().optional(),
 });
 
+export const LocationCoordSchema = z.object({
+  lat: z.number(),
+  lng: z.number(),
+  address: z.string().optional(),
+});
+
 export const CustomerSchema = z.object({
-  id: z.string(),
+  user_id: z.string(),
   name: z.string(),
-  pickup: z.string(),
-  destination: z.string(),
   rating: z.number().min(0).max(5).optional(),
-  phone: z.string().optional(),
+  pickup: LocationCoordSchema.nullable().optional(),
+  dropoff: LocationCoordSchema.nullable().optional(),
+  pickup_distance_km: z.number().nullable().optional(),
 });
 
 export const PoolSchema = z.object({
   id: z.string(),
-  customers: z.array(CustomerSchema),
-  totalEarnings: z.number(),
-  distance: z.number(),
-  estimatedTime: z.number(),
-  firstPickup: z.string(),
-  finalDestination: z.string(),
-  isPriority: z.boolean(),
+  passengers: z.array(CustomerSchema),
+  total_earnings: z.number(),
+  fare_per_person: z.number(),
+  vehicle_type: z.string().optional(),
+  current_passengers: z.number(),
+  max_passengers: z.number(),
+  nearest_pickup_km: z.number().nullable().optional(),
+  estimated_arrival_minutes: z.number().optional(),
+  destination: LocationCoordSchema.optional(),
+  created_at: z.string().optional(),
   status: z.enum(['WAITING_FOR_DRIVER', 'READY_TO_START', 'STARTED', 'COMPLETED', 'CANCELLED']).optional(),
 });
 
@@ -78,6 +87,7 @@ export const RegisterRequestSchema = z.object({
 });
 
 export type Location = z.infer<typeof LocationSchema>;
+export type LocationCoord = z.infer<typeof LocationCoordSchema>;
 export type Customer = z.infer<typeof CustomerSchema>;
 export type Pool = z.infer<typeof PoolSchema>;
 export type DriverStatus = z.infer<typeof DriverStatusSchema>;

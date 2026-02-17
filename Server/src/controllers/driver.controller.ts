@@ -20,17 +20,6 @@ interface DriverSession {
   ended_at: string | null;
 }
 
-interface SearchZone {
-  lat: number;
-  lng: number;
-  address?: string;
-  h3Hexagons: string[];
-  routeHexagons: string[];
-  setAt: string;
-}
-
-// In-memory store for driver search zones (ephemeral — valid while driver is online)
-const driverSearchZones = new Map<string, SearchZone>();
 
 export class DriverController {
   async goOnline(req: AuthRequest, res: Response, next: NextFunction) {
@@ -253,9 +242,6 @@ export class DriverController {
         });
       }
 
-      // Clear search zone when going offline
-      driverSearchZones.delete(userId);
-
       await supabaseAdmin
         .from('driver_sessions')
         .update({
@@ -459,6 +445,8 @@ export class DriverController {
         });
       }
 
+      logger.info(`[AvailablePools] Driver ${userId} at lat=${driverLocation.lat}, lng=${driverLocation.lng}, vehicle_id=${driverLocation.vehicle_id}`);
+
       const { data: vehicle } = await supabaseAdmin
         .from('vehicles')
         .select('vehicle_type')
@@ -467,49 +455,30 @@ export class DriverController {
         .single();
 
       const driverVehicleType = vehicle?.vehicle_type || null;
+      logger.info(`[AvailablePools] Driver vehicle_type=${driverVehicleType}`);
 
-      // Driver pool search: find pools whose PICKUP is near the driver (~2.1km)
-      // Same H3 resolution & ring as passenger matching:
-      //   Pickup: Res 9 + Ring 6 ≈ 2.1 km radius
-      //   Destination: Res 7 + Ring 2 ≈ 4.8 km radius (for search zone / priority location)
-      const driverLoc: Location = { latitude: driverLocation.lat, longitude: driverLocation.lng };
-
+      // Simple pickup-only proximity: H3 Res 9, Ring 6 ≈ 2.1km
+      const driverLat = Number(driverLocation.lat);
+      const driverLng = Number(driverLocation.lng);
+      const driverLoc: Location = { latitude: driverLat, longitude: driverLng };
       const driverH3Res9 = h3Utils.latLngToH3(driverLoc, 9);
-      const pickupSearchHexagons = h3Utils.getH3Ring(driverH3Res9, config.h3.searchRadiusPickup); // ring 6 ≈ 2.1km
+      const pickupSearchHexagons = h3Utils.getH3Ring(driverH3Res9, config.h3.searchRadiusPickup);
       const pickupSearchSet = new Set(pickupSearchHexagons);
 
-      // Expanded pickup search for fallback (+2 rings)
-      const expandedPickupHexagons = h3Utils.getH3Ring(driverH3Res9, config.h3.searchRadiusPickup + 2);
-      const expandedPickupSet = new Set(expandedPickupHexagons);
+      logger.info(`[AvailablePools] Driver H3 (res9)=${driverH3Res9}, search hexagons count=${pickupSearchHexagons.length}`);
 
-      // Optional: destination-level search zone / priority location hexagons
-      const driverH3Res7 = h3Utils.latLngToH3(driverLoc, 7);
-
-      let { data: priorityLocation } = await supabaseAdmin
-        .from('users')
-        .select('driver_priority_lat, driver_priority_lng, driver_priority_h3_index')
-        .eq('id', userId)
-        .single();
-
-      let destinationHexSet = new Set<string>();
-      if (priorityLocation?.driver_priority_h3_index) {
-        const priorityHexagons = h3Utils.getH3Ring(priorityLocation.driver_priority_h3_index, config.h3.searchRadiusDestination);
-        priorityHexagons.forEach(h => destinationHexSet.add(h));
-      }
-
-      const searchZone = driverSearchZones.get(userId);
-      if (searchZone) {
-        searchZone.h3Hexagons.forEach(h => destinationHexSet.add(h));
-        searchZone.routeHexagons.forEach(h => destinationHexSet.add(h));
-      }
-
-      // Fetch all WAITING_FOR_DRIVER pools (pool pickup H3 is in JSONB so can't filter in DB)
+      // Fetch WAITING_FOR_DRIVER pools with ride details
       let query = supabaseAdmin
         .from('pools')
         .select(`
           *,
-          pool_members(user_id, ride_id),
-          creator:users!creator_user_id(id, average_rating)
+          pool_members(
+            user_id,
+            ride_id,
+            left_at,
+            rides(id, user_id, pickup_lat, pickup_lng, pickup_address, dropoff_lat, dropoff_lng, dropoff_address),
+            users:user_id(id, full_name, average_rating)
+          )
         `)
         .in('status', ['WAITING_FOR_DRIVER'] as PoolStatus[])
         .is('driver_id', null)
@@ -523,120 +492,129 @@ export class DriverController {
       const { data: rawPools, error } = await query;
 
       if (error) {
+        logger.error(`[AvailablePools] Query error: ${error.message}`);
         throw error;
       }
 
-      // Filter pools by proximity to driver using H3 hexagons
-      // A pool matches if its PICKUP is within the driver's search radius (~2.1km)
-      // OR its DESTINATION matches the driver's search zone / priority location
-      let filteredPools = (rawPools || []).filter((pool) => {
-        const poolPickupH3 = pool.score_breakdown?.creator_pickup?.h3_index;
+      logger.info(`[AvailablePools] Raw pools found: ${rawPools?.length || 0}`);
 
-        // Match 1: Pool's pickup is within driver's pickup search area (Res 9, ring 6 ≈ 2.1km)
+      if (rawPools && rawPools.length > 0) {
+        for (const pool of rawPools) {
+          const creatorH3 = pool.score_breakdown?.creator_pickup?.h3_index;
+          const members = pool.pool_members || [];
+          logger.info(`[AvailablePools] Pool ${pool.id}: status=${pool.status}, passengers=${pool.current_passengers}, vehicle_type=${pool.vehicle_type}, creator_h3=${creatorH3}, members=${members.length}`);
+          for (const m of members) {
+            const ride = m.rides;
+            logger.info(`[AvailablePools]   Member ${m.user_id}: ride_id=${m.ride_id}, ride pickup=${ride?.pickup_lat},${ride?.pickup_lng}, ride exists=${!!ride}`);
+          }
+        }
+      }
+
+      // Filter: any ride pickup in pool within driver's search radius
+      let filteredPools = (rawPools || []).filter((pool) => {
+        const activeMembers = (pool.pool_members || []).filter((m: any) => !m.left_at);
+
+        // Check pool creator's pickup (stored in score_breakdown)
+        const poolPickupH3 = pool.score_breakdown?.creator_pickup?.h3_index;
         if (poolPickupH3 && pickupSearchSet.has(poolPickupH3)) {
+          logger.info(`[AvailablePools] Pool ${pool.id} matched via creator_pickup H3`);
           return true;
         }
 
-        // Match 2: Pool's destination is in driver's search zone / priority location
-        if (destinationHexSet.size > 0 && pool.destination_h3_index && destinationHexSet.has(pool.destination_h3_index)) {
-          return true;
+        // Check each active member's ride pickup location
+        for (const member of activeMembers) {
+          const ride = member.rides;
+          if (ride && ride.pickup_lat != null && ride.pickup_lng != null) {
+            const ridePickupH3 = h3Utils.latLngToH3(
+              { latitude: Number(ride.pickup_lat), longitude: Number(ride.pickup_lng) }, 9
+            );
+            if (pickupSearchSet.has(ridePickupH3)) {
+              logger.info(`[AvailablePools] Pool ${pool.id} matched via member ride H3`);
+              return true;
+            }
+          }
         }
 
         return false;
       });
 
-      // Fallback: expand pickup search by +2 rings if no pools found in initial radius
-      if (filteredPools.length === 0 && (rawPools || []).length > 0) {
-        filteredPools = (rawPools || []).filter((pool) => {
-          const poolPickupH3 = pool.score_breakdown?.creator_pickup?.h3_index;
+      logger.info(`[AvailablePools] After H3 filter: ${filteredPools.length} pools`);
 
-          if (poolPickupH3 && expandedPickupSet.has(poolPickupH3)) {
-            return true;
-          }
+      // Build response with per-ride pickup/destination details (active members only)
+      const poolsWithDetails = filteredPools.map((pool) => {
+        const activeMembers = (pool.pool_members || []).filter((pm: any) => !pm.left_at);
+        const passengers = activeMembers.map((pm: any) => {
+          const ride = pm.rides;
+          const user = pm.users;
+          const fullName = user?.full_name || 'Rider';
 
-          // Also try matching by destination in expanded range
-          if (pool.destination_h3_index) {
-            const destRing = h3Utils.getH3Ring(driverH3Res7, config.h3.searchRadiusDestination + 2);
-            if (destRing.includes(pool.destination_h3_index)) {
-              return true;
-            }
-          }
+          const pickupDist = (ride && ride.pickup_lat != null && ride.pickup_lng != null)
+            ? calculateDistance(driverLat, driverLng, Number(ride.pickup_lat), Number(ride.pickup_lng))
+            : null;
 
-          return false;
+          return {
+            user_id: pm.user_id,
+            name: fullName,
+            rating: user?.average_rating || 0,
+            pickup: ride ? {
+              lat: Number(ride.pickup_lat),
+              lng: Number(ride.pickup_lng),
+              address: ride.pickup_address || 'Pickup',
+            } : null,
+            dropoff: ride ? {
+              lat: Number(ride.dropoff_lat),
+              lng: Number(ride.dropoff_lng),
+              address: ride.dropoff_address || 'Dropoff',
+            } : null,
+            pickup_distance_km: pickupDist !== null ? Math.round(pickupDist * 10) / 10 : null,
+          };
         });
-      }
 
-      // Final fallback: if still no pools, use haversine distance within 2.1km
-      if (filteredPools.length === 0 && (rawPools || []).length > 0) {
-        filteredPools = (rawPools || []).filter((pool) => {
-          const pickupInfo = pool.score_breakdown?.creator_pickup;
-          if (pickupInfo?.lat && pickupInfo?.lng) {
-            const dist = calculateDistance(driverLocation.lat, driverLocation.lng, pickupInfo.lat, pickupInfo.lng);
-            return dist <= 2.1;
-          }
-          // Fallback to destination distance
-          const destDist = calculateDistance(driverLocation.lat, driverLocation.lng, pool.destination_lat, pool.destination_lng);
-          return destDist <= 5.0;
-        });
-      }
+        // Find nearest pickup among all passengers
+        const nearestPickup = passengers.reduce((nearest: any, p: any) => {
+          if (p.pickup_distance_km === null) return nearest;
+          if (nearest === null || p.pickup_distance_km < nearest.pickup_distance_km) return p;
+          return nearest;
+        }, null);
 
-      const poolsWithDistance = filteredPools.map((pool) => {
-        const pickupDistance = pool.score_breakdown?.creator_pickup
-          ? calculateDistance(
-              driverLocation.lat,
-              driverLocation.lng,
-              pool.score_breakdown.creator_pickup.lat,
-              pool.score_breakdown.creator_pickup.lng
-            )
-          : null;
-
-        const destDistance = calculateDistance(
-          driverLocation.lat,
-          driverLocation.lng,
-          pool.destination_lat,
-          pool.destination_lng
-        );
-
-        const relevantDistance = pickupDistance !== null ? pickupDistance : destDistance;
-        const estimatedMinutes = estimateTravelTime(relevantDistance);
+        const nearestPickupDist = nearestPickup?.pickup_distance_km ?? null;
+        const estimatedMinutes = nearestPickupDist !== null ? estimateTravelTime(nearestPickupDist) : 0;
+        const totalEarnings = Math.round((pool.fare_per_person || 0) * (pool.current_passengers || 0) * 0.8);
 
         return {
           id: pool.id,
-          pickup: pool.score_breakdown?.creator_pickup
-            ? {
-                lat: pool.score_breakdown.creator_pickup.lat,
-                lng: pool.score_breakdown.creator_pickup.lng,
-                address: pool.score_breakdown.creator_pickup.address,
-              }
-            : null,
-          destination: {
-            lat: pool.destination_lat,
-            lng: pool.destination_lng,
-            address: pool.destination_address,
-          },
+          passengers,
+          total_earnings: totalEarnings,
+          fare_per_person: pool.fare_per_person,
           vehicle_type: pool.vehicle_type,
-          gender_restriction: pool.gender_restriction,
           current_passengers: pool.current_passengers,
           max_passengers: pool.max_passengers,
-          fare_per_person: pool.fare_per_person,
-          pickup_distance_km: pickupDistance !== null ? Math.round(pickupDistance * 10) / 10 : null,
-          distance_km: Math.round(destDistance * 10) / 10,
+          nearest_pickup_km: nearestPickupDist,
           estimated_arrival_minutes: estimatedMinutes,
+          destination: {
+            lat: Number(pool.destination_lat),
+            lng: Number(pool.destination_lng),
+            address: pool.destination_address,
+          },
           created_at: pool.created_at,
         };
       });
 
-      poolsWithDistance.sort((a, b) => {
-        const distA = a.pickup_distance_km ?? a.distance_km;
-        const distB = b.pickup_distance_km ?? b.distance_km;
+      // Sort by nearest pickup distance
+      poolsWithDetails.sort((a, b) => {
+        const distA = a.nearest_pickup_km ?? 999;
+        const distB = b.nearest_pickup_km ?? 999;
         return distA - distB;
       });
+
+      const result = poolsWithDetails.slice(0, 10);
+      logger.info(`[AvailablePools] Returning ${result.length} pools to driver ${userId}`);
 
       res.json({
         success: true,
         data: {
-          pools: poolsWithDistance.slice(0, 10),
-          total_available: poolsWithDistance.length,
+          pools: result,
+          total_available: poolsWithDetails.length,
         },
         timestamp: new Date().toISOString(),
       });
@@ -766,35 +744,80 @@ export class DriverController {
           pool_members(
             user_id,
             ride_id,
-            rides(pickup_lat, pickup_lng, pickup_address, dropoff_lat, dropoff_lng, dropoff_address)
+            rides(pickup_lat, pickup_lng, pickup_address, dropoff_lat, dropoff_lng, dropoff_address),
+            users:user_id(id, full_name, average_rating)
           )
         `)
         .eq('id', poolId)
         .single();
+
+      // Get driver's current location to find nearest pickup
+      const { data: driverLoc } = await supabaseAdmin
+        .from('vehicle_locations')
+        .select('lat, lng')
+        .eq('driver_id', userId)
+        .single();
+
+      const passengers = pool?.pool_members?.map((pm: any) => {
+        const user = pm.users;
+        return {
+          user_id: pm.user_id,
+          name: user?.full_name || 'Rider',
+          rating: user?.average_rating || 0,
+          pickup: {
+            lat: pm.rides?.pickup_lat != null ? Number(pm.rides.pickup_lat) : null,
+            lng: pm.rides?.pickup_lng != null ? Number(pm.rides.pickup_lng) : null,
+            address: pm.rides?.pickup_address,
+          },
+          dropoff: {
+            lat: pm.rides?.dropoff_lat != null ? Number(pm.rides.dropoff_lat) : null,
+            lng: pm.rides?.dropoff_lng != null ? Number(pm.rides.dropoff_lng) : null,
+            address: pm.rides?.dropoff_address,
+          },
+        };
+      }) || [];
+
+      // Find nearest pickup for navigation
+      let nearestPickup = null as any;
+      if (driverLoc && passengers.length > 0) {
+        const drvLat = Number(driverLoc.lat);
+        const drvLng = Number(driverLoc.lng);
+        let minDist = Infinity;
+        for (const p of passengers) {
+          if (p.pickup?.lat != null && p.pickup?.lng != null) {
+            const dist = calculateDistance(drvLat, drvLng, p.pickup.lat, p.pickup.lng);
+            if (dist < minDist) {
+              minDist = dist;
+              nearestPickup = p.pickup;
+            }
+          }
+        }
+      }
+
+      // Build Google Maps navigation URL to nearest pickup
+      let navigation_url = null as string | null;
+      if (nearestPickup?.lat != null && nearestPickup?.lng != null) {
+        const waypointCoords = passengers
+          .filter((p: any) => p.pickup?.lat && p.pickup?.lng && (p.pickup.lat !== nearestPickup.lat || p.pickup.lng !== nearestPickup.lng))
+          .map((p: any) => `${p.pickup.lat},${p.pickup.lng}`);
+
+        const destCoord = `${nearestPickup.lat},${nearestPickup.lng}`;
+        navigation_url = `https://www.google.com/maps/dir/?api=1&destination=${destCoord}&travelmode=driving`;
+      }
 
       res.json({
         success: true,
         data: {
           pool_id: poolId,
           status: 'READY_TO_START',
-          passengers: pool?.pool_members?.map((pm: any) => ({
-            user_id: pm.user_id,
-            pickup: {
-              lat: pm.rides?.pickup_lat,
-              lng: pm.rides?.pickup_lng,
-              address: pm.rides?.pickup_address,
-            },
-            dropoff: {
-              lat: pm.rides?.dropoff_lat,
-              lng: pm.rides?.dropoff_lng,
-              address: pm.rides?.dropoff_address,
-            },
-          })) || [],
+          passengers,
           destination: {
-            lat: pool?.destination_lat,
-            lng: pool?.destination_lng,
+            lat: pool?.destination_lat ? Number(pool.destination_lat) : null,
+            lng: pool?.destination_lng ? Number(pool.destination_lng) : null,
             address: pool?.destination_address,
           },
+          nearest_pickup: nearestPickup,
+          navigation_url,
         },
         timestamp: new Date().toISOString(),
       });
@@ -875,8 +898,8 @@ export class DriverController {
             id: pool.id,
             status: pool.status,
             destination: {
-              lat: pool.destination_lat,
-              lng: pool.destination_lng,
+              lat: Number(pool.destination_lat),
+              lng: Number(pool.destination_lng),
               address: pool.destination_address,
             },
             vehicle: pool.vehicles,
@@ -884,13 +907,13 @@ export class DriverController {
               user_id: pm.user_id,
               ride_id: pm.ride_id,
               pickup: {
-                lat: pm.rides?.pickup_lat,
-                lng: pm.rides?.pickup_lng,
+                lat: pm.rides?.pickup_lat != null ? Number(pm.rides.pickup_lat) : null,
+                lng: pm.rides?.pickup_lng != null ? Number(pm.rides.pickup_lng) : null,
                 address: pm.rides?.pickup_address,
               },
               dropoff: {
-                lat: pm.rides?.dropoff_lat,
-                lng: pm.rides?.dropoff_lng,
+                lat: pm.rides?.dropoff_lat != null ? Number(pm.rides.dropoff_lat) : null,
+                lng: pm.rides?.dropoff_lng != null ? Number(pm.rides.dropoff_lng) : null,
                 address: pm.rides?.dropoff_address,
               },
               status: pm.rides?.status,
@@ -1297,271 +1320,6 @@ export class DriverController {
           total_ratings: user?.total_ratings || 0,
           total_earnings: totalEarnings,
         },
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async setPriorityLocation(req: AuthRequest, res: Response, next: NextFunction) {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      const { priority_lat, priority_lng, priority_address } = req.body;
-
-      const h3Index = h3Utils.latLngToH3({ latitude: priority_lat, longitude: priority_lng }, 7);
-
-      const { data, error } = await supabaseAdmin
-        .from('users')
-        .update({
-          driver_priority_lat: priority_lat,
-          driver_priority_lng: priority_lng,
-          driver_priority_address: priority_address || null,
-          driver_priority_h3_index: h3Index,
-        })
-        .eq('id', userId)
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      res.json({
-        success: true,
-        data: {
-          priority_location: {
-            lat: priority_lat,
-            lng: priority_lng,
-            address: priority_address,
-            h3_index: h3Index,
-          },
-        },
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async getPriorityLocation(req: AuthRequest, res: Response, next: NextFunction) {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      const { data, error } = await supabaseAdmin
-        .from('users')
-        .select('driver_priority_lat, driver_priority_lng, driver_priority_address, driver_priority_h3_index')
-        .eq('id', userId)
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      if (!data?.driver_priority_lat) {
-        return res.json({
-          success: true,
-          data: { priority_location: null },
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      res.json({
-        success: true,
-        data: {
-          priority_location: {
-            lat: data.driver_priority_lat,
-            lng: data.driver_priority_lng,
-            address: data.driver_priority_address,
-            h3_index: data.driver_priority_h3_index,
-          },
-        },
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async clearPriorityLocation(req: AuthRequest, res: Response, next: NextFunction) {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      await supabaseAdmin
-        .from('users')
-        .update({
-          driver_priority_lat: null,
-          driver_priority_lng: null,
-          driver_priority_address: null,
-          driver_priority_h3_index: null,
-        })
-        .eq('id', userId);
-
-      res.json({
-        success: true,
-        data: { message: 'Priority location cleared' },
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async setSearchZone(req: AuthRequest, res: Response, next: NextFunction) {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      const { destination_lat, destination_lng, destination_address } = req.body;
-
-      // Get driver's current location
-      const { data: driverLocation } = await supabaseAdmin
-        .from('vehicle_locations')
-        .select('lat, lng')
-        .eq('driver_id', userId)
-        .eq('is_active', true)
-        .single();
-
-      if (!driverLocation) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'NOT_ONLINE', message: 'Driver must be online to set search zone' },
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // Compute H3 hexagons at destination (res 7) with ring search
-      const destH3 = h3Utils.latLngToH3(
-        { latitude: destination_lat, longitude: destination_lng },
-        7
-      );
-      const destHexagons = h3Utils.getH3Ring(destH3, config.h3.searchRadius + 1);
-
-      // Compute H3 route hexagons from current location to destination (res 7)
-      const routeHexagons = h3Utils.getRouteH3Indices(
-        { latitude: driverLocation.lat, longitude: driverLocation.lng },
-        { latitude: destination_lat, longitude: destination_lng },
-        7
-      );
-
-      // Expand route hexagons by 1 ring each for coverage along route corridor
-      const expandedRouteHexagons = new Set<string>();
-      for (const hex of routeHexagons) {
-        const ring = h3Utils.getH3Ring(hex, 1);
-        ring.forEach(h => expandedRouteHexagons.add(h));
-      }
-
-      const searchZone: SearchZone = {
-        lat: destination_lat,
-        lng: destination_lng,
-        address: destination_address || undefined,
-        h3Hexagons: destHexagons,
-        routeHexagons: Array.from(expandedRouteHexagons),
-        setAt: new Date().toISOString(),
-      };
-
-      driverSearchZones.set(userId, searchZone);
-
-      logger.info(`[Driver] Search zone set for ${userId}: ${destHexagons.length} dest hexagons, ${expandedRouteHexagons.size} route hexagons`);
-
-      res.json({
-        success: true,
-        data: {
-          search_zone: {
-            lat: destination_lat,
-            lng: destination_lng,
-            address: destination_address,
-            hexagon_count: destHexagons.length + expandedRouteHexagons.size,
-          },
-        },
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async getSearchZone(req: AuthRequest, res: Response, next: NextFunction) {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      const searchZone = driverSearchZones.get(userId);
-      if (!searchZone) {
-        return res.json({
-          success: true,
-          data: { search_zone: null },
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      res.json({
-        success: true,
-        data: {
-          search_zone: {
-            lat: searchZone.lat,
-            lng: searchZone.lng,
-            address: searchZone.address,
-            set_at: searchZone.setAt,
-          },
-        },
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async clearSearchZone(req: AuthRequest, res: Response, next: NextFunction) {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      driverSearchZones.delete(userId);
-
-      res.json({
-        success: true,
-        data: { message: 'Search zone cleared' },
         timestamp: new Date().toISOString(),
       });
     } catch (error) {

@@ -85,7 +85,7 @@ export function PassengerBillingDialog({
                 </View>
                 <View className="flex-1">
                   <Text className="text-xs text-gray-500 mb-0.5">PICKUP</Text>
-                  <Text className="font-medium">{passenger.pickup}</Text>
+                  <Text className="font-medium">{passenger.pickup?.address || 'N/A'}</Text>
                 </View>
               </View>
 
@@ -95,7 +95,7 @@ export function PassengerBillingDialog({
                 </View>
                 <View className="flex-1">
                   <Text className="text-xs text-gray-500 mb-0.5">DROP-OFF</Text>
-                  <Text className="font-medium">{passenger.destination}</Text>
+                  <Text className="font-medium">{passenger.dropoff?.address || 'N/A'}</Text>
                 </View>
               </View>
             </View>

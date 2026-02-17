@@ -1,23 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Linking, Alert } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { HomeScreen } from '../../src/components/home/HomeScreen.native';
 import { driverService } from '../../src/services/driver.service';
 import { locationService } from '../../src/services/location.service';
 import { useDriverStore } from '../../src/store/useDriverStore';
 import type { Pool, Location } from '../../src/types';
-
-interface PoolRequestData {
-  pool_id: string;
-  vehicle_type?: string;
-  passengers?: number;
-  estimated_earnings?: number;
-  pickup_lat?: number;
-  pickup_lng?: number;
-  destination_lat?: number;
-  destination_lng?: number;
-  destination_address?: string;
-  pickup_address?: string;
-}
 
 export default function Home() {
   const {
@@ -27,10 +15,7 @@ export default function Home() {
     setCurrentLocation,
     driverStatus,
     setDriverStatus,
-    priorityLocation,
-    setPriorityLocation,
-    searchZone,
-    setSearchZone,
+    setActivePool,
     incomingPoolRequest,
     setIncomingPoolRequest,
     setLoading,
@@ -38,9 +23,6 @@ export default function Home() {
   } = useDriverStore();
 
   const [selectedPoolForDetails, setSelectedPoolForDetails] = useState<Pool | null>(null);
-  const [showPriorityDialog, setShowPriorityDialog] = useState(false);
-  const [showSearchZoneDialog, setShowSearchZoneDialog] = useState(false);
-  const [showPromotions, setShowPromotions] = useState(false);
   const isOnline = driverStatus === 'ONLINE';
   const goingOnlineRef = useRef(false);
 
@@ -48,8 +30,8 @@ export default function Home() {
     if (!isOnline) return;
     try {
       const response = await driverService.getAvailablePools();
-      if (response.success && response.data) {
-        setAvailablePools(response.data);
+      if (response.success && response.data?.pools) {
+        setAvailablePools(response.data.pools);
       }
     } catch (err) {
       // Silently fail — driver may not be online yet
@@ -91,7 +73,6 @@ export default function Home() {
     } else if (currentLocation) {
       await handleGoOnline(currentLocation);
     } else {
-      // Try to get location first
       const location = await locationService.getCurrentLocation();
       if (location) {
         setCurrentLocation(location);
@@ -102,7 +83,7 @@ export default function Home() {
     }
   }, [isOnline, currentLocation, handleGoOnline, handleGoOffline, setCurrentLocation, setError]);
 
-  // Initialize: request location permissions and get current position (do NOT auto go-online)
+  // Initialize: request location permissions and get current position
   useEffect(() => {
     const init = async () => {
       const permissions = await locationService.requestAllPermissions();
@@ -121,7 +102,7 @@ export default function Home() {
     if (!isOnline) return;
 
     fetchAvailablePools();
-    const interval = setInterval(fetchAvailablePools, 30000);
+    const interval = setInterval(fetchAvailablePools, 15000);
     return () => clearInterval(interval);
   }, [isOnline, fetchAvailablePools]);
 
@@ -132,19 +113,20 @@ export default function Home() {
       if (!data) return;
 
       if (data.action === 'VIEW_POOL' && data.pool_id) {
-        const poolRequest: PoolRequestData = {
-          pool_id: String(data.pool_id),
-          vehicle_type: data.vehicle_type ? String(data.vehicle_type) : undefined,
-          passengers: data.passengers ? Number(data.passengers) : undefined,
-          estimated_earnings: data.estimated_earnings ? Number(data.estimated_earnings) : undefined,
-          pickup_lat: data.pickup_lat ? Number(data.pickup_lat) : undefined,
-          pickup_lng: data.pickup_lng ? Number(data.pickup_lng) : undefined,
-          pickup_address: data.pickup_address ? String(data.pickup_address) : undefined,
-          destination_lat: data.destination_lat ? Number(data.destination_lat) : undefined,
-          destination_lng: data.destination_lng ? Number(data.destination_lng) : undefined,
-          destination_address: data.destination_address ? String(data.destination_address) : undefined,
-        };
-        setIncomingPoolRequest(poolRequest as any);
+        setIncomingPoolRequest({
+          id: String(data.pool_id),
+          passengers: [],
+          total_earnings: data.estimated_earnings ? Number(data.estimated_earnings) : 0,
+          fare_per_person: 0,
+          current_passengers: data.passengers ? Number(data.passengers) : 0,
+          max_passengers: 4,
+          nearest_pickup_km: null,
+          destination: data.destination_address ? {
+            lat: Number(data.destination_lat || 0),
+            lng: Number(data.destination_lng || 0),
+            address: String(data.destination_address),
+          } : undefined,
+        } as Pool);
         fetchAvailablePools();
       }
     });
@@ -189,10 +171,22 @@ export default function Home() {
     try {
       setLoading(true);
       const response = await driverService.acceptPool(poolId);
-      if (response.success) {
+      if (response.success && response.data) {
         setSelectedPoolForDetails(null);
         setIncomingPoolRequest(null);
-        await fetchAvailablePools();
+        setActivePool({ id: poolId } as Pool);
+        setAvailablePools([]);
+
+        // Open Google Maps navigation to nearest pickup
+        const navUrl = response.data.navigation_url;
+        if (navUrl) {
+          const canOpen = await Linking.canOpenURL(navUrl);
+          if (canOpen) {
+            await Linking.openURL(navUrl);
+          } else {
+            Alert.alert('Navigation', 'Could not open Google Maps. Please navigate manually.');
+          }
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to accept pool');
@@ -210,65 +204,6 @@ export default function Home() {
     setIncomingPoolRequest(null);
   };
 
-  const handleSetPriority = async (locationAddress: string) => {
-    if (currentLocation) {
-      try {
-        const priorityLoc: Location = {
-          ...currentLocation,
-          address: locationAddress,
-        };
-        await driverService.setPriorityLocation(priorityLoc);
-        setPriorityLocation(priorityLoc);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to set priority');
-      }
-    }
-    setShowPriorityDialog(false);
-  };
-
-  const handleClearPriority = async () => {
-    try {
-      await driverService.clearPriorityLocation();
-      setPriorityLocation(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to clear priority');
-    }
-    setShowPriorityDialog(false);
-  };
-
-  const handleSetSearchZone = async (destinationAddress: string) => {
-    if (currentLocation) {
-      try {
-        await driverService.setSearchZone({
-          destination_lat: currentLocation.latitude,
-          destination_lng: currentLocation.longitude,
-          destination_address: destinationAddress,
-        });
-        setSearchZone({
-          lat: currentLocation.latitude,
-          lng: currentLocation.longitude,
-          address: destinationAddress,
-        });
-        // Refresh pools with new search zone
-        await fetchAvailablePools();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to set search zone');
-      }
-    }
-    setShowSearchZoneDialog(false);
-  };
-
-  const handleClearSearchZone = async () => {
-    try {
-      await driverService.clearSearchZone();
-      setSearchZone(null);
-      await fetchAvailablePools();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to clear search zone');
-    }
-    setShowSearchZoneDialog(false);
-  };
-
   const driverLocation = currentLocation
     ? { lat: currentLocation.latitude, lng: currentLocation.longitude }
     : null;
@@ -282,18 +217,6 @@ export default function Home() {
       selectedPoolForDetails={selectedPoolForDetails}
       onPoolSelect={handlePoolSelect}
       onAcceptPool={handleAcceptPool}
-      priorityLocation={priorityLocation?.address || null}
-      showPriorityDialog={showPriorityDialog}
-      setShowPriorityDialog={setShowPriorityDialog}
-      onSetPriority={handleSetPriority}
-      onClearPriority={handleClearPriority}
-      searchZone={searchZone}
-      showSearchZoneDialog={showSearchZoneDialog}
-      setShowSearchZoneDialog={setShowSearchZoneDialog}
-      onSetSearchZone={handleSetSearchZone}
-      onClearSearchZone={handleClearSearchZone}
-      showPromotions={showPromotions}
-      setShowPromotions={setShowPromotions}
       incomingPoolRequest={incomingPoolRequest as any}
       onAcceptIncoming={handleAcceptIncoming}
       onDismissIncoming={handleDismissIncoming}

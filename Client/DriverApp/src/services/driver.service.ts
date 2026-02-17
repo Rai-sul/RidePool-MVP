@@ -46,12 +46,19 @@ export const driverService = {
     });
   },
 
-  async getAvailablePools(): Promise<ApiResponse<Pool[]>> {
-    return apiClient.get<ApiResponse<Pool[]>>(API_ENDPOINTS.DRIVER.AVAILABLE_POOLS);
+  async getAvailablePools(): Promise<ApiResponse<{ pools: Pool[]; total_available: number }>> {
+    return apiClient.get<ApiResponse<{ pools: Pool[]; total_available: number }>>(API_ENDPOINTS.DRIVER.AVAILABLE_POOLS);
   },
 
-  async acceptPool(poolId: string): Promise<ApiResponse> {
-    return apiClient.post<ApiResponse>(API_ENDPOINTS.DRIVER.ACCEPT_POOL(poolId));
+  async acceptPool(poolId: string): Promise<ApiResponse<{
+    pool_id: string;
+    status: string;
+    passengers: any[];
+    destination: any;
+    nearest_pickup: any;
+    navigation_url: string | null;
+  }>> {
+    return apiClient.post<ApiResponse<any>>(API_ENDPOINTS.DRIVER.ACCEPT_POOL(poolId));
   },
 
   async rejectPool(poolId: string): Promise<ApiResponse> {
@@ -93,34 +100,6 @@ export const driverService = {
     return apiClient.get<ApiResponse<DriverStats>>(API_ENDPOINTS.DRIVER.STATS);
   },
 
-  async setPriorityLocation(location: Location): Promise<ApiResponse> {
-    return apiClient.post<ApiResponse>(API_ENDPOINTS.DRIVER.PRIORITY_LOCATION, location);
-  },
-
-  async getPriorityLocation(): Promise<ApiResponse<Location | null>> {
-    return apiClient.get<ApiResponse<Location | null>>(API_ENDPOINTS.DRIVER.PRIORITY_LOCATION);
-  },
-
-  async clearPriorityLocation(): Promise<ApiResponse> {
-    return apiClient.delete<ApiResponse>(API_ENDPOINTS.DRIVER.PRIORITY_LOCATION);
-  },
-
-  async setSearchZone(data: {
-    destination_lat: number;
-    destination_lng: number;
-    destination_address?: string;
-  }): Promise<ApiResponse> {
-    return apiClient.post<ApiResponse>(API_ENDPOINTS.DRIVER.SEARCH_ZONE, data);
-  },
-
-  async getSearchZone(): Promise<ApiResponse<{ search_zone: { lat: number; lng: number; address?: string; set_at: string } | null }>> {
-    return apiClient.get<ApiResponse<{ search_zone: { lat: number; lng: number; address?: string; set_at: string } | null }>>(API_ENDPOINTS.DRIVER.SEARCH_ZONE);
-  },
-
-  async clearSearchZone(): Promise<ApiResponse> {
-    return apiClient.delete<ApiResponse>(API_ENDPOINTS.DRIVER.SEARCH_ZONE);
-  },
-
   async registerVehicle(data: {
     vehicle_type: 'CAR' | 'CNG';
     vehicle_number: string;
@@ -128,5 +107,13 @@ export const driverService = {
     color?: string;
   }): Promise<ApiResponse> {
     return apiClient.post<ApiResponse>(API_ENDPOINTS.DRIVER.REGISTER_VEHICLE, data);
+  },
+
+  async getPoolRoute(poolId: string): Promise<ApiResponse> {
+    return apiClient.get<ApiResponse>(API_ENDPOINTS.POOL.ROUTE(poolId));
+  },
+
+  async getNavigationLink(poolId: string): Promise<ApiResponse> {
+    return apiClient.get<ApiResponse>(`/pools/${poolId}/navigation-link`);
   },
 };

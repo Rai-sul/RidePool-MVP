@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Fragment } from "react";
 import { View, Text, StyleSheet, Platform } from "react-native";
 import MapViewComponent, { Marker, Polyline, PROVIDER_GOOGLE, Region } from "react-native-maps";
 import { Button } from "../ui/button";
@@ -16,30 +16,13 @@ interface MapViewProps {
   activePool?: Pool | null;
 }
 
-const locationCoords: { [key: string]: { lat: number; lng: number } } = {
-  "Badda": { lat: 23.7805, lng: 90.4258 },
-  "Mirpur": { lat: 23.8223, lng: 90.3654 },
-  "Gulshan": { lat: 23.7925, lng: 90.4078 },
-  "Dhanmondi": { lat: 23.7461, lng: 90.3742 },
-  "Uttara": { lat: 23.8759, lng: 90.3795 },
-  "Banani": { lat: 23.7937, lng: 90.4066 },
-  "Rampura": { lat: 23.7629, lng: 90.4259 },
-  "Banasree": { lat: 23.7591, lng: 90.4358 },
-  "Malibagh": { lat: 23.7518, lng: 90.4068 },
-  "Farmgate": { lat: 23.7574, lng: 90.3897 },
-  "Karwan Bazar": { lat: 23.7516, lng: 90.3939 },
-  "Shahbag": { lat: 23.7389, lng: 90.3958 },
-  "Merul": { lat: 23.7785, lng: 90.4268 },
-  "Satarkul": { lat: 23.7695, lng: 90.4305 },
-};
-
-const getLocationCoord = (locationName: string): { lat: number; lng: number } => {
-  for (const [key, coord] of Object.entries(locationCoords)) {
-    if (locationName.toLowerCase().includes(key.toLowerCase())) {
-      return coord;
-    }
+// Get nearest pickup coordinate from pool passengers
+const getPoolPickupCoord = (pool: Pool): { lat: number; lng: number } | null => {
+  const firstPassenger = pool.passengers?.[0];
+  if (firstPassenger?.pickup?.lat && firstPassenger?.pickup?.lng) {
+    return { lat: firstPassenger.pickup.lat, lng: firstPassenger.pickup.lng };
   }
-  return { lat: 23.7805, lng: 90.4258 };
+  return pool.destination ? { lat: pool.destination.lat, lng: pool.destination.lng } : null;
 };
 
 export function MapView({ 
@@ -123,20 +106,22 @@ export function MapView({
   };
 
   const poolToShow = navigationMode && activePool ? activePool : selectedPool;
-  const routeCoordinates: { latitude: number; longitude: number }[] = [];
 
+  // Build route preview: driver → pickups → dropoffs
+  const routeCoordinates: { latitude: number; longitude: number }[] = [];
   if (poolToShow && currentLocation) {
     routeCoordinates.push({ latitude: currentLocation.lat, longitude: currentLocation.lng });
     
-    poolToShow.customers.forEach((customer) => {
-      const pickupCoord = getLocationCoord(customer.pickup);
-      routeCoordinates.push({ latitude: pickupCoord.lat, longitude: pickupCoord.lng });
-    });
-    
-    poolToShow.customers.forEach((customer) => {
-      const dropoffCoord = getLocationCoord(customer.destination);
-      routeCoordinates.push({ latitude: dropoffCoord.lat, longitude: dropoffCoord.lng });
-    });
+    for (const passenger of (poolToShow.passengers || [])) {
+      if (passenger.pickup?.lat && passenger.pickup?.lng) {
+        routeCoordinates.push({ latitude: passenger.pickup.lat, longitude: passenger.pickup.lng });
+      }
+    }
+    for (const passenger of (poolToShow.passengers || [])) {
+      if (passenger.dropoff?.lat && passenger.dropoff?.lng) {
+        routeCoordinates.push({ latitude: passenger.dropoff.lat, longitude: passenger.dropoff.lng });
+      }
+    }
   }
 
   return (
@@ -162,40 +147,43 @@ export function MapView({
           />
         )}
 
-        {!selectedPool && pools.map((pool) => {
-          const coord = getLocationCoord(pool.firstPickup);
+        {/* Pool markers — show nearest pickup location for each pool */}
+        {pools.map((pool) => {
+          const coord = getPoolPickupCoord(pool);
+          if (!coord) return null;
           return (
             <Marker
               key={pool.id}
               coordinate={{ latitude: coord.lat, longitude: coord.lng }}
-              title={`৳${pool.totalEarnings}`}
-              description={`${pool.customers.length} passengers`}
-              pinColor={pool.isPriority ? "#10b981" : "#6366f1"}
+              title={`৳${pool.total_earnings}`}
+              description={`${pool.current_passengers} passengers`}
+              pinColor={selectedPool?.id === pool.id ? "#f59e0b" : "#6366f1"}
               onPress={() => handleMarkerPress(pool)}
             />
           );
         })}
 
-        {poolToShow && poolToShow.customers.map((customer, index) => {
-          const pickupCoord = getLocationCoord(customer.pickup);
-          const dropoffCoord = getLocationCoord(customer.destination);
-          return (
-            <View key={customer.id}>
+        {/* When a pool is selected, show each passenger's pickup and dropoff */}
+        {poolToShow && (poolToShow.passengers || []).map((passenger, index) => (
+          <Fragment key={passenger.user_id}>
+            {passenger.pickup?.lat && passenger.pickup?.lng && (
               <Marker
-                coordinate={{ latitude: pickupCoord.lat, longitude: pickupCoord.lng }}
-                title={`Pickup: ${customer.name}`}
-                description={customer.pickup}
+                coordinate={{ latitude: passenger.pickup.lat, longitude: passenger.pickup.lng }}
+                title={`Pickup: ${passenger.name}`}
+                description={passenger.pickup.address || 'Pickup'}
                 pinColor="#10b981"
               />
+            )}
+            {passenger.dropoff?.lat && passenger.dropoff?.lng && (
               <Marker
-                coordinate={{ latitude: dropoffCoord.lat, longitude: dropoffCoord.lng }}
-                title={`Dropoff: ${customer.name}`}
-                description={customer.destination}
+                coordinate={{ latitude: passenger.dropoff.lat, longitude: passenger.dropoff.lng }}
+                title={`Dropoff: ${passenger.name}`}
+                description={passenger.dropoff.address || 'Dropoff'}
                 pinColor="#ef4444"
               />
-            </View>
-          );
-        })}
+            )}
+          </Fragment>
+        ))}
 
         {routeCoordinates.length > 1 && (
           <Polyline
@@ -260,10 +248,6 @@ export function MapView({
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: '#6366f1' }]} />
               <Text style={[styles.legendText, { color: colors.text }]}>Pool</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
-              <Text style={[styles.legendText, { color: colors.text }]}>Priority</Text>
             </View>
           </>
         ) : (

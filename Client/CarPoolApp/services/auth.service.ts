@@ -115,7 +115,7 @@ export const userService = {
   },
 
   async registerDeviceToken(token: string): Promise<ApiResponse> {
-    return apiClient.post(API_ENDPOINTS.USER.DEVICE_TOKEN, { token });
+    return apiClient.post(API_ENDPOINTS.USER.DEVICE_TOKEN, { token, app_type: 'rider' });
   },
 
   async unregisterDeviceToken(): Promise<ApiResponse> {

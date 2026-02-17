@@ -3,23 +3,11 @@ import { View, Text, Modal, Pressable, Animated, Vibration } from "react-native"
 import { Button } from "../ui/button";
 import { MapPin, Users, DollarSign, Navigation, X } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
-
-interface PoolRequestData {
-  pool_id: string;
-  vehicle_type?: string;
-  passengers?: number;
-  estimated_earnings?: number;
-  pickup_lat?: number;
-  pickup_lng?: number;
-  destination_lat?: number;
-  destination_lng?: number;
-  destination_address?: string;
-  pickup_address?: string;
-}
+import type { Pool } from "../../types";
 
 interface PoolRequestAlertProps {
   isVisible: boolean;
-  poolRequest: PoolRequestData | null;
+  poolRequest: Pool | null;
   onAccept: (poolId: string) => void;
   onDismiss: () => void;
 }
@@ -81,9 +69,12 @@ export function PoolRequestAlert({
 
   if (!isVisible || !poolRequest) return null;
 
-  const earnings = poolRequest.estimated_earnings
-    ? `৳${Math.round(poolRequest.estimated_earnings)}`
+  const earnings = poolRequest.total_earnings
+    ? `৳${Math.round(poolRequest.total_earnings)}`
     : 'N/A';
+
+  const firstPickupAddress = poolRequest.passengers?.[0]?.pickup?.address;
+  const destinationAddress = poolRequest.destination?.address;
 
   return (
     <Modal
@@ -129,7 +120,7 @@ export function PoolRequestAlert({
                 <View className="flex-1 flex-row items-center gap-2">
                   <Users size={16} color={colors.primary} />
                   <Text style={{ color: colors.text }}>
-                    <Text className="font-bold">{poolRequest.passengers || '?'}</Text> passengers
+                    <Text className="font-bold">{poolRequest.current_passengers || '?'}</Text> passengers
                   </Text>
                 </View>
                 <View className="flex-1 flex-row items-center gap-2">
@@ -153,21 +144,21 @@ export function PoolRequestAlert({
                 </View>
               )}
 
-              {(poolRequest.pickup_address || poolRequest.destination_address) && (
+              {(firstPickupAddress || destinationAddress) && (
                 <View className="gap-2">
-                  {poolRequest.pickup_address && (
+                  {firstPickupAddress && (
                     <View className="flex-row items-center gap-2">
                       <MapPin size={14} color={colors.success} />
                       <Text className="text-sm flex-1" style={{ color: colors.textSecondary }} numberOfLines={1}>
-                        Pickup: {poolRequest.pickup_address}
+                        Pickup: {firstPickupAddress}
                       </Text>
                     </View>
                   )}
-                  {poolRequest.destination_address && (
+                  {destinationAddress && (
                     <View className="flex-row items-center gap-2">
                       <MapPin size={14} color={colors.error} />
                       <Text className="text-sm flex-1" style={{ color: colors.textSecondary }} numberOfLines={1}>
-                        Drop: {poolRequest.destination_address}
+                        Drop: {destinationAddress}
                       </Text>
                     </View>
                   )}
@@ -186,7 +177,7 @@ export function PoolRequestAlert({
                 <Text className="font-semibold" style={{ color: colors.text }}>Dismiss</Text>
               </Button>
               <Button
-                onPress={() => onAccept(poolRequest.pool_id)}
+                onPress={() => onAccept(poolRequest.id)}
                 className="flex-1 h-12"
                 style={{ backgroundColor: isDark ? '#B45309' : '#D97706' }}
               >

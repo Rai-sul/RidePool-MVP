@@ -35,7 +35,8 @@ export function RatingFeedbackDialog({ isOpen, onClose, pool }: RatingFeedbackDi
 
   if (!pool) return null;
 
-  const allRated = pool.customers.every(customer => ratings[customer.id] > 0);
+  const passengers = pool.passengers || [];
+  const allRated = passengers.every(p => ratings[p.user_id] > 0);
 
   return (
     <Modal
@@ -60,25 +61,25 @@ export function RatingFeedbackDialog({ isOpen, onClose, pool }: RatingFeedbackDi
             <Card className="p-4 bg-gradient-to-r from-green-600 to-green-700 mb-4">
               <View className="items-center">
                 <Text className="text-sm text-white opacity-90 mb-1">Total Earned</Text>
-                <Text className="text-4xl text-white mb-2">৳{pool.totalEarnings}</Text>
-                <Text className="text-sm text-white opacity-90">{pool.customers.length} passengers • {pool.distance}km</Text>
+                <Text className="text-4xl text-white mb-2">৳{pool.total_earnings}</Text>
+                <Text className="text-sm text-white opacity-90">{passengers.length} passengers{pool.nearest_pickup_km ? ` • ${pool.nearest_pickup_km}km` : ''}</Text>
               </View>
             </Card>
 
             {/* Rate Each Passenger */}
             <View className="space-y-4 mt-4">
               <Text className="font-semibold">Rate Passengers</Text>
-              {pool.customers.map(customer => (
-                <Card key={customer.id} className="p-4">
+              {passengers.map(passenger => (
+                <Card key={passenger.user_id} className="p-4">
                   <View className="flex-row items-center gap-3 mb-3">
                     <View className="w-10 h-10 rounded-full bg-blue-600 items-center justify-center">
                       <Text className="text-white">
-                        {customer.name.charAt(0)}
+                        {passenger.name.charAt(0)}
                       </Text>
                     </View>
                     <View className="flex-1">
-                      <Text className="font-semibold">{customer.name}</Text>
-                      <Text className="text-xs text-gray-600">{customer.pickup} → {customer.destination}</Text>
+                      <Text className="font-semibold">{passenger.name}</Text>
+                      <Text className="text-xs text-gray-600">{passenger.pickup?.address || 'N/A'} → {passenger.dropoff?.address || 'N/A'}</Text>
                     </View>
                   </View>
 
@@ -87,24 +88,24 @@ export function RatingFeedbackDialog({ isOpen, onClose, pool }: RatingFeedbackDi
                     {[1, 2, 3, 4, 5].map(star => (
                       <TouchableOpacity
                         key={star}
-                        onPress={() => handleRating(customer.id, star)}
+                        onPress={() => handleRating(passenger.user_id, star)}
                         activeOpacity={0.7}
                       >
                         <Star
                           size={32}
-                          color={(ratings[customer.id] || 0) >= star ? '#EAB308' : '#D1D5DB'}
-                          fill={(ratings[customer.id] || 0) >= star ? '#EAB308' : 'transparent'}
+                          color={(ratings[passenger.user_id] || 0) >= star ? '#EAB308' : '#D1D5DB'}
+                          fill={(ratings[passenger.user_id] || 0) >= star ? '#EAB308' : 'transparent'}
                         />
                       </TouchableOpacity>
                     ))}
                   </View>
 
                   {/* Optional Feedback */}
-                  {ratings[customer.id] > 0 && (
+                  {ratings[passenger.user_id] > 0 && (
                     <Textarea
                       placeholder="Add feedback (optional)"
-                      value={feedback[customer.id] || ''}
-                      onChangeText={(text) => setFeedback(prev => ({ ...prev, [customer.id]: text }))}
+                      value={feedback[passenger.user_id] || ''}
+                      onChangeText={(text) => setFeedback(prev => ({ ...prev, [passenger.user_id]: text }))}
                       className="mt-2"
                       numberOfLines={2}
                     />

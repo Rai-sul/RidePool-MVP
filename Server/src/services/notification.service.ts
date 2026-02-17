@@ -36,7 +36,7 @@ export class NotificationService {
     }
   }
 
-  async sendPushNotification(userId: string, payload: NotificationPayload): Promise<void> {
+  async sendPushNotification(userId: string, payload: NotificationPayload, appType?: 'rider' | 'driver'): Promise<void> {
     try {
       await supabaseAdmin.from('notifications').insert({
         user_id: userId,
@@ -48,22 +48,24 @@ export class NotificationService {
       });
 
       if (this.fcmServerKey) {
-        await this.sendToFCM(userId, payload);
+        await this.sendToFCM(userId, payload, appType);
+      } else {
+        logger.warn(`[Notification] FCM_SERVER_KEY not set — push notification for ${userId} stored in DB only`);
       }
 
-      logger.info(`[Notification] Sent to ${userId}: ${payload.type}`);
+      logger.info(`[Notification] Sent to ${userId}: ${payload.type} (app: ${appType || 'any'})`);
     } catch (error) {
       logger.error(`[Notification] Failed to send to ${userId}:`, error);
     }
   }
 
-  async sendBulkNotification(userIds: string[], payload: NotificationPayload): Promise<{ sent: number; failed: number }> {
+  async sendBulkNotification(userIds: string[], payload: NotificationPayload, appType?: 'rider' | 'driver'): Promise<{ sent: number; failed: number }> {
     let sent = 0;
     let failed = 0;
 
     for (const userId of userIds) {
       try {
-        await this.sendPushNotification(userId, payload);
+        await this.sendPushNotification(userId, payload, appType);
         sent++;
       } catch {
         failed++;
@@ -73,12 +75,18 @@ export class NotificationService {
     return { sent, failed };
   }
 
-  private async sendToFCM(userId: string, payload: NotificationPayload): Promise<boolean> {
-    const { data: tokens } = await supabaseAdmin
+  private async sendToFCM(userId: string, payload: NotificationPayload, appType?: 'rider' | 'driver'): Promise<boolean> {
+    let query = supabaseAdmin
       .from('device_tokens')
       .select('token, platform')
       .eq('user_id', userId)
       .eq('is_active', true);
+
+    if (appType) {
+      query = query.eq('app_type', appType);
+    }
+
+    const { data: tokens } = await query;
 
     if (!tokens || tokens.length === 0) {
       logger.debug(`[Notification] No active device tokens for user ${userId}`);
@@ -135,7 +143,7 @@ export class NotificationService {
     return serialized;
   }
 
-  async registerDeviceToken(userId: string, token: string, platform: 'ios' | 'android' | 'web'): Promise<boolean> {
+  async registerDeviceToken(userId: string, token: string, platform: 'ios' | 'android' | 'web', appType: 'rider' | 'driver' = 'rider'): Promise<boolean> {
     try {
       const { error } = await supabaseAdmin
         .from('device_tokens')
@@ -143,6 +151,7 @@ export class NotificationService {
           user_id: userId,
           token,
           platform,
+          app_type: appType,
           is_active: true,
           updated_at: new Date().toISOString(),
         }, {
@@ -442,8 +451,8 @@ export class NotificationService {
     score_breakdown?: any;
   }): Promise<{ notified: number }> {
     try {
-      const pickupLat = pool.score_breakdown?.creator_pickup?.lat || pool.destination_lat;
-      const pickupLng = pool.score_breakdown?.creator_pickup?.lng || pool.destination_lng;
+      const pickupLat = Number(pool.score_breakdown?.creator_pickup?.lat || pool.destination_lat);
+      const pickupLng = Number(pool.score_breakdown?.creator_pickup?.lng || pool.destination_lng);
 
       const pickupH3 = h3Utils.latLngToH3(
         { latitude: pickupLat, longitude: pickupLng },
@@ -516,7 +525,7 @@ export class NotificationService {
         },
       };
 
-      const result = await this.sendBulkNotification(availableDriverIds, payload);
+      const result = await this.sendBulkNotification(availableDriverIds, payload, 'driver');
 
       logger.info(`[Notification] Notified ${result.sent}/${availableDriverIds.length} drivers for pool ${poolId} (${pool.vehicle_type})`);
       return { notified: result.sent };

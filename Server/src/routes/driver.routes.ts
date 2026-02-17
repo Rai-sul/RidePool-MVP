@@ -5,8 +5,6 @@ import {
   validate,
   GoOnlineSchema,
   UpdateLocationSchema,
-  SetPriorityLocationSchema,
-  SearchZoneSchema,
   PoolIdParamSchema,
   PassengerIdParamSchema,
   RegisterVehicleSchema,
@@ -32,14 +30,6 @@ router.post('/dropoff/:passengerId', authenticate, validate(PassengerIdParamSche
 router.get('/earnings/today', authenticate, driverController.getEarningsToday.bind(driverController));
 router.get('/earnings/history', authenticate, driverController.getEarningsHistory.bind(driverController));
 router.get('/stats', authenticate, driverController.getStats.bind(driverController));
-
-router.post('/priority-location', authenticate, validate(SetPriorityLocationSchema), driverController.setPriorityLocation.bind(driverController));
-router.get('/priority-location', authenticate, driverController.getPriorityLocation.bind(driverController));
-router.delete('/priority-location', authenticate, driverController.clearPriorityLocation.bind(driverController));
-
-router.post('/search-zone', authenticate, validate(SearchZoneSchema), driverController.setSearchZone.bind(driverController));
-router.get('/search-zone', authenticate, driverController.getSearchZone.bind(driverController));
-router.delete('/search-zone', authenticate, driverController.clearSearchZone.bind(driverController));
 
 router.post('/vehicle', authenticate, validate(RegisterVehicleSchema), driverController.registerVehicle.bind(driverController));
 

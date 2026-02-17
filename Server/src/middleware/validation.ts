@@ -73,17 +73,6 @@ export const UpdateLocationSchema = z.object({
   speed_kmh: z.number().min(0).max(200).optional(),
 });
 
-export const SetPriorityLocationSchema = z.object({
-  priority_lat: z.number().min(-90).max(90),
-  priority_lng: z.number().min(-180).max(180),
-  priority_address: z.string().max(500).optional(),
-});
-
-export const SearchZoneSchema = z.object({
-  destination_lat: z.number().min(-90).max(90),
-  destination_lng: z.number().min(-180).max(180),
-  destination_address: z.string().max(500).optional(),
-});
 
 export const RegisterVehicleSchema = z.object({
   vehicle_type: z.enum(['CAR', 'CNG']),
