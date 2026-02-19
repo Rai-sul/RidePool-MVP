@@ -1,6 +1,6 @@
 import React, { Component, ErrorInfo } from 'react';
 import { View, Text, TouchableOpacity, Animated } from 'react-native';
-import { useRouter, usePathname } from 'expo-router';
+import { router, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGlobalContext } from '../contexts/GlobalContext';
 import { Navigation, Users, ChevronRight } from './Icons';
@@ -44,7 +44,6 @@ export default function ActiveTripButton() {
 }
 
 function ActiveTripButtonInner() {
-  const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { activeTrip, hasActiveTrip, userProfile, endTrip } = useGlobalContext();

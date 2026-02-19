@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, ActivityIndicator, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { router } from 'expo-router';
 import { useNotificationContext } from '../contexts/NotificationContext';
 import { useGlobalContext, toDisplayPool } from '../contexts/GlobalContext';
 import { Users, X, Check, MapPin, Navigation } from './Icons';
@@ -11,7 +11,6 @@ import { poolService } from '../services/pool.service';
 export default function PriyoSathiRideInviteHandler() {
   const { priyoSathiInvite, clearPriyoSathiInvite } = useNotificationContext();
   const { userProfile, startTrip, pickupLocation, selectedDestination, selectedRideType, activeTrip, cancelTrip } = useGlobalContext();
-  const router = useRouter();
   
   const [joining, setJoining] = useState(false);
   const [loading, setLoading] = useState(false);

@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MapPin, Receipt, Wallet, User, Users } from './Icons';
 import LinearGradient from './LinearGradient';
 import { useGlobalContext } from '../contexts/GlobalContext';
-import { useRouter, usePathname } from 'expo-router';
+import { router, usePathname } from 'expo-router';
 
 type BottomNavProps = {
   isFemale?: boolean;
@@ -12,7 +12,6 @@ type BottomNavProps = {
 
 export default function BottomNav({ isFemale = false }: BottomNavProps) {
   const { activeTab, setActiveTab } = useGlobalContext();
-  const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
 

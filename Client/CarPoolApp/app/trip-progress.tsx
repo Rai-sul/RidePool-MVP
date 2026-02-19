@@ -1,9 +1,8 @@
-import { useRouter } from 'expo-router';
+import { router } from 'expo-router';
 import TripProgress from '../components/TripProgress.native';
 import { useGlobalContext } from '../contexts/GlobalContext';
 
 export default function TripProgressScreen() {
-  const router = useRouter();
   const {
     userProfile,
     pickupLocation,
