@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { InteractionManager } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { Pool, PoolMember } from '../types';
 import { poolService, SearchTiming } from '../services/pool.service';
@@ -220,19 +221,23 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
         (payload) => {
           console.log('[usePoolRealtime] Pool update received:', payload.eventType);
           
-          if (payload.eventType === 'UPDATE' && payload.new) {
-            setState(prev => ({
-              ...prev,
-              pool: { ...prev.pool, ...payload.new } as Pool,
-              lastUpdated: new Date(),
-            }));
-          } else if (payload.eventType === 'DELETE') {
-            setState(prev => ({
-              ...prev,
-              pool: null,
-              error: 'Pool was cancelled',
-            }));
-          }
+          // Defer state updates from WebSocket callbacks to avoid racing with
+          // React Navigation's context propagation during re-renders
+          InteractionManager.runAfterInteractions(() => {
+            if (payload.eventType === 'UPDATE' && payload.new) {
+              setState(prev => ({
+                ...prev,
+                pool: { ...prev.pool, ...payload.new } as Pool,
+                lastUpdated: new Date(),
+              }));
+            } else if (payload.eventType === 'DELETE') {
+              setState(prev => ({
+                ...prev,
+                pool: null,
+                error: 'Pool was cancelled',
+              }));
+            }
+          });
         }
       )
       .on(
@@ -246,30 +251,29 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
         (payload) => {
           console.log('[usePoolRealtime] Pool member update received:', payload.eventType);
           
-          if (payload.eventType === 'INSERT' && payload.new) {
-            // Refetch full pool data to get complete member info with user profiles and ride details
-            console.log('[usePoolRealtime] New member joined, refetching pool data...');
-            fetchPoolData();
-          } else if (payload.eventType === 'DELETE' && payload.old) {
-            // Refetch pool data when a member leaves to get updated fare and member list
-            console.log('[usePoolRealtime] Member left, refetching pool data...');
-            fetchPoolData();
-          } else if (payload.eventType === 'UPDATE' && payload.new) {
-            // Check if left_at was set (member left the pool)
-            const updatedMember = payload.new as any;
-            if (updatedMember.left_at !== null) {
-              console.log('[usePoolRealtime] Member left_at updated, refetching pool data...');
+          InteractionManager.runAfterInteractions(() => {
+            if (payload.eventType === 'INSERT' && payload.new) {
+              console.log('[usePoolRealtime] New member joined, refetching pool data...');
               fetchPoolData();
-            } else {
-              setState(prev => ({
-                ...prev,
-                members: prev.members.map(m => 
-                  m.id === (payload.new as PoolMember).id ? payload.new as PoolMember : m
-                ),
-                lastUpdated: new Date(),
-              }));
+            } else if (payload.eventType === 'DELETE' && payload.old) {
+              console.log('[usePoolRealtime] Member left, refetching pool data...');
+              fetchPoolData();
+            } else if (payload.eventType === 'UPDATE' && payload.new) {
+              const updatedMember = payload.new as any;
+              if (updatedMember.left_at !== null) {
+                console.log('[usePoolRealtime] Member left_at updated, refetching pool data...');
+                fetchPoolData();
+              } else {
+                setState(prev => ({
+                  ...prev,
+                  members: prev.members.map(m => 
+                    m.id === (payload.new as PoolMember).id ? payload.new as PoolMember : m
+                  ),
+                  lastUpdated: new Date(),
+                }));
+              }
             }
-          }
+          });
         }
       )
       .on(
@@ -280,21 +284,21 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           table: 'messages',
         },
         (payload) => {
-          // Listen for new messages from pool conversations
           const newMessage = payload.new as any;
           
-          // Only track messages from other users (not our own)
           if (newMessage.sender_id && newMessage.sender_id !== currentUserId) {
             console.log('[usePoolRealtime] New message from:', newMessage.sender_id);
             
-            setState(prev => ({
-              ...prev,
-              unreadMessageCounts: {
-                ...prev.unreadMessageCounts,
-                [newMessage.sender_id]: (prev.unreadMessageCounts[newMessage.sender_id] || 0) + 1,
-              },
-              lastUpdated: new Date(),
-            }));
+            InteractionManager.runAfterInteractions(() => {
+              setState(prev => ({
+                ...prev,
+                unreadMessageCounts: {
+                  ...prev.unreadMessageCounts,
+                  [newMessage.sender_id]: (prev.unreadMessageCounts[newMessage.sender_id] || 0) + 1,
+                },
+                lastUpdated: new Date(),
+              }));
+            });
           }
         }
       )

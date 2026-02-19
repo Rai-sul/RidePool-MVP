@@ -1,6 +1,43 @@
+import React, { Component, ErrorInfo } from 'react';
+import { View, Text, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import TripProgress from '../components/TripProgress.native';
 import { useGlobalContext } from '../contexts/GlobalContext';
+
+// Expo Router's internal Screen component calls useNavigation() which can throw
+// "Couldn't find a navigation context" when Supabase realtime events trigger re-renders
+// that race with React Navigation's context propagation. This boundary catches that
+// transient error and auto-recovers on the next render cycle.
+class TripProgressErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(_: Error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, _errorInfo: ErrorInfo) {
+    console.warn('[TripProgress] Navigation context error, recovering:', error.message);
+    setTimeout(() => this.setState({ hasError: false }), 0);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#2563eb" />
+          <Text style={{ marginTop: 12, color: '#6b7280', fontSize: 14 }}>Loading trip...</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function TripProgressScreen() {
   const {
@@ -68,17 +105,19 @@ export default function TripProgressScreen() {
   };
 
   return (
-    <TripProgress
-      userProfile={userProfile}
-      pickupLocation={activeTrip?.pickupLocation || pickupLocation}
-      destination={activeTrip?.destination || selectedDestination}
-      selectedPool={activeTrip?.pool || selectedPool}
-      onComplete={handleComplete}
-      onChatDriver={handleChatDriver}
-      onChatCoRider={handleChatCoRider}
-      onCreateNewPool={handleCreateNewPool}
-      onCancelPool={handleCancelPool}
-      onPoolCancelled={handlePoolCancelled}
-    />
+    <TripProgressErrorBoundary>
+      <TripProgress
+        userProfile={userProfile}
+        pickupLocation={activeTrip?.pickupLocation || pickupLocation}
+        destination={activeTrip?.destination || selectedDestination}
+        selectedPool={activeTrip?.pool || selectedPool}
+        onComplete={handleComplete}
+        onChatDriver={handleChatDriver}
+        onChatCoRider={handleChatCoRider}
+        onCreateNewPool={handleCreateNewPool}
+        onCancelPool={handleCancelPool}
+        onPoolCancelled={handlePoolCancelled}
+      />
+    </TripProgressErrorBoundary>
   );
 }
