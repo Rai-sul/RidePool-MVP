@@ -247,6 +247,11 @@ CREATE TABLE public.pools (
   driver_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
   vehicle_id UUID REFERENCES public.vehicles(id) ON DELETE SET NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'WAITING_FOR_RIDERS' CHECK (status IN ('WAITING_FOR_RIDERS', 'WAITING_FOR_DRIVER', 'DRIVER_ASSIGNED', 'READY_TO_START', 'STARTED', 'COMPLETED', 'CANCELLED')),
+  pickup_lat DECIMAL(10,8) NOT NULL,
+  pickup_lng DECIMAL(11,8) NOT NULL,
+  pickup_location GEOGRAPHY(POINT, 4326),
+  pickup_address TEXT,
+  pickup_h3_index VARCHAR(20),
   destination_lat DECIMAL(10,8) NOT NULL,
   destination_lng DECIMAL(11,8) NOT NULL,
   destination_location GEOGRAPHY(POINT, 4326),
@@ -257,7 +262,10 @@ CREATE TABLE public.pools (
   current_passengers INTEGER NOT NULL DEFAULT 0,
   max_passengers INTEGER NOT NULL DEFAULT 4,
   viability_score DECIMAL(5,2),
-  score_breakdown JSONB,
+  base_distance_km DECIMAL(10,2),
+  base_duration_minutes DECIMAL(10,2),
+  extended_search_h3 TEXT[],
+  extended_pickup_h3 TEXT[],
   fare_per_person DECIMAL(10,2),
   total_surcharge_collected DECIMAL(10,2) DEFAULT 0,
   deleted_at TIMESTAMPTZ,
@@ -267,6 +275,8 @@ CREATE TABLE public.pools (
   completed_at TIMESTAMPTZ
 );
 
+CREATE INDEX idx_pools_pickup ON public.pools USING GIST(pickup_location);
+CREATE INDEX idx_pools_pickup_h3 ON public.pools(pickup_h3_index, status) WHERE deleted_at IS NULL;
 CREATE INDEX idx_pools_dest ON public.pools USING GIST(destination_location);
 CREATE INDEX idx_pools_status ON public.pools(status) WHERE deleted_at IS NULL;
 CREATE INDEX idx_pools_search ON public.pools(status, vehicle_type, gender_restriction) WHERE deleted_at IS NULL;

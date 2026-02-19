@@ -442,17 +442,19 @@ export class NotificationService {
   }
 
   async notifyNearbyDrivers(poolId: string, pool: {
+    pickup_lat: number;
+    pickup_lng: number;
+    pickup_address?: string;
     destination_lat: number;
     destination_lng: number;
     destination_address?: string;
     vehicle_type: string;
     fare_per_person: number;
     current_passengers: number;
-    score_breakdown?: any;
   }): Promise<{ notified: number }> {
     try {
-      const pickupLat = Number(pool.score_breakdown?.creator_pickup?.lat || pool.destination_lat);
-      const pickupLng = Number(pool.score_breakdown?.creator_pickup?.lng || pool.destination_lng);
+      const pickupLat = Number(pool.pickup_lat);
+      const pickupLng = Number(pool.pickup_lng);
 
       const pickupH3 = h3Utils.latLngToH3(
         { latitude: pickupLat, longitude: pickupLng },
@@ -503,7 +505,7 @@ export class NotificationService {
         return { notified: 0 };
       }
 
-      const pickupAddress = pool.score_breakdown?.creator_pickup?.address || 'Nearby';
+      const pickupAddress = pool.pickup_address || 'Nearby';
       const estimatedEarnings = pool.fare_per_person * pool.current_passengers * 0.8;
 
       const payload: NotificationPayload = {

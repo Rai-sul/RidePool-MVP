@@ -96,8 +96,8 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
       : true;
 
   const displayEtaMinutes = hasStableMemberCount
-    ? (selectedPool?.eta ?? (poolDetails?.score_breakdown?.base_duration_minutes ?? undefined))
-    : (poolDetails?.score_breakdown?.base_duration_minutes ?? selectedPool?.eta);
+    ? (selectedPool?.eta ?? (poolDetails?.base_duration_minutes ?? undefined))
+    : (poolDetails?.base_duration_minutes ?? selectedPool?.eta);
 
   const displayFare = currentMemberRide?.fare
     ?? (hasStableMemberCount

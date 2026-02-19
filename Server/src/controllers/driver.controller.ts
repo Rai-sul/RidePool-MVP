@@ -500,7 +500,7 @@ export class DriverController {
 
       if (rawPools && rawPools.length > 0) {
         for (const pool of rawPools) {
-          const creatorH3 = pool.score_breakdown?.creator_pickup?.h3_index;
+          const creatorH3 = pool.pickup_h3_index;
           const members = pool.pool_members || [];
           logger.info(`[AvailablePools] Pool ${pool.id}: status=${pool.status}, passengers=${pool.current_passengers}, vehicle_type=${pool.vehicle_type}, creator_h3=${creatorH3}, members=${members.length}`);
           for (const m of members) {
@@ -514,10 +514,10 @@ export class DriverController {
       let filteredPools = (rawPools || []).filter((pool) => {
         const activeMembers = (pool.pool_members || []).filter((m: any) => !m.left_at);
 
-        // Check pool creator's pickup (stored in score_breakdown)
-        const poolPickupH3 = pool.score_breakdown?.creator_pickup?.h3_index;
+        // Check pool creator's pickup
+        const poolPickupH3 = pool.pickup_h3_index;
         if (poolPickupH3 && pickupSearchSet.has(poolPickupH3)) {
-          logger.info(`[AvailablePools] Pool ${pool.id} matched via creator_pickup H3`);
+          logger.info(`[AvailablePools] Pool ${pool.id} matched via pickup H3`);
           return true;
         }
 

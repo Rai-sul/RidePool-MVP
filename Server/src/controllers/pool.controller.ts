@@ -185,20 +185,6 @@ export class PoolController {
         2 // Initial estimate for 2 passengers
       );
 
-      // Store pickup info in score_breakdown for reference
-      const scoreBreakdown = {
-        creator_pickup: {
-          lat: poolData.pickup_lat,
-          lng: poolData.pickup_lng,
-          address: poolData.pickup_address,
-          name: poolData.pickup_name,
-          h3_index: pickupH3,
-        },
-        base_distance_km: rideEstimate.distanceKm,
-        base_duration_minutes: rideEstimate.durationMinutes,
-        calculated_at: new Date().toISOString(),
-      };
-
       // First, create a ride for the pool creator
       // Use location name instead of address for better user-friendliness in co-rider views
       const { data: creatorRide, error: rideError } = await supabaseAdmin
@@ -230,6 +216,10 @@ export class PoolController {
         .from('pools')
         .insert({
           creator_user_id: userId,
+          pickup_lat: poolData.pickup_lat,
+          pickup_lng: poolData.pickup_lng,
+          pickup_address: poolData.pickup_name || poolData.pickup_address,
+          pickup_h3_index: pickupH3,
           destination_lat: poolData.destination_lat,
           destination_lng: poolData.destination_lng,
           destination_address: poolData.destination_name || poolData.destination_address,
@@ -240,7 +230,8 @@ export class PoolController {
           current_passengers: 1,
           status: 'WAITING_FOR_RIDERS' as PoolStatus,
           fare_per_person: rideEstimate.fareEstimates.with2Passengers,
-          score_breakdown: scoreBreakdown,
+          base_distance_km: rideEstimate.distanceKm,
+          base_duration_minutes: rideEstimate.durationMinutes,
         })
         .select()
         .single();

@@ -363,8 +363,8 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
             <View className="flex-row justify-between">
               <Text className="text-gray-600">Estimated Time</Text>
               <Text className="font-medium">
-                {poolDetails?.score_breakdown?.base_duration_minutes 
-                  ? `${Math.round(poolDetails.score_breakdown.base_duration_minutes)} mins`
+                {poolDetails?.base_duration_minutes 
+                  ? `${Math.round(poolDetails.base_duration_minutes)} mins`
                   : selectedPool?.eta 
                     ? `${selectedPool.eta} mins` 
                     : 'Calculating...'}

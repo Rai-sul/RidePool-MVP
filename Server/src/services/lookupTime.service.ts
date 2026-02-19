@@ -81,7 +81,7 @@ export class LookupTimeService {
     try {
       const { data: pool, error: poolError } = await supabaseAdmin
         .from('pools')
-        .select('id, status, current_passengers, max_passengers, creator_user_id, destination_h3_index, score_breakdown')
+        .select('id, status, current_passengers, max_passengers, creator_user_id, destination_h3_index, pickup_h3_index')
         .eq('id', poolId)
         .single();
 
@@ -121,7 +121,7 @@ export class LookupTimeService {
       }
 
       // Expand pickup search area (Resolution 9: +2 rings ≈ +0.7 km)
-      const creatorPickupH3 = pool.score_breakdown?.creator_pickup?.h3_index;
+      const creatorPickupH3 = pool.pickup_h3_index;
       if (creatorPickupH3) {
         const expandedPickupH3 = h3Utils.getExtendedNeighbors(creatorPickupH3, 2);
         extendedSearchData.extended_pickup_h3 = expandedPickupH3;
@@ -130,14 +130,10 @@ export class LookupTimeService {
 
       // Update pool with expanded search areas
       if (Object.keys(extendedSearchData).length > 0) {
-        const currentScoreBreakdown = pool.score_breakdown || {};
         await supabaseAdmin
           .from('pools')
           .update({
-            score_breakdown: {
-              ...currentScoreBreakdown,
-              ...extendedSearchData,
-            },
+            ...extendedSearchData,
             updated_at: new Date().toISOString(),
           })
           .eq('id', poolId);
@@ -388,7 +384,7 @@ export class LookupTimeService {
 
     const { data: fullPool } = await supabaseAdmin
       .from('pools')
-      .select('destination_lat, destination_lng, destination_address, vehicle_type, fare_per_person, current_passengers, score_breakdown')
+      .select('pickup_lat, pickup_lng, pickup_address, destination_lat, destination_lng, destination_address, vehicle_type, fare_per_person, current_passengers')
       .eq('id', poolId)
       .single();
 

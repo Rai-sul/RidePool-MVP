@@ -180,7 +180,7 @@ export class PoolMatchingService {
           "WAITING_FOR_DRIVER",
         ] as PoolStatus[])
         // Initially query mostly by destination H3 - we'll handle expanded logic below
-        .or(`destination_h3_index.in.(${destinationSearchHexagons.join(',')}),score_breakdown->extended_search_h3.cs.[${JSON.stringify(destinationH3)}]`)
+        .or(`destination_h3_index.in.(${destinationSearchHexagons.join(',')}),extended_search_h3.cs.{${destinationH3}}`)
         .neq("creator_user_id", userId)
         .or(`driver_id.is.null,driver_id.neq.${userId}`)
         .gt("current_passengers", 0)) as any;
@@ -210,11 +210,10 @@ export class PoolMatchingService {
       });
 
       // Filter pools by pickup H3 - pools should have similar pickup location
-      // The pickup H3 is stored in score_breakdown.creator_pickup.h3_index
       // Also check if pool has extended_pickup_h3 (from extended search phase)
       let pickupFilteredPools = pools.filter((pool: any) => {
-        const poolPickupH3 = pool.score_breakdown?.creator_pickup?.h3_index;
-        const extendedPickupH3 = pool.score_breakdown?.extended_pickup_h3 || [];
+        const poolPickupH3 = pool.pickup_h3_index;
+        const extendedPickupH3 = pool.extended_pickup_h3 || [];
         
         if (!poolPickupH3) {
           return false;
@@ -230,8 +229,8 @@ export class PoolMatchingService {
         const expandedPickupHexagons = h3Utils.getH3Ring(pickupH3, config.h3.searchRadiusPickup + 2);
         
         pickupFilteredPools = pools.filter((pool: any) => {
-          const poolPickupH3 = pool.score_breakdown?.creator_pickup?.h3_index;
-          const extendedPickupH3 = pool.score_breakdown?.extended_pickup_h3 || [];
+          const poolPickupH3 = pool.pickup_h3_index;
+          const extendedPickupH3 = pool.extended_pickup_h3 || [];
           
           if (!poolPickupH3) {
             return false;
@@ -297,7 +296,7 @@ export class PoolMatchingService {
         // Check if destination hexagon matches within acceptable range
         // Also check if pool has extended search enabled and covers our destination
         const poolDestinationH3 = pool.destination_h3_index;
-        const extendedSearchH3 = pool.score_breakdown?.extended_search_h3 || [];
+        const extendedSearchH3 = pool.extended_search_h3 || [];
         
         const isDestinationCompatible =
           destinationRing.includes(poolDestinationH3) || 
@@ -496,7 +495,7 @@ export class PoolMatchingService {
         .eq("vehicle_type", ride.vehicle_type)
         .in("status", ["WAITING_FOR_RIDERS", "WAITING_FOR_DRIVER"] as PoolStatus[])
         // Allow matching if pool's destination is in our search ring OR if our destination is in pool's extended search
-        .or(`destination_h3_index.in.(${destinationSearchHexagons.join(',')}),score_breakdown->extended_search_h3.cs.[${JSON.stringify(destinationH3)}]`)
+        .or(`destination_h3_index.in.(${destinationSearchHexagons.join(',')}),extended_search_h3.cs.{${destinationH3}}`)
         .neq("creator_user_id", userId)
         .or(`driver_id.is.null,driver_id.neq.${userId}`)
         .gt("current_passengers", 0)) as any;
@@ -539,11 +538,10 @@ export class PoolMatchingService {
       });
 
       // Filter pools by pickup H3 - pools should have similar pickup location
-      // The pickup H3 is stored in score_breakdown.creator_pickup.h3_index
       // Also check if pool has extended_pickup_h3 (from extended search phase)
       let pickupFilteredPools = pools.filter((pool: any) => {
-        const poolPickupH3 = pool.score_breakdown?.creator_pickup?.h3_index;
-        const extendedPickupH3 = pool.score_breakdown?.extended_pickup_h3 || [];
+        const poolPickupH3 = pool.pickup_h3_index;
+        const extendedPickupH3 = pool.extended_pickup_h3 || [];
         
         if (!poolPickupH3) {
           return false;
@@ -559,8 +557,8 @@ export class PoolMatchingService {
         const expandedPickupHexagons = h3Utils.getH3Ring(pickupH3, config.h3.searchRadiusPickup + 2); // Expand by 2 more rings
         
         pickupFilteredPools = pools.filter((pool: any) => {
-          const poolPickupH3 = pool.score_breakdown?.creator_pickup?.h3_index;
-          const extendedPickupH3 = pool.score_breakdown?.extended_pickup_h3 || [];
+          const poolPickupH3 = pool.pickup_h3_index;
+          const extendedPickupH3 = pool.extended_pickup_h3 || [];
           
           if (!poolPickupH3) {
             return false;
@@ -652,7 +650,7 @@ export class PoolMatchingService {
         const rideDestinationH3 = h3Utils.latLngToH3(destination, 7);
         const destinationRing = h3Utils.getH3Ring(rideDestinationH3, 2);
         const poolDestinationH3 = pool.destination_h3_index;
-        const extendedSearchH3 = pool.score_breakdown?.extended_search_h3 || [];
+        const extendedSearchH3 = pool.extended_search_h3 || [];
 
         if (!destinationRing.includes(poolDestinationH3) && !extendedSearchH3.includes(rideDestinationH3)) {
           incompatibleReasons['destination_incompatible']++;
@@ -688,8 +686,8 @@ export class PoolMatchingService {
           continue;
         }
 
-        // Get pool pickup location from score_breakdown (creator's pickup)
-        const poolPickupInfo = pool.score_breakdown?.creator_pickup;
+        // Get pool pickup location from pool columns
+        const poolPickupInfo = { lat: pool.pickup_lat, lng: pool.pickup_lng, address: pool.pickup_address, name: pool.pickup_address };
         let poolPickupLocation: { lat: number; lng: number; address?: string; name?: string } | undefined;
         const poolDropoffLocation = {
           lat: pool.destination_lat,

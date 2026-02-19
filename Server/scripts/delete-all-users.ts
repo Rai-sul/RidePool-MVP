@@ -83,3 +83,5 @@ async function deleteAllUsers() {
 }
 
 deleteAllUsers();
+
+// Have to run npx ts-node scripts/delete-all-users.ts to raisul@Raisul-PC:~/RaisulFiles/CarPool-Dev/Carpool-dev/Server$ 

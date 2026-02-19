@@ -48,6 +48,10 @@ export interface Pool {
   driver_id: string | null;
   vehicle_id: string | null;
   status: PoolStatus;
+  pickup_lat: number;
+  pickup_lng: number;
+  pickup_address: string | null;
+  pickup_h3_index: string;
   destination_lat: number;
   destination_lng: number;
   destination_address: string | null;
@@ -57,6 +61,10 @@ export interface Pool {
   current_passengers: number;
   max_passengers: number;
   viability_score: number | null;
+  base_distance_km: number | null;
+  base_duration_minutes: number | null;
+  extended_search_h3: string[] | null;
+  extended_pickup_h3: string[] | null;
   fare_per_person: number | null;
   created_at: string;
   updated_at: string;
