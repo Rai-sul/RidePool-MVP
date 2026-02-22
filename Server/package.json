@@ -20,7 +20,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@supabase/supabase-js": "^2.90.1",
+    "@supabase/supabase-js": "^2.97.0",
     "bullmq": "^5.66.5",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
