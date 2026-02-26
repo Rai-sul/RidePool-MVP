@@ -114,6 +114,6 @@ export const driverService = {
   },
 
   async getNavigationLink(poolId: string): Promise<ApiResponse> {
-    return apiClient.get<ApiResponse>(`/pools/${poolId}/navigation-link`);
+    return apiClient.get<ApiResponse>(API_ENDPOINTS.POOL.NAVIGATION_LINK(poolId));
   },
 };

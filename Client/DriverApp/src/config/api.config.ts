@@ -47,5 +47,7 @@ export const API_ENDPOINTS = {
   POOL: {
     GET_BY_ID: (poolId: string) => `/pools/${poolId}`,
     ROUTE: (poolId: string) => `/pools/${poolId}/route`,
+    NAVIGATION_LINK: (poolId: string) => `/pools/${poolId}/navigation-link`,
+    COMBINED_ROUTE: (poolId: string) => `/pools/${poolId}/combined-route`,
   },
 };

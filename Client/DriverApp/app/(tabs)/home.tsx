@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Linking, Alert } from 'react-native';
+import { Alert } from 'react-native';
+import { useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { HomeScreen } from '../../src/components/home/HomeScreen.native';
 import { driverService } from '../../src/services/driver.service';
@@ -8,6 +9,7 @@ import { useDriverStore } from '../../src/store/useDriverStore';
 import type { Pool, Location } from '../../src/types';
 
 export default function Home() {
+  const router = useRouter();
   const {
     availablePools,
     setAvailablePools,
@@ -15,6 +17,7 @@ export default function Home() {
     setCurrentLocation,
     driverStatus,
     setDriverStatus,
+    activePool,
     setActivePool,
     incomingPoolRequest,
     setIncomingPoolRequest,
@@ -25,6 +28,13 @@ export default function Home() {
   const [selectedPoolForDetails, setSelectedPoolForDetails] = useState<Pool | null>(null);
   const isOnline = driverStatus === 'ONLINE';
   const goingOnlineRef = useRef(false);
+
+  // If there's already an active pool, redirect to trip progress
+  useEffect(() => {
+    if (activePool?.id) {
+      router.replace('/trip-progress' as any);
+    }
+  }, [activePool?.id, router]);
 
   const fetchAvailablePools = useCallback(async () => {
     if (!isOnline) return;
@@ -176,17 +186,7 @@ export default function Home() {
         setIncomingPoolRequest(null);
         setActivePool({ id: poolId } as Pool);
         setAvailablePools([]);
-
-        // Open Google Maps navigation to nearest pickup
-        const navUrl = response.data.navigation_url;
-        if (navUrl) {
-          const canOpen = await Linking.canOpenURL(navUrl);
-          if (canOpen) {
-            await Linking.openURL(navUrl);
-          } else {
-            Alert.alert('Navigation', 'Could not open Google Maps. Please navigate manually.');
-          }
-        }
+        // Navigation to trip-progress is handled by the activePool useEffect
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to accept pool');
