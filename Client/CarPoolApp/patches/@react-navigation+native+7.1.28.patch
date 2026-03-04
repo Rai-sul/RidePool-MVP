@@ -1,0 +1,42 @@
+diff --git a/node_modules/@react-navigation/native/lib/module/LinkingContext.js b/node_modules/@react-navigation/native/lib/module/LinkingContext.js
+index 7302784..e44e6af 100644
+--- a/node_modules/@react-navigation/native/lib/module/LinkingContext.js
++++ b/node_modules/@react-navigation/native/lib/module/LinkingContext.js
+@@ -1,11 +1,9 @@
+ "use strict";
+ 
+ import * as React from 'react';
+-const MISSING_CONTEXT_ERROR = "Couldn't find a LinkingContext context.";
++// Patched: no-op default instead of throwing during transient context loss.
+ export const LinkingContext = /*#__PURE__*/React.createContext({
+-  get options() {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  }
++  options: undefined,
+ });
+ LinkingContext.displayName = 'LinkingContext';
+ //# sourceMappingURL=LinkingContext.js.map
+diff --git a/node_modules/@react-navigation/native/lib/module/UnhandledLinkingContext.js b/node_modules/@react-navigation/native/lib/module/UnhandledLinkingContext.js
+index e1fa19a..ccd93ea 100644
+--- a/node_modules/@react-navigation/native/lib/module/UnhandledLinkingContext.js
++++ b/node_modules/@react-navigation/native/lib/module/UnhandledLinkingContext.js
+@@ -2,13 +2,13 @@
+ 
+ import * as React from 'react';
+ const MISSING_CONTEXT_ERROR = "Couldn't find an UnhandledLinkingContext context.";
++
++// Patched: return safe no-op defaults instead of throwing, so transient
++// context loss during React 19 concurrent re-renders doesn't crash the app.
++const NOOP = () => {};
+ export const UnhandledLinkingContext = /*#__PURE__*/React.createContext({
+-  get lastUnhandledLink() {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  },
+-  get setLastUnhandledLink() {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  }
++  lastUnhandledLink: undefined,
++  setLastUnhandledLink: NOOP,
+ });
+ UnhandledLinkingContext.displayName = 'UnhandledLinkingContext';
+ //# sourceMappingURL=UnhandledLinkingContext.js.map

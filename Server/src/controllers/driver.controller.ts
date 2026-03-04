@@ -866,6 +866,7 @@ export class DriverController {
             user_id,
             ride_id,
             joined_at,
+            users:user_id(id, full_name, average_rating),
             rides(
               id,
               pickup_lat,
@@ -903,24 +904,31 @@ export class DriverController {
               address: pool.destination_address,
             },
             vehicle: pool.vehicles,
-            passengers: pool.pool_members?.map((pm: any) => ({
-              user_id: pm.user_id,
-              ride_id: pm.ride_id,
-              pickup: {
-                lat: pm.rides?.pickup_lat != null ? Number(pm.rides.pickup_lat) : null,
-                lng: pm.rides?.pickup_lng != null ? Number(pm.rides.pickup_lng) : null,
-                address: pm.rides?.pickup_address,
-              },
-              dropoff: {
-                lat: pm.rides?.dropoff_lat != null ? Number(pm.rides.dropoff_lat) : null,
-                lng: pm.rides?.dropoff_lng != null ? Number(pm.rides.dropoff_lng) : null,
-                address: pm.rides?.dropoff_address,
-              },
-              status: pm.rides?.status,
-            })) || [],
+            vehicle_type: pool.vehicle_type,
+            passengers: pool.pool_members?.map((pm: any) => {
+              const user = pm.users;
+              return {
+                user_id: pm.user_id,
+                ride_id: pm.ride_id,
+                name: user?.full_name || 'Rider',
+                rating: user?.average_rating || 0,
+                pickup: {
+                  lat: pm.rides?.pickup_lat != null ? Number(pm.rides.pickup_lat) : null,
+                  lng: pm.rides?.pickup_lng != null ? Number(pm.rides.pickup_lng) : null,
+                  address: pm.rides?.pickup_address,
+                },
+                dropoff: {
+                  lat: pm.rides?.dropoff_lat != null ? Number(pm.rides.dropoff_lat) : null,
+                  lng: pm.rides?.dropoff_lng != null ? Number(pm.rides.dropoff_lng) : null,
+                  address: pm.rides?.dropoff_address,
+                },
+                status: pm.rides?.status,
+              };
+            }) || [],
             current_passengers: pool.current_passengers,
             max_passengers: pool.max_passengers,
             fare_per_person: pool.fare_per_person,
+            total_earnings: (pool.fare_per_person || 0) * (pool.current_passengers || 0),
             created_at: pool.created_at,
             started_at: pool.started_at,
           },

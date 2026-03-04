@@ -184,7 +184,18 @@ export default function Home() {
       if (response.success && response.data) {
         setSelectedPoolForDetails(null);
         setIncomingPoolRequest(null);
-        setActivePool({ id: poolId } as Pool);
+        // Populate activePool with data from accept response
+        const acceptData = response.data as any;
+        setActivePool({
+          id: acceptData.pool_id || poolId,
+          status: acceptData.status || 'READY_TO_START',
+          passengers: acceptData.passengers || [],
+          destination: acceptData.destination,
+          fare_per_person: acceptData.fare_per_person || 0,
+          total_earnings: acceptData.total_earnings || 0,
+          current_passengers: acceptData.passengers?.length || 0,
+          max_passengers: acceptData.max_passengers || 4,
+        } as Pool);
         setAvailablePools([]);
         // Navigation to trip-progress is handled by the activePool useEffect
       }

@@ -49,14 +49,23 @@ export const usePoolRealtime = (poolId: string | null) => {
       const response = await driverService.getActivePool();
 
       if (response.success && response.data) {
-        const pool = response.data;
-        setState(prev => ({
-          ...prev,
-          pool,
-          loading: false,
-          lastUpdated: new Date(),
-          error: null,
-        }));
+        // Server returns { data: { active_pool: { ... } } }
+        const pool = (response.data as any).active_pool || response.data;
+        if (pool && pool.id) {
+          setState(prev => ({
+            ...prev,
+            pool,
+            loading: false,
+            lastUpdated: new Date(),
+            error: null,
+          }));
+        } else {
+          setState(prev => ({
+            ...prev,
+            loading: false,
+            error: prev.pool ? null : 'Pool not found',
+          }));
+        }
       } else {
         setState(prev => ({
           ...prev,
@@ -80,7 +89,9 @@ export const usePoolRealtime = (poolId: string | null) => {
     try {
       const response = await driverService.getActivePool();
       if (response.success && response.data) {
-        const pool = response.data;
+        // Server returns { data: { active_pool: { ... } } }
+        const pool = (response.data as any).active_pool || response.data;
+        if (!pool || !pool.id) return;
         // Defer polling state updates to avoid racing with React Navigation context
         InteractionManager.runAfterInteractions(() => {
           startTransition(() => {
@@ -180,7 +191,7 @@ export const usePoolRealtime = (poolId: string | null) => {
     };
   }, [poolId, fetchPoolData, pollForUpdates, restartPolling]);
 
-  const poolStatus = state.pool?.status || 'WAITING_FOR_DRIVER';
+  const poolStatus = state.pool?.status || 'READY_TO_START';
   const passengers = state.pool?.passengers || [];
 
   const refresh = useCallback(() => {

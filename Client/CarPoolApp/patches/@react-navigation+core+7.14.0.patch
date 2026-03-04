@@ -1,3 +1,29 @@
+diff --git a/node_modules/@react-navigation/core/lib/module/NavigationBuilderContext.js b/node_modules/@react-navigation/core/lib/module/NavigationBuilderContext.js
+index 282706b..7089760 100644
+--- a/node_modules/@react-navigation/core/lib/module/NavigationBuilderContext.js
++++ b/node_modules/@react-navigation/core/lib/module/NavigationBuilderContext.js
+@@ -1,17 +1,15 @@
+ "use strict";
+ 
+ import * as React from 'react';
++const NOOP = () => {};
+ /**
+  * Context which holds the required helpers needed to build nested navigators.
++ * Patched: no-op defaults instead of throwing during transient context loss.
+  */
+ export const NavigationBuilderContext = /*#__PURE__*/React.createContext({
+   onDispatchAction: () => undefined,
+   onOptionsChange: () => undefined,
+-  scheduleUpdate: () => {
+-    throw new Error("Couldn't find a context for scheduling updates.");
+-  },
+-  flushUpdates: () => {
+-    throw new Error("Couldn't find a context for flushing updates.");
+-  }
++  scheduleUpdate: NOOP,
++  flushUpdates: NOOP,
+ });
+ //# sourceMappingURL=NavigationBuilderContext.js.map
 diff --git a/node_modules/@react-navigation/core/lib/module/NavigationStateContext.js b/node_modules/@react-navigation/core/lib/module/NavigationStateContext.js
 index 4221b52..6d2f1e7 100644
 --- a/node_modules/@react-navigation/core/lib/module/NavigationStateContext.js
