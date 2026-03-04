@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Linking, Platform, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapViewComponent, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
-import { Phone, CheckCircle, X, Navigation, MessageCircle, Star, Clock, AlertCircle, RefreshCw, Users } from 'lucide-react-native';
+import { Phone, CheckCircle, X, Navigation, MessageCircle, Star, Clock, AlertCircle, RefreshCw, Users, User } from 'lucide-react-native';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -56,6 +56,11 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
   // Navigation link state
   const [loadingNavLink, setLoadingNavLink] = useState(false);
 
+  // Combined route state
+  const [combinedRoute, setCombinedRoute] = useState<any>(null);
+  const [loadingCombinedRoute, setLoadingCombinedRoute] = useState(false);
+  const prevPoolStatusRef = useRef<string | null>(null);
+
   // Watch driver's location via GPS
   useEffect(() => {
     let subscription: { remove: () => void } | null = null;
@@ -66,7 +71,6 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
           (location) => {
             const newLoc = { lat: location.latitude, lng: location.longitude };
             setDriverLocation(newLoc);
-            // Also send location updates to server
             driverService.updateLocation(location).catch(() => {});
           },
           { distanceInterval: 20, timeInterval: 5000 }
@@ -97,6 +101,46 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
     }
   }, [driverLocation]);
 
+  // Fetch combined route when pool status changes
+  useEffect(() => {
+    const validStatuses = ['READY_TO_START', 'STARTED', 'WAITING_FOR_DRIVER'];
+    if (!poolId || !validStatuses.includes(poolStatus)) return;
+    if (prevPoolStatusRef.current === poolStatus && combinedRoute) return;
+
+    let isMounted = true;
+    let retryCount = 0;
+
+    const fetchRoute = async () => {
+      if (!isMounted) return;
+      setLoadingCombinedRoute(true);
+
+      try {
+        const response = await driverService.getPoolRoute(poolId);
+        if (!isMounted) return;
+
+        if (response.success && response.data) {
+          const data = response.data as any;
+          const hasValid = data.waypoints?.length >= 2 && data.route?.coordinates?.length > 0;
+          if (hasValid || retryCount >= 2) {
+            setCombinedRoute(data);
+            prevPoolStatusRef.current = poolStatus;
+          } else if (retryCount < 2) {
+            retryCount++;
+            setTimeout(fetchRoute, 2000);
+            return;
+          }
+        }
+      } catch (error) {
+        console.log('[TripProgress] Error fetching route:', error);
+      }
+
+      if (isMounted) setLoadingCombinedRoute(false);
+    };
+
+    fetchRoute();
+    return () => { isMounted = false; };
+  }, [poolId, poolStatus]);
+
   // Handle navigate button — opens Google Maps with turn-by-turn navigation
   const handleStartNavigation = useCallback(async () => {
     if (!poolId) return;
@@ -108,7 +152,6 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
         const navData = response.data as any;
         let url = '';
 
-        // Use platform-specific navigation URL for turn-by-turn
         if (navData.platformLinks) {
           if (Platform.OS === 'android' && navData.platformLinks.android) {
             url = navData.platformLinks.android;
@@ -125,12 +168,11 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
           if (canOpen) {
             await Linking.openURL(url);
           } else {
-            // Fallback to universal URL
             const fallback = navData.platformLinks?.universal || navData.navigationUrl;
             if (fallback) {
               await Linking.openURL(fallback);
             } else {
-              Alert.alert('Navigation', 'Could not open Google Maps. Please navigate manually.');
+              Alert.alert('Navigation', 'Could not open Google Maps.');
             }
           }
         } else {
@@ -167,7 +209,6 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
         }
       }
 
-      // Notify backend
       driverService.markDropoff(passengerId).catch(() => {});
     }
 
@@ -202,7 +243,8 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
 
   const getStatusText = () => {
     switch (poolStatus) {
-      case 'READY_TO_START': return 'On the way to pickup';
+      case 'WAITING_FOR_DRIVER': return 'Waiting for driver...';
+      case 'READY_TO_START': return 'Driver is on the way';
       case 'STARTED': return 'Trip in progress';
       case 'COMPLETED': return 'Trip completed';
       case 'CANCELLED': return 'Ride cancelled';
@@ -224,7 +266,7 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
   return (
     <SafeAreaView className="flex-1 bg-gray-50" edges={['top']}>
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 100 }}>
-        {/* Map Section — Only driver's current location pin */}
+        {/* Map Section — Driver location + passenger pickup/dropoff markers */}
         <View style={{ height: 300, position: 'relative' }}>
           <MapViewComponent
             ref={mapRef}
@@ -246,6 +288,24 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
                 pinColor="#3b82f6"
               />
             )}
+            {passengers.map((p, idx) => (
+              <React.Fragment key={p.user_id}>
+                {p.pickup && (
+                  <Marker
+                    coordinate={{ latitude: p.pickup.lat, longitude: p.pickup.lng }}
+                    title={`Pickup: ${p.name}`}
+                    pinColor="#22c55e"
+                  />
+                )}
+                {p.dropoff && (
+                  <Marker
+                    coordinate={{ latitude: p.dropoff.lat, longitude: p.dropoff.lng }}
+                    title={`Drop-off: ${p.name}`}
+                    pinColor="#ef4444"
+                  />
+                )}
+              </React.Fragment>
+            ))}
           </MapViewComponent>
 
           {/* Status Badge */}
@@ -262,6 +322,73 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
           >
             <Text style={{ color: 'white', fontWeight: '600' }}>{getStatusText()}</Text>
           </View>
+
+          {/* ETA Badge */}
+          {combinedRoute?.route?.durationInTraffic && (
+            <View
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                backgroundColor: 'white',
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 20,
+                borderWidth: 2,
+                borderColor: '#e5e7eb',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <Clock size={16} color="#4b5563" />
+              <Text style={{ fontWeight: '600' }}>{combinedRoute.route.durationInTraffic} mins</Text>
+            </View>
+          )}
+
+          {/* Combined Route Badge */}
+          {combinedRoute && (
+            <View
+              style={{
+                position: 'absolute',
+                bottom: 16,
+                left: 16,
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <Navigation size={14} color="#10b981" />
+              <Text style={{ color: 'white', fontSize: 12 }}>
+                {combinedRoute.route?.totalDistanceKm}km • {combinedRoute.route?.totalDurationMinutes}min
+              </Text>
+            </View>
+          )}
+
+          {/* Loading Combined Route */}
+          {loadingCombinedRoute && (
+            <View
+              style={{
+                position: 'absolute',
+                bottom: 16,
+                left: 16,
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <ActivityIndicator size="small" color="#10b981" />
+              <Text style={{ color: 'white', fontSize: 12 }}>Loading smart route...</Text>
+            </View>
+          )}
 
           {/* Center on location button */}
           <TouchableOpacity
@@ -287,38 +414,28 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
           </TouchableOpacity>
         </View>
 
-        {/* Ride Header Card */}
-        <View className="mx-4 mt-4">
-          <Card className="p-5 bg-blue-600">
-            <View className="flex-row items-center justify-between mb-4">
-              <View>
-                <Text className="text-2xl text-white mb-1">Active Pool Ride</Text>
-                <Text className="text-sm text-white opacity-90">
-                  {completedPassengers.size}/{passengers.length} passengers completed
-                </Text>
-              </View>
-              <Badge className="bg-white px-3 py-1">
-                <Text className="text-blue-700">In Progress</Text>
-              </Badge>
+        {/* Your Driver Card — Shows you are the driver */}
+        <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
+          <Text className="font-semibold mb-4">Your Driver</Text>
+          <View className="flex-row items-center gap-4">
+            <View className="w-16 h-16 rounded-full items-center justify-center bg-blue-100 border-2 border-white shadow-md">
+              <User size={28} color="#1e40af" />
             </View>
-            <View className="flex-row gap-4 mt-2">
-              <View className="flex-1">
-                <Text className="text-sm text-white opacity-90">Total Earnings</Text>
-                <Text className="text-3xl text-white">৳{pool?.total_earnings || 0}</Text>
-              </View>
-              {pool?.nearest_pickup_km !== null && pool?.nearest_pickup_km !== undefined && (
-                <View className="flex-1">
-                  <Text className="text-sm text-white opacity-90">Distance</Text>
-                  <Text className="text-3xl text-white">{pool.nearest_pickup_km}km</Text>
-                </View>
-              )}
+            <View className="flex-1">
+              <Text className="text-lg font-semibold">You (Driver)</Text>
+              <Text className="text-sm text-gray-500 mt-1">
+                {pool?.vehicle_type || 'Vehicle'} • {passengers.length} passenger{passengers.length !== 1 ? 's' : ''}
+              </Text>
             </View>
-          </Card>
+            <Badge className="bg-green-100 px-3 py-1">
+              <Text className="text-green-700 text-xs font-medium">Active</Text>
+            </Badge>
+          </View>
         </View>
 
-        {/* Floating Navigate Button */}
+        {/* Navigate Button */}
         {['READY_TO_START', 'STARTED', 'WAITING_FOR_DRIVER'].includes(poolStatus) && (
-          <View className="mx-4 mt-4">
+          <View className="mx-6 mt-4">
             <TouchableOpacity
               onPress={handleStartNavigation}
               disabled={loadingNavLink}
@@ -338,20 +455,20 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
                 <>
                   <Navigation size={24} color="white" />
                   <View>
-                    <Text className="text-white font-bold text-lg">Navigate to Pickup</Text>
-                    <Text className="text-white text-xs opacity-80">Open Google Maps turn-by-turn • FREE</Text>
+                    <Text className="text-white font-bold text-lg">View Route in Google Maps</Text>
+                    <Text className="text-white text-xs opacity-80">See all pickup & dropoff points • FREE</Text>
                   </View>
                 </>
               )}
             </TouchableOpacity>
             <Text className="text-center text-gray-500 text-xs mt-2">
-              Opens Google Maps with optimal pickup route
+              Opens Google Maps app with the full route and all stops
             </Text>
           </View>
         )}
 
         {/* Pool Status Card */}
-        <View className="mx-4 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
+        <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
           <View className="flex-row items-center justify-between mb-4">
             <View className="flex-row items-center gap-2">
               <Text className="font-semibold">Pool Status</Text>
@@ -390,6 +507,10 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
                   <Text className="font-medium">{passengers.length}/{pool?.max_passengers || 4}</Text>
                 </View>
               </View>
+              <View className="flex-row justify-between">
+                <Text className="text-gray-600">Driver</Text>
+                <Text className="font-medium text-green-600">Assigned (You)</Text>
+              </View>
               {lastUpdated && (
                 <Text className="text-xs text-gray-400 text-right">
                   Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
@@ -399,108 +520,230 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
           )}
         </View>
 
-        {/* Passengers List */}
-        <View className="mx-4 mt-4">
-          <Text className="mb-3 text-lg font-semibold">Passengers ({passengers.length})</Text>
-          <View className="gap-3">
-            {passengers.map((passenger) => {
-              const isCompleted = completedPassengers.has(passenger.user_id);
+        {/* Passengers Card — Matches CarPoolApp co-riders style */}
+        <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
+          <Text className="font-semibold mb-4">
+            Passengers {passengers.length > 0 ? `(${passengers.length})` : ''}
+          </Text>
 
-              return (
-                <Card
-                  key={passenger.user_id}
-                  className={`p-4 ${isCompleted ? 'bg-gray-50 opacity-60' : 'bg-white'}`}
-                >
-                  <View className="flex-row items-start justify-between gap-3 mb-3">
-                    <View className="flex-row items-center gap-3 flex-1">
-                      <View className="w-12 h-12 rounded-full bg-blue-600 items-center justify-center">
-                        <Text className="text-white text-lg">
-                          {passenger.name.charAt(0)}
-                        </Text>
+          {loadingPool && passengers.length === 0 ? (
+            <View className="items-center py-4">
+              <ActivityIndicator size="small" color="#2563eb" />
+              <Text className="text-gray-500 text-sm mt-2">Loading passengers...</Text>
+            </View>
+          ) : passengers.length > 0 ? (
+            <View className="gap-3">
+              {passengers.map((passenger) => {
+                const isCompleted = completedPassengers.has(passenger.user_id);
+
+                return (
+                  <View key={passenger.user_id} className={`${isCompleted ? 'opacity-60' : ''}`}>
+                    <View className="flex-row items-center gap-3">
+                      <View className="w-10 h-10 rounded-full items-center justify-center bg-blue-100 border-2 border-white">
+                        <Text className="text-blue-800 font-semibold">{passenger.name.charAt(0)}</Text>
                       </View>
                       <View className="flex-1">
-                        <Text className="font-semibold mb-1">{passenger.name}</Text>
-                        {passenger.rating !== undefined && passenger.rating > 0 && (
-                          <View className="flex-row items-center gap-1">
-                            <Star size={12} color="#EAB308" fill="#EAB308" />
-                            <Text className="text-sm">{passenger.rating}</Text>
+                        <View className="flex-row items-center gap-2">
+                          <Text className="text-gray-800 font-medium">{passenger.name}</Text>
+                          {passenger.rating !== undefined && passenger.rating > 0 && (
+                            <View className="flex-row items-center gap-1">
+                              <Star size={12} color="#EAB308" fill="#EAB308" />
+                              <Text className="text-xs text-gray-600">{passenger.rating}</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                      <View className="flex-row gap-2">
+                        <TouchableOpacity className="w-10 h-10 rounded-full bg-gray-100 items-center justify-center">
+                          <Phone size={16} color="#6B7280" />
+                        </TouchableOpacity>
+                        <TouchableOpacity className="w-10 h-10 rounded-full bg-gray-100 items-center justify-center">
+                          <MessageCircle size={16} color="#4b5563" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Pickup / Dropoff addresses */}
+                    <View className="bg-gray-50 rounded-lg p-3 mt-2 mb-2 ml-12">
+                      <View className="flex-row items-start gap-2 mb-2">
+                        <Text className="text-green-700 font-medium">↑ Pickup:</Text>
+                        <Text className="text-gray-700 flex-1" numberOfLines={1}>{passenger.pickup?.address || 'N/A'}</Text>
+                      </View>
+                      <View className="flex-row items-start gap-2">
+                        <Text className="text-red-700 font-medium">↓ Drop:</Text>
+                        <Text className="text-gray-700 flex-1" numberOfLines={1}>{passenger.dropoff?.address || 'N/A'}</Text>
+                      </View>
+                    </View>
+
+                    {/* Mark as Dropped Off button */}
+                    <View className="ml-12">
+                      <TouchableOpacity
+                        className={`w-full h-10 rounded-lg flex-row items-center justify-center ${isCompleted ? 'bg-gray-200' : 'bg-green-600'}`}
+                        onPress={() => togglePassengerComplete(passenger.user_id)}
+                      >
+                        {isCompleted ? (
+                          <>
+                            <X size={16} color="#6B7280" />
+                            <Text className="ml-2 text-gray-600 font-medium">Undo Complete</Text>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle size={16} color="#FFFFFF" />
+                            <Text className="text-white ml-2 font-medium">Mark as Dropped Off</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          ) : (
+            <View className="items-center py-4">
+              <Users size={32} color="#d1d5db" />
+              <Text className="text-gray-500 text-center mt-2">No passengers yet</Text>
+              <Text className="text-gray-400 text-xs text-center mt-1">
+                Waiting for passengers to join...
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Route Info — Smart route waypoints */}
+        {combinedRoute?.waypoints && (
+          <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="font-semibold">Smart Route</Text>
+              {combinedRoute.route?.trafficLevel && (
+                <View className={`px-2 py-1 rounded ${combinedRoute.route.trafficLevel === 'low' ? 'bg-green-100' : combinedRoute.route.trafficLevel === 'moderate' ? 'bg-yellow-100' : 'bg-red-100'}`}>
+                  <Text className={`text-xs font-medium ${combinedRoute.route.trafficLevel === 'low' ? 'text-green-700' : combinedRoute.route.trafficLevel === 'moderate' ? 'text-yellow-700' : 'text-red-700'}`}>
+                    {combinedRoute.route.trafficLevel.charAt(0).toUpperCase() + combinedRoute.route.trafficLevel.slice(1)} traffic
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <View className="gap-3">
+              {combinedRoute.waypoints.map((waypoint: any, idx: number) => {
+                const waypointColor = waypoint.type === 'driver' ? '#3B82F6' : waypoint.type === 'pickup' ? '#22C55E' : '#EF4444';
+                const waypointLabel = waypoint.type === 'driver' ? 'Driver' : waypoint.type === 'pickup' ? 'Pick up' : 'Drop off';
+
+                return (
+                  <View key={waypoint.id || idx} className="flex-row items-start gap-3">
+                    <View className="items-center">
+                      <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: waypointColor, justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ color: 'white', fontSize: 12, fontWeight: '600' }}>{idx + 1}</Text>
+                      </View>
+                      {idx < combinedRoute.waypoints.length - 1 && (
+                        <View style={{ width: 2, height: 20, backgroundColor: '#e5e7eb', marginTop: 4 }} />
+                      )}
+                    </View>
+                    <View className="flex-1">
+                      <View className="flex-row items-center gap-2">
+                        <Text className="text-sm text-gray-500">{waypointLabel}</Text>
+                        {waypoint.type === 'driver' && (
+                          <View className="bg-blue-100 px-2 py-0.5 rounded">
+                            <Text className="text-xs text-blue-700">You</Text>
                           </View>
                         )}
                       </View>
-                    </View>
-                    <View className="flex-row gap-2">
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        className="w-10 h-10"
-                        onPress={() => {}}
-                      >
-                        <Phone size={16} color="#6B7280" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        className="w-10 h-10"
-                        onPress={() => {}}
-                      >
-                        <MessageCircle size={16} color="#6B7280" />
-                      </Button>
+                      <Text className="font-medium" numberOfLines={1}>
+                        {waypoint.name || waypoint.address || `Waypoint ${idx + 1}`}
+                      </Text>
+                      <Text className="text-xs text-gray-400">
+                        ETA: {waypoint.estimatedArrivalMinutes === 0 ? 'Start' : `+${waypoint.estimatedArrivalMinutes} min`}
+                      </Text>
                     </View>
                   </View>
+                );
+              })}
 
-                  <View className="bg-gray-50 rounded-lg p-3 mb-3">
-                    <View className="flex-row items-start gap-2 mb-2">
-                      <Text className="text-green-700 font-medium">↑ Pickup:</Text>
-                      <Text className="text-gray-700 flex-1">{passenger.pickup?.address || 'N/A'}</Text>
-                    </View>
-                    <View className="flex-row items-start gap-2">
-                      <Text className="text-red-700 font-medium">↓ Drop:</Text>
-                      <Text className="text-gray-700 flex-1">{passenger.dropoff?.address || 'N/A'}</Text>
-                    </View>
+              {/* Route Summary */}
+              <View className="mt-3 pt-3 border-t border-gray-100">
+                <View className="flex-row justify-between">
+                  <Text className="text-gray-600">Total Distance</Text>
+                  <Text className="font-medium">{combinedRoute.route?.totalDistanceKm} km</Text>
+                </View>
+                <View className="flex-row justify-between mt-1">
+                  <Text className="text-gray-600">Total Duration</Text>
+                  <Text className="font-medium">{combinedRoute.route?.durationInTraffic || combinedRoute.route?.totalDurationMinutes} mins</Text>
+                </View>
+                {combinedRoute.optimization?.savingsPercent > 0 && (
+                  <View className="flex-row justify-between mt-1">
+                    <Text className="text-gray-600">Route Savings</Text>
+                    <Text className="font-medium text-green-600">
+                      {combinedRoute.optimization.savingsPercent}% more efficient
+                    </Text>
                   </View>
+                )}
+              </View>
+            </View>
+          </View>
+        )}
 
-                  <Button
-                    variant={isCompleted ? 'secondary' : 'default'}
-                    className={`w-full h-11 ${!isCompleted && 'bg-green-600'}`}
-                    onPress={() => togglePassengerComplete(passenger.user_id)}
-                  >
-                    <View className="flex-row items-center">
-                      {isCompleted ? (
-                        <>
-                          <X size={16} color="#6B7280" />
-                          <Text className="ml-2">Undo Complete</Text>
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle size={16} color="#FFFFFF" />
-                          <Text className="text-white ml-2">Mark as Dropped Off</Text>
-                        </>
-                      )}
-                    </View>
-                  </Button>
-                </Card>
-              );
-            })}
+        {/* Trip Details */}
+        <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
+          <Text className="font-semibold mb-4">Trip Details</Text>
+
+          <View className="gap-3">
+            <View className="flex-row justify-between">
+              <Text className="text-gray-600">Vehicle Type</Text>
+              <Text className="font-medium">{pool?.vehicle_type || 'N/A'}</Text>
+            </View>
+            <View className="flex-row justify-between">
+              <Text className="text-gray-600">Estimated Time</Text>
+              <Text className="font-medium">
+                {combinedRoute?.route?.durationInTraffic
+                  ? `${combinedRoute.route.durationInTraffic} mins`
+                  : pool?.estimated_arrival_minutes
+                    ? `${pool.estimated_arrival_minutes} mins`
+                    : 'Calculating...'}
+              </Text>
+            </View>
+            <View className="flex-row justify-between">
+              <Text className="text-gray-600">Total Earnings</Text>
+              <Text className="font-semibold text-blue-600">৳{pool?.total_earnings || 0}</Text>
+            </View>
+            <View className="flex-row justify-between">
+              <Text className="text-gray-600">Fare per Person</Text>
+              <Text className="font-medium">৳{pool?.fare_per_person || 0}</Text>
+            </View>
+            <View className="flex-row justify-between">
+              <Text className="text-gray-600">Passengers Completed</Text>
+              <Text className="font-medium">{completedPassengers.size}/{passengers.length}</Text>
+            </View>
           </View>
         </View>
 
         {/* Action Buttons */}
-        <View className="mx-4 mt-4 flex-row gap-3">
-          <Button
-            variant="outline"
-            className="flex-1 h-14 border-2"
-            onPress={handleCancelRide}
-          >
-            <Text className="text-base">Cancel Ride</Text>
-          </Button>
-          <Button
-            className="flex-1 h-14 bg-green-600"
-            disabled={!allCompleted}
-            onPress={handleCompletePool}
-          >
-            <Text className="text-white text-base">Complete Pool</Text>
-          </Button>
-        </View>
+        {!['COMPLETED', 'CANCELLED'].includes(poolStatus) && (
+          <View className="mx-6 mt-4 flex-row gap-3">
+            <TouchableOpacity
+              onPress={handleCancelRide}
+              className="flex-1 h-14 rounded-xl border-2 border-gray-300 bg-white flex-row items-center justify-center"
+            >
+              <X size={20} color="#6b7280" />
+              <Text className="text-gray-600 font-semibold ml-2">Cancel Ride</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleCompletePool}
+              disabled={!allCompleted}
+              className={`flex-1 h-14 rounded-xl flex-row items-center justify-center ${allCompleted ? 'bg-green-600' : 'bg-gray-300'}`}
+            >
+              <CheckCircle size={20} color="white" />
+              <Text className="text-white font-semibold ml-2">Complete Pool</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* SOS Button */}
+        {!['COMPLETED', 'CANCELLED'].includes(poolStatus) && (
+          <View className="mx-6 mt-4">
+            <TouchableOpacity className="w-full py-4 rounded-xl border-2 border-red-500 bg-white flex-row items-center justify-center">
+              <Text className="text-red-500 font-semibold">🚨 Emergency SOS</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Billing Dialog */}
         {billingPassenger && (

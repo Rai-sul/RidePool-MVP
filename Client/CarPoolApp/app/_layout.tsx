@@ -91,7 +91,7 @@ function AppLayout() {
                 <Stack.Screen name="profile" options={{ headerShown: false }} />
                 <Stack.Screen name="ride-confirmation" options={{ headerShown: false }} />
                 <Stack.Screen name="searching" options={{ headerShown: false }} />
-                <Stack.Screen name="trip-progress" options={{ headerShown: true, headerTitle: 'Trip Progress' }} />
+                <Stack.Screen name="trip-progress" options={{ headerShown: false }} />
                 <Stack.Screen name="payment-summary" options={{ headerShown: true, headerTitle: 'Payment Summary' }} />
                 <Stack.Screen name="chat" options={{ headerShown: false }} />
                 <Stack.Screen name="support-chat" options={{ headerShown: false }} />

@@ -172,27 +172,29 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
         const pool = response.data.pool;
         const newMemberCount = pool.pool_members?.length || 0;
         
-        // Always update state with latest data - let React handle diffing
-        setState(prev => {
-          const memberCountChanged = newMemberCount !== (prev.members?.length || 0);
-          const statusChanged = prev.pool?.status !== pool.status;
-          const driverChanged = prev.pool?.driver_id !== pool.driver_id;
-          
-          if (memberCountChanged || statusChanged || driverChanged) {
-            console.log(`[usePoolRealtime] Polling detected changes: members=${memberCountChanged}, status=${statusChanged}, driver=${driverChanged}`);
-            return {
-              ...prev,
-              pool,
-              members: pool.pool_members || [],
-              searchTiming: response.data.search_timing || prev.searchTiming || null,
-              lastUpdated: new Date(),
-            };
-          }
-          // Keep searchTiming updated even if other fields didn't change
-          if (response.data.search_timing) {
-            return { ...prev, searchTiming: response.data.search_timing };
-          }
-          return prev;
+        // Defer polling state updates to avoid racing with React Navigation context
+        InteractionManager.runAfterInteractions(() => {
+          setState(prev => {
+            const memberCountChanged = newMemberCount !== (prev.members?.length || 0);
+            const statusChanged = prev.pool?.status !== pool.status;
+            const driverChanged = prev.pool?.driver_id !== pool.driver_id;
+            
+            if (memberCountChanged || statusChanged || driverChanged) {
+              console.log(`[usePoolRealtime] Polling detected changes: members=${memberCountChanged}, status=${statusChanged}, driver=${driverChanged}`);
+              return {
+                ...prev,
+                pool,
+                members: pool.pool_members || [],
+                searchTiming: response.data.search_timing || prev.searchTiming || null,
+                lastUpdated: new Date(),
+              };
+            }
+            // Keep searchTiming updated even if other fields didn't change
+            if (response.data.search_timing) {
+              return { ...prev, searchTiming: response.data.search_timing };
+            }
+            return prev;
+          });
         });
       }
     } catch (err) {

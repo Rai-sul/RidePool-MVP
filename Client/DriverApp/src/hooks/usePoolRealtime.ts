@@ -79,18 +79,21 @@ export const usePoolRealtime = (poolId: string | null) => {
       const response = await driverService.getActivePool();
       if (response.success && response.data) {
         const pool = response.data;
-        setState(prev => {
-          const statusChanged = prev.pool?.status !== pool.status;
-          const passengersChanged = (prev.pool?.passengers?.length || 0) !== (pool.passengers?.length || 0);
+        // Defer polling state updates to avoid racing with React Navigation context
+        InteractionManager.runAfterInteractions(() => {
+          setState(prev => {
+            const statusChanged = prev.pool?.status !== pool.status;
+            const passengersChanged = (prev.pool?.passengers?.length || 0) !== (pool.passengers?.length || 0);
 
-          if (statusChanged || passengersChanged) {
-            return {
-              ...prev,
-              pool,
-              lastUpdated: new Date(),
-            };
-          }
-          return prev;
+            if (statusChanged || passengersChanged) {
+              return {
+                ...prev,
+                pool,
+                lastUpdated: new Date(),
+              };
+            }
+            return prev;
+          });
         });
       }
     } catch (err) {
