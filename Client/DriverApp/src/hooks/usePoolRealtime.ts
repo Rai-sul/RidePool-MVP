@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback, useRef, startTransition } from 'react';
-import { InteractionManager } from 'react-native';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { driverService } from '../services/driver.service';
 import type { Pool } from '../types';
@@ -92,23 +91,19 @@ export const usePoolRealtime = (poolId: string | null) => {
         // Server returns { data: { active_pool: { ... } } }
         const pool = (response.data as any).active_pool || response.data;
         if (!pool || !pool.id) return;
-        // Defer polling state updates to avoid racing with React Navigation context
-        InteractionManager.runAfterInteractions(() => {
-          startTransition(() => {
-            setState(prev => {
-              const statusChanged = prev.pool?.status !== pool.status;
-              const passengersChanged = (prev.pool?.passengers?.length || 0) !== (pool.passengers?.length || 0);
 
-              if (statusChanged || passengersChanged) {
-                return {
-                  ...prev,
-                  pool,
-                  lastUpdated: new Date(),
-                };
-              }
-              return prev;
-            });
-          });
+        setState(prev => {
+          const statusChanged = prev.pool?.status !== pool.status;
+          const passengersChanged = (prev.pool?.passengers?.length || 0) !== (pool.passengers?.length || 0);
+
+          if (statusChanged || passengersChanged) {
+            return {
+              ...prev,
+              pool,
+              lastUpdated: new Date(),
+            };
+          }
+          return prev;
         });
       }
     } catch (err) {
@@ -141,11 +136,9 @@ export const usePoolRealtime = (poolId: string | null) => {
           filter: `id=eq.${poolId}`,
         },
         (payload) => {
-          InteractionManager.runAfterInteractions(() => {
-            if (payload.eventType === 'UPDATE' && payload.new) {
-              fetchPoolData();
-            }
-          });
+          if (payload.eventType === 'UPDATE' && payload.new) {
+            fetchPoolData();
+          }
         }
       )
       .on(
@@ -157,9 +150,7 @@ export const usePoolRealtime = (poolId: string | null) => {
           filter: `pool_id=eq.${poolId}`,
         },
         (payload) => {
-          InteractionManager.runAfterInteractions(() => {
-            fetchPoolData();
-          });
+          fetchPoolData();
         }
       )
       .subscribe((status) => {
