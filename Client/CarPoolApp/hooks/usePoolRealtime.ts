@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback, useRef, startTransition } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, startTransition } from 'react';
 import { InteractionManager } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { Pool, PoolMember } from '../types';
 import { poolService, SearchTiming } from '../services/pool.service';
 
-// Polling interval for fallback (2 seconds)
-const POLLING_INTERVAL = 2000;
+// Polling intervals
+const POLLING_INTERVAL_FAST = 3000;   // When realtime is disconnected
+const POLLING_INTERVAL_SLOW = 30000;  // Heartbeat when realtime is connected
 
 interface PoolRealtimeState {
   pool: Pool | null;
@@ -65,6 +66,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const poolIdRef = useRef<string | null>(null);
+  const isConnectedRef = useRef(false);
   
   // Keep poolId ref in sync
   useEffect(() => {
@@ -193,6 +195,8 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
               const memberCountChanged = newMemberCount !== (prev.members?.length || 0);
               const statusChanged = prev.pool?.status !== pool.status;
               const driverChanged = prev.pool?.driver_id !== pool.driver_id;
+              const searchTimingChanged = pollingSearchTiming &&
+                JSON.stringify(pollingSearchTiming) !== JSON.stringify(prev.searchTiming);
               
               if (memberCountChanged || statusChanged || driverChanged) {
                 console.log(`[usePoolRealtime] Polling detected changes: members=${memberCountChanged}, status=${statusChanged}, driver=${driverChanged}`);
@@ -204,8 +208,8 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
                   lastUpdated: new Date(),
                 };
               }
-              // Keep searchTiming updated even if other fields didn't change
-              if (pollingSearchTiming) {
+              // Only update searchTiming if it actually changed
+              if (searchTimingChanged) {
                 return { ...prev, searchTiming: pollingSearchTiming };
               }
               return prev;
@@ -218,7 +222,17 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
     }
   }, []);
 
-  // Set up real-time subscriptions with polling fallback
+  // Restart polling with the appropriate interval based on connection status
+  const restartPolling = useCallback((connected: boolean) => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+    }
+    const interval = connected ? POLLING_INTERVAL_SLOW : POLLING_INTERVAL_FAST;
+    console.log(`[usePoolRealtime] Polling interval: ${interval / 1000}s (realtime ${connected ? 'connected' : 'disconnected'})`);
+    pollingRef.current = setInterval(pollForUpdates, interval);
+  }, [pollForUpdates]);
+
+  // Set up real-time subscriptions with smart polling fallback
   useEffect(() => {
     if (!poolId || !currentUserId) return;
 
@@ -331,24 +345,23 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
         
         if (status === 'SUBSCRIBED') {
           console.log('[usePoolRealtime] Successfully subscribed to pool updates');
+          isConnectedRef.current = true;
           setState(prev => ({ ...prev, isConnected: true }));
-          // NOTE: We keep polling running as a safety net even when realtime "works"
-          // because realtime might report SUBSCRIBED but not deliver events
+          // Switch to slow heartbeat polling since realtime is delivering events
+          restartPolling(true);
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          console.warn('[usePoolRealtime] Realtime failed');
+          console.warn('[usePoolRealtime] Realtime failed, switching to fast polling');
+          isConnectedRef.current = false;
           setState(prev => ({ ...prev, isConnected: false }));
+          // Switch to fast polling since realtime is not available
+          restartPolling(false);
         }
       });
 
     channelRef.current = poolChannel;
     
-    // Start polling and KEEP IT RUNNING as the primary update mechanism
-    // This ensures pool updates always happen even if realtime is unreliable
-    const pollInterval = setInterval(pollForUpdates, POLLING_INTERVAL);
-    pollingRef.current = pollInterval;
-    
-    // Also do an immediate poll after initial fetch
-    setTimeout(pollForUpdates, 1000);
+    // Start with fast polling until realtime connects
+    pollingRef.current = setInterval(pollForUpdates, POLLING_INTERVAL_FAST);
 
     // Cleanup subscription and polling on unmount
     return () => {
@@ -362,7 +375,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
         pollingRef.current = null;
       }
     };
-  }, [poolId, currentUserId, fetchPoolData, pollForUpdates]);
+  }, [poolId, currentUserId, fetchPoolData, pollForUpdates, restartPolling]);
 
   // Clear unread messages for a specific user (call when opening chat with that user)
   const clearUnreadMessages = useCallback((userId: string) => {
@@ -374,7 +387,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
   }, []);
 
   // Derived state: co-riders (excluding current user) with unread message status
-  const coRiders: CoRiderInfo[] = state.members
+  const coRiders: CoRiderInfo[] = useMemo(() => state.members
     .filter(member => member.user_id !== currentUserId)
     .map((member, index) => {
       const memberWithProfile = member as PoolMemberWithProfile;
@@ -399,7 +412,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
         } : undefined,
         hasUnreadMessages: unreadCount > 0,
       };
-    });
+    }), [state.members, state.unreadMessageCounts, currentUserId]);
 
   // Derived state: has driver
   const hasDriver = !!state.pool?.driver_id;

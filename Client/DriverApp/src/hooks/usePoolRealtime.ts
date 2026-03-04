@@ -4,7 +4,8 @@ import { supabase } from '../lib/supabase';
 import { driverService } from '../services/driver.service';
 import type { Pool } from '../types';
 
-const POLLING_INTERVAL = 3000;
+const POLLING_INTERVAL_FAST = 3000;   // When realtime is disconnected
+const POLLING_INTERVAL_SLOW = 30000;  // Heartbeat when realtime is connected
 
 interface PoolRealtimeState {
   pool: Pool | null;
@@ -33,6 +34,7 @@ export const usePoolRealtime = (poolId: string | null) => {
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const poolIdRef = useRef<string | null>(null);
+  const isConnectedRef = useRef(false);
 
   useEffect(() => {
     poolIdRef.current = poolId;
@@ -103,6 +105,15 @@ export const usePoolRealtime = (poolId: string | null) => {
     }
   }, []);
 
+  // Restart polling with the appropriate interval based on connection status
+  const restartPolling = useCallback((connected: boolean) => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+    }
+    const interval = connected ? POLLING_INTERVAL_SLOW : POLLING_INTERVAL_FAST;
+    pollingRef.current = setInterval(pollForUpdates, interval);
+  }, [pollForUpdates]);
+
   useEffect(() => {
     if (!poolId) return;
 
@@ -142,16 +153,20 @@ export const usePoolRealtime = (poolId: string | null) => {
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
+          isConnectedRef.current = true;
           setState(prev => ({ ...prev, isConnected: true }));
+          restartPolling(true);
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          isConnectedRef.current = false;
           setState(prev => ({ ...prev, isConnected: false }));
+          restartPolling(false);
         }
       });
 
     channelRef.current = poolChannel;
 
-    const pollInterval = setInterval(pollForUpdates, POLLING_INTERVAL);
-    pollingRef.current = pollInterval;
+    // Start with fast polling until realtime connects
+    pollingRef.current = setInterval(pollForUpdates, POLLING_INTERVAL_FAST);
 
     return () => {
       if (channelRef.current) {
@@ -163,7 +178,7 @@ export const usePoolRealtime = (poolId: string | null) => {
         pollingRef.current = null;
       }
     };
-  }, [poolId, fetchPoolData, pollForUpdates]);
+  }, [poolId, fetchPoolData, pollForUpdates, restartPolling]);
 
   const poolStatus = state.pool?.status || 'WAITING_FOR_DRIVER';
   const passengers = state.pool?.passengers || [];
