@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, startTransition } from 'react';
 import { InteractionManager } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { Pool, PoolMember } from '../types';
@@ -86,16 +86,19 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
       
       if (response.success && response.data?.pool) {
         const pool = response.data.pool;
+        const searchTiming = response.data.search_timing || null;
         console.log(`[usePoolRealtime] Pool fetched successfully: ${pool.id}, status: ${pool.status}, members: ${pool.pool_members?.length || 0}`);
-        setState(prev => ({
-          ...prev,
-          pool,
-          members: pool.pool_members || [],
-          searchTiming: response.data.search_timing || null,
-          loading: false,
-          lastUpdated: new Date(),
-          error: null,
-        }));
+        startTransition(() => {
+          setState(prev => ({
+            ...prev,
+            pool,
+            members: pool.pool_members || [],
+            searchTiming,
+            loading: false,
+            lastUpdated: new Date(),
+            error: null,
+          }));
+        });
       } else {
         // API returned but without pool data
         const errorMessage = response.message || 'Pool not found';
@@ -104,22 +107,26 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
         
         // Only set error if pool is genuinely not found
         if (isNotFound) {
-          setState(prev => ({
-            ...prev,
-            pool: null,
-            members: [],
-            searchTiming: null,
-            loading: false,
-            error: 'This pool is no longer available',
-          }));
+          startTransition(() => {
+            setState(prev => ({
+              ...prev,
+              pool: null,
+              members: [],
+              searchTiming: null,
+              loading: false,
+              error: 'This pool is no longer available',
+            }));
+          });
         } else {
           // For other issues, keep existing pool data if available
-          setState(prev => ({
-            ...prev,
-            loading: false,
-            searchTiming: prev.searchTiming || null,
-            error: prev.pool ? null : errorMessage,
-          }));
+          startTransition(() => {
+            setState(prev => ({
+              ...prev,
+              loading: false,
+              searchTiming: prev.searchTiming || null,
+              error: prev.pool ? null : errorMessage,
+            }));
+          });
         }
       }
     } catch (err: any) {
@@ -131,32 +138,38 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
       console.warn('[usePoolRealtime] Failed to fetch pool data:', errorMessage);
       
       if (isNotFound) {
-        setState(prev => ({
-          ...prev,
-          pool: null,
-          members: [],
-          searchTiming: null,
-          loading: false,
-          error: 'This pool is no longer available',
-        }));
+        startTransition(() => {
+          setState(prev => ({
+            ...prev,
+            pool: null,
+            members: [],
+            searchTiming: null,
+            loading: false,
+            error: 'This pool is no longer available',
+          }));
+        });
       } else if (isCancelled) {
-        setState(prev => ({
-          ...prev,
-          pool: null,
-          members: [],
-          searchTiming: null,
-          loading: false,
-          error: 'This pool was cancelled',
-        }));
+        startTransition(() => {
+          setState(prev => ({
+            ...prev,
+            pool: null,
+            members: [],
+            searchTiming: null,
+            loading: false,
+            error: 'This pool was cancelled',
+          }));
+        });
       } else {
         // For other errors (network, temporary issues), keep existing pool data if available
-        setState(prev => ({
-          ...prev,
-          loading: false,
-          // Only set error if we don't have pool data - otherwise the user is in a valid pool
-          searchTiming: prev.searchTiming || null,
-          error: prev.pool ? null : errorMessage,
-        }));
+        startTransition(() => {
+          setState(prev => ({
+            ...prev,
+            loading: false,
+            // Only set error if we don't have pool data - otherwise the user is in a valid pool
+            searchTiming: prev.searchTiming || null,
+            error: prev.pool ? null : errorMessage,
+          }));
+        });
       }
     }
   }, [poolId]);
@@ -171,29 +184,32 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
       if (response.success && response.data?.pool) {
         const pool = response.data.pool;
         const newMemberCount = pool.pool_members?.length || 0;
+        const pollingSearchTiming = response.data.search_timing;
         
         // Defer polling state updates to avoid racing with React Navigation context
         InteractionManager.runAfterInteractions(() => {
-          setState(prev => {
-            const memberCountChanged = newMemberCount !== (prev.members?.length || 0);
-            const statusChanged = prev.pool?.status !== pool.status;
-            const driverChanged = prev.pool?.driver_id !== pool.driver_id;
-            
-            if (memberCountChanged || statusChanged || driverChanged) {
-              console.log(`[usePoolRealtime] Polling detected changes: members=${memberCountChanged}, status=${statusChanged}, driver=${driverChanged}`);
-              return {
-                ...prev,
-                pool,
-                members: pool.pool_members || [],
-                searchTiming: response.data.search_timing || prev.searchTiming || null,
-                lastUpdated: new Date(),
-              };
-            }
-            // Keep searchTiming updated even if other fields didn't change
-            if (response.data.search_timing) {
-              return { ...prev, searchTiming: response.data.search_timing };
-            }
-            return prev;
+          startTransition(() => {
+            setState(prev => {
+              const memberCountChanged = newMemberCount !== (prev.members?.length || 0);
+              const statusChanged = prev.pool?.status !== pool.status;
+              const driverChanged = prev.pool?.driver_id !== pool.driver_id;
+              
+              if (memberCountChanged || statusChanged || driverChanged) {
+                console.log(`[usePoolRealtime] Polling detected changes: members=${memberCountChanged}, status=${statusChanged}, driver=${driverChanged}`);
+                return {
+                  ...prev,
+                  pool,
+                  members: pool.pool_members || [],
+                  searchTiming: pollingSearchTiming || prev.searchTiming || null,
+                  lastUpdated: new Date(),
+                };
+              }
+              // Keep searchTiming updated even if other fields didn't change
+              if (pollingSearchTiming) {
+                return { ...prev, searchTiming: pollingSearchTiming };
+              }
+              return prev;
+            });
           });
         });
       }
@@ -226,19 +242,21 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           // Defer state updates from WebSocket callbacks to avoid racing with
           // React Navigation's context propagation during re-renders
           InteractionManager.runAfterInteractions(() => {
-            if (payload.eventType === 'UPDATE' && payload.new) {
-              setState(prev => ({
-                ...prev,
-                pool: { ...prev.pool, ...payload.new } as Pool,
-                lastUpdated: new Date(),
-              }));
-            } else if (payload.eventType === 'DELETE') {
-              setState(prev => ({
-                ...prev,
-                pool: null,
-                error: 'Pool was cancelled',
-              }));
-            }
+            startTransition(() => {
+              if (payload.eventType === 'UPDATE' && payload.new) {
+                setState(prev => ({
+                  ...prev,
+                  pool: { ...prev.pool, ...payload.new } as Pool,
+                  lastUpdated: new Date(),
+                }));
+              } else if (payload.eventType === 'DELETE') {
+                setState(prev => ({
+                  ...prev,
+                  pool: null,
+                  error: 'Pool was cancelled',
+                }));
+              }
+            });
           });
         }
       )
@@ -266,13 +284,15 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
                 console.log('[usePoolRealtime] Member left_at updated, refetching pool data...');
                 fetchPoolData();
               } else {
-                setState(prev => ({
-                  ...prev,
-                  members: prev.members.map(m => 
-                    m.id === (payload.new as PoolMember).id ? payload.new as PoolMember : m
-                  ),
-                  lastUpdated: new Date(),
-                }));
+                startTransition(() => {
+                  setState(prev => ({
+                    ...prev,
+                    members: prev.members.map(m => 
+                      m.id === (payload.new as PoolMember).id ? payload.new as PoolMember : m
+                    ),
+                    lastUpdated: new Date(),
+                  }));
+                });
               }
             }
           });
@@ -292,14 +312,16 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
             console.log('[usePoolRealtime] New message from:', newMessage.sender_id);
             
             InteractionManager.runAfterInteractions(() => {
-              setState(prev => ({
-                ...prev,
-                unreadMessageCounts: {
-                  ...prev.unreadMessageCounts,
-                  [newMessage.sender_id]: (prev.unreadMessageCounts[newMessage.sender_id] || 0) + 1,
-                },
-                lastUpdated: new Date(),
-              }));
+              startTransition(() => {
+                setState(prev => ({
+                  ...prev,
+                  unreadMessageCounts: {
+                    ...prev.unreadMessageCounts,
+                    [newMessage.sender_id]: (prev.unreadMessageCounts[newMessage.sender_id] || 0) + 1,
+                  },
+                  lastUpdated: new Date(),
+                }));
+              });
             });
           }
         }

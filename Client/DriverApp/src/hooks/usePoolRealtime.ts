@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, startTransition } from 'react';
 import { InteractionManager } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { driverService } from '../services/driver.service';
@@ -81,18 +81,20 @@ export const usePoolRealtime = (poolId: string | null) => {
         const pool = response.data;
         // Defer polling state updates to avoid racing with React Navigation context
         InteractionManager.runAfterInteractions(() => {
-          setState(prev => {
-            const statusChanged = prev.pool?.status !== pool.status;
-            const passengersChanged = (prev.pool?.passengers?.length || 0) !== (pool.passengers?.length || 0);
+          startTransition(() => {
+            setState(prev => {
+              const statusChanged = prev.pool?.status !== pool.status;
+              const passengersChanged = (prev.pool?.passengers?.length || 0) !== (pool.passengers?.length || 0);
 
-            if (statusChanged || passengersChanged) {
-              return {
-                ...prev,
-                pool,
-                lastUpdated: new Date(),
-              };
-            }
-            return prev;
+              if (statusChanged || passengersChanged) {
+                return {
+                  ...prev,
+                  pool,
+                  lastUpdated: new Date(),
+                };
+              }
+              return prev;
+            });
           });
         });
       }

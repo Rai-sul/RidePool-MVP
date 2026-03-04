@@ -15,13 +15,17 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 // Error boundary: prevents navigation context errors in overlays from crashing the Stack/screens.
 // Realtime updates (e.g. Supabase pool events) can briefly invalidate the navigation context
 // during re-renders — this boundary isolates that failure to the overlay layer only.
+// Uses retry limit to prevent infinite crash→recover loops (React 19 logs all caught errors).
 class OverlayErrorBoundary extends Component<
   { children: React.ReactNode },
-  { hasError: boolean }
+  { hasError: boolean; retryCount: number }
 > {
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private static MAX_RETRIES = 3;
+
   constructor(props: { children: React.ReactNode }) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, retryCount: 0 };
   }
 
   static getDerivedStateFromError(_: Error) {
@@ -29,9 +33,16 @@ class OverlayErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, _errorInfo: ErrorInfo) {
-    console.warn('[OverlayErrorBoundary] Caught (will auto-recover):', error.message);
-    // Auto-recover: navigation context is available again on the next render cycle
-    setTimeout(() => this.setState({ hasError: false }), 0);
+    if (this.state.retryCount < OverlayErrorBoundary.MAX_RETRIES) {
+      const delay = Math.min(500 * Math.pow(2, this.state.retryCount), 4000);
+      this.retryTimer = setTimeout(() => {
+        this.setState(prev => ({ hasError: false, retryCount: prev.retryCount + 1 }));
+      }, delay);
+    }
+  }
+
+  componentWillUnmount() {
+    if (this.retryTimer) clearTimeout(this.retryTimer);
   }
 
   render() {

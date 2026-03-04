@@ -1,20 +1,22 @@
 import React, { Component, ErrorInfo } from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 import TripProgress from '../components/TripProgress.native';
 import { useGlobalContext } from '../contexts/GlobalContext';
 
-// Expo Router's internal Screen component calls useNavigation() which can throw
-// "Couldn't find a navigation context" when Supabase realtime events trigger re-renders
-// that race with React Navigation's context propagation. This boundary catches that
-// transient error and auto-recovers on the next render cycle.
+// Error boundary for TripProgress — catches transient navigation context errors
+// that can occur when Supabase realtime events trigger rapid re-renders.
+// Uses exponential backoff to avoid infinite crash loops (React 19 logs all caught errors).
 class TripProgressErrorBoundary extends Component<
   { children: React.ReactNode },
-  { hasError: boolean }
+  { hasError: boolean; retryCount: number }
 > {
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private static MAX_RETRIES = 3;
+
   constructor(props: { children: React.ReactNode }) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, retryCount: 0 };
   }
 
   static getDerivedStateFromError(_: Error) {
@@ -22,18 +24,43 @@ class TripProgressErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, _errorInfo: ErrorInfo) {
-    console.warn('[TripProgress] Navigation context error, recovering:', error.message);
-    setTimeout(() => this.setState({ hasError: false }), 0);
+    if (this.state.retryCount < TripProgressErrorBoundary.MAX_RETRIES) {
+      const delay = Math.min(500 * Math.pow(2, this.state.retryCount), 4000);
+      this.retryTimer = setTimeout(() => {
+        this.setState(prev => ({ hasError: false, retryCount: prev.retryCount + 1 }));
+      }, delay);
+    }
   }
+
+  componentWillUnmount() {
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+  }
+
+  handleManualRetry = () => {
+    this.setState({ hasError: false, retryCount: 0 });
+  };
 
   render() {
     if (this.state.hasError) {
-      return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#2563eb" />
-          <Text style={{ marginTop: 12, color: '#6b7280', fontSize: 14 }}>Loading trip...</Text>
-        </View>
-      );
+      if (this.state.retryCount >= TripProgressErrorBoundary.MAX_RETRIES) {
+        return (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <Text style={{ fontSize: 16, color: '#374151', fontWeight: '600', marginBottom: 8 }}>
+              Something went wrong
+            </Text>
+            <Text style={{ color: '#6b7280', fontSize: 14, textAlign: 'center', marginBottom: 16 }}>
+              Trip progress failed to load. Please try again.
+            </Text>
+            <TouchableOpacity
+              onPress={this.handleManualRetry}
+              style={{ backgroundColor: '#2563eb', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+            >
+              <Text style={{ color: 'white', fontWeight: '600' }}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      }
+      return null;
     }
     return this.props.children;
   }
