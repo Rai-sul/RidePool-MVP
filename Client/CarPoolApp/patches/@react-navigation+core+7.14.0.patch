@@ -1,0 +1,36 @@
+diff --git a/node_modules/@react-navigation/core/lib/module/NavigationStateContext.js b/node_modules/@react-navigation/core/lib/module/NavigationStateContext.js
+index 4221b52..6d2f1e7 100644
+--- a/node_modules/@react-navigation/core/lib/module/NavigationStateContext.js
++++ b/node_modules/@react-navigation/core/lib/module/NavigationStateContext.js
+@@ -2,22 +2,16 @@
+ 
+ import * as React from 'react';
+ const MISSING_CONTEXT_ERROR = "Couldn't find a navigation context. Have you wrapped your app with 'NavigationContainer'? See https://reactnavigation.org/docs/getting-started for setup instructions.";
++
++// Patched: return safe no-op defaults instead of throwing, so transient
++// context loss during React 19 concurrent re-renders doesn't crash the app.
++const NOOP = () => {};
+ export const NavigationStateContext = /*#__PURE__*/React.createContext({
+   isDefault: true,
+-  get getKey() {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  },
+-  get setKey() {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  },
+-  get getState() {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  },
+-  get setState() {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  },
+-  get getIsInitial() {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  }
++  getKey: NOOP,
++  setKey: NOOP,
++  getState: () => undefined,
++  setState: NOOP,
++  getIsInitial: () => true,
+ });
+ //# sourceMappingURL=NavigationStateContext.js.map
