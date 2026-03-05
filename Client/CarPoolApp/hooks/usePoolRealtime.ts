@@ -50,14 +50,14 @@ interface PoolMemberWithProfile extends PoolMember {
  * Also tracks unread messages from co-riders
  * Falls back to polling if realtime fails
  */
-export const usePoolRealtime = (poolId: string | null, currentUserId: string | null) => {
+export const usePoolRealtime = (poolId: string | null, currentUserId: string | null, initialPool?: Pool | null) => {
   const [state, setState] = useState<PoolRealtimeState>({
-    pool: null,
-    members: [],
+    pool: initialPool || null,
+    members: initialPool?.pool_members || [],
     searchTiming: null,
-    loading: false,
+    loading: !initialPool, // only loading if we have no initial data
     error: null,
-    lastUpdated: null,
+    lastUpdated: initialPool ? new Date() : null,
     unreadMessageCounts: {},
     isConnected: false,
   });
@@ -66,21 +66,21 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const poolIdRef = useRef<string | null>(null);
   const isConnectedRef = useRef(false);
+  const hasFetchedRef = useRef(!!initialPool);
   
   // Keep poolId ref in sync
   useEffect(() => {
     poolIdRef.current = poolId;
   }, [poolId]);
 
-  // Fetch initial pool data
+  // Fetch pool data — only shows loading spinner on the first fetch
   const fetchPoolData = useCallback(async () => {
-    if (!poolId) {
-      console.log('[usePoolRealtime] No poolId provided, skipping fetch');
-      return;
-    }
+    if (!poolId) return;
 
-    console.log(`[usePoolRealtime] Fetching pool data for: ${poolId}`);
-    setState(prev => ({ ...prev, loading: true, error: null }));
+    // Only show loading spinner on first fetch (before we have any data)
+    if (!hasFetchedRef.current) {
+      setState(prev => ({ ...prev, loading: true, error: null }));
+    }
 
     try {
       const response = await poolService.getPoolById(poolId);
@@ -88,7 +88,8 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
       if (response.success && response.data?.pool) {
         const pool = response.data.pool;
         const searchTiming = response.data.search_timing || null;
-        console.log(`[usePoolRealtime] Pool fetched successfully: ${pool.id}, status: ${pool.status}, members: ${pool.pool_members?.length || 0}`);
+        hasFetchedRef.current = true;
+        console.log(`[usePoolRealtime] Pool fetched: status=${pool.status}, driver=${pool.driver_id ? 'yes' : 'no'}, members=${pool.pool_members?.length || 0}`);
         setState(prev => ({
           ...prev,
           pool,
@@ -101,7 +102,6 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
       } else {
         const errorMessage = response.message || 'Pool not found';
         const isNotFound = errorMessage.toLowerCase().includes('not found');
-        console.log(`[usePoolRealtime] Pool ${poolId} response issue: ${errorMessage}`);
         
         if (isNotFound) {
           setState(prev => ({
@@ -157,7 +157,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
     }
   }, [poolId]);
 
-  // Polling function for fallback - uses refs to check for changes
+  // Polling function for fallback
   const pollForUpdates = useCallback(async () => {
     const currentPoolId = poolIdRef.current;
     if (!currentPoolId) return;
@@ -166,34 +166,36 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
       const response = await poolService.getPoolById(currentPoolId);
       if (response.success && response.data?.pool) {
         const pool = response.data.pool;
-        const newMemberCount = pool.pool_members?.length || 0;
         const pollingSearchTiming = response.data.search_timing;
         
         setState(prev => {
-          const memberCountChanged = newMemberCount !== (prev.members?.length || 0);
           const statusChanged = prev.pool?.status !== pool.status;
           const driverChanged = prev.pool?.driver_id !== pool.driver_id;
-          const searchTimingChanged = pollingSearchTiming &&
-            JSON.stringify(pollingSearchTiming) !== JSON.stringify(prev.searchTiming);
+          const memberCountChanged = (pool.pool_members?.length || 0) !== (prev.members?.length || 0);
+          // Also compare updated_at to catch relation data changes (driver assigned, etc.)
+          const updatedAtChanged = prev.pool?.updated_at !== pool.updated_at;
           
-          if (memberCountChanged || statusChanged || driverChanged) {
-            console.log(`[usePoolRealtime] Polling detected changes: members=${memberCountChanged}, status=${statusChanged}, driver=${driverChanged}`);
+          if (statusChanged || driverChanged || memberCountChanged || updatedAtChanged) {
+            console.log(`[usePoolRealtime] Poll: changes detected — status=${pool.status}, driver=${pool.driver_id ? 'yes' : 'no'}, members=${pool.pool_members?.length || 0}`);
             return {
               ...prev,
               pool,
               members: pool.pool_members || [],
               searchTiming: pollingSearchTiming || prev.searchTiming || null,
+              loading: false,
               lastUpdated: new Date(),
             };
           }
-          if (searchTimingChanged) {
-            return { ...prev, searchTiming: pollingSearchTiming };
+          // Clear stuck loading even when no data changes
+          if (prev.loading) {
+            return { ...prev, loading: false };
           }
           return prev;
         });
       }
     } catch (err) {
-      console.warn('[usePoolRealtime] Polling error:', err);
+      // Clear loading on error
+      setState(prev => prev.loading ? { ...prev, loading: false } : prev);
     }
   }, []);
 
@@ -228,12 +230,10 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
         (payload) => {
           console.log('[usePoolRealtime] Pool update received:', payload.eventType);
           
-          if (payload.eventType === 'UPDATE' && payload.new) {
-            setState(prev => ({
-              ...prev,
-              pool: { ...prev.pool, ...payload.new } as Pool,
-              lastUpdated: new Date(),
-            }));
+          if (payload.eventType === 'UPDATE') {
+            // Full refetch to get relation data (driver, vehicles, members)
+            // Realtime payload only has raw columns, no joins
+            fetchPoolData();
           } else if (payload.eventType === 'DELETE') {
             setState(prev => ({
               ...prev,
@@ -252,29 +252,9 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           filter: `pool_id=eq.${poolId}`,
         },
         (payload) => {
-          console.log('[usePoolRealtime] Pool member update received:', payload.eventType);
-          
-          if (payload.eventType === 'INSERT' && payload.new) {
-            console.log('[usePoolRealtime] New member joined, refetching pool data...');
-            fetchPoolData();
-          } else if (payload.eventType === 'DELETE' && payload.old) {
-            console.log('[usePoolRealtime] Member left, refetching pool data...');
-            fetchPoolData();
-          } else if (payload.eventType === 'UPDATE' && payload.new) {
-            const updatedMember = payload.new as any;
-            if (updatedMember.left_at !== null) {
-              console.log('[usePoolRealtime] Member left_at updated, refetching pool data...');
-              fetchPoolData();
-            } else {
-              setState(prev => ({
-                ...prev,
-                members: prev.members.map(m => 
-                  m.id === (payload.new as PoolMember).id ? payload.new as PoolMember : m
-                ),
-                lastUpdated: new Date(),
-              }));
-            }
-          }
+          console.log('[usePoolRealtime] Pool member change:', payload.eventType);
+          // Always refetch to get enriched member data (user profiles, rides)
+          fetchPoolData();
         }
       )
       .on(

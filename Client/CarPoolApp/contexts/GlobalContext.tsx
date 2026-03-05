@@ -148,12 +148,16 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
                   await AsyncStorage.removeItem(ACTIVE_TRIP_STORAGE_KEY);
                   return;
                 }
-                console.log('[GlobalContext] Restored active trip:', trip.poolId);
-                setActiveTrip(trip);
-                setSelectedPool(trip.pool);
+                console.log('[GlobalContext] Restored active trip:', trip.poolId, 'status:', pool.status);
+                // Use fresh pool data from API, not stale data from storage
+                const freshTrip = { ...trip, pool: pool as Pool };
+                setActiveTrip(freshTrip);
+                setSelectedPool(pool as Pool);
                 setPickupLocation(trip.pickupLocation);
                 setSelectedDestination(trip.destination);
                 setSelectedRideType(trip.rideType);
+                // Persist the updated trip data
+                await AsyncStorage.setItem(ACTIVE_TRIP_STORAGE_KEY, JSON.stringify(freshTrip));
               } else {
                 // API returned success=false - check if pool is genuinely not found
                 const errorMessage = response.message || '';

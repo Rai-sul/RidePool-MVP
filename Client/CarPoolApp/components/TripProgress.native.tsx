@@ -68,7 +68,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
     isConnected,
     refresh: refreshPool,
     clearUnreadMessages,
-  } = usePoolRealtime(selectedPool?.id || null, userProfile?.id || null);
+  } = usePoolRealtime(selectedPool?.id || null, userProfile?.id || null, selectedPool as any);
 
   // Use the current member's ride info (server source of truth) for per-user trip details
   const currentMemberRide = useMemo(() => {
@@ -254,8 +254,8 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
 
   // Driver info - use real pool data if available
   const driver = {
-    name: poolDetails?.driver?.id ? 'Driver' : (selectedPool?.driverName || 'Waiting for driver...'),
-    initial: poolDetails?.driver?.id?.charAt(0).toUpperCase() || selectedPool?.photo || 'D',
+    name: poolDetails?.driver?.full_name || selectedPool?.driverName || 'Driver',
+    initial: (poolDetails?.driver?.full_name || selectedPool?.driverName || 'D').charAt(0).toUpperCase(),
     rating: poolDetails?.driver?.average_rating || selectedPool?.rating || 0,
     trips: 0,
     vehicle: poolDetails?.vehicles?.model || selectedPool?.carModel || selectedPool?.vehicle_type || 'N/A',
@@ -954,7 +954,7 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
             Co-Riders {coRiders.length > 0 ? `(${coRiders.length})` : ''}
           </Text>
 
-          {loadingPool ? (
+          {loadingPool && coRiders.length === 0 ? (
             <View className="items-center py-4">
               <ActivityIndicator size="small" color="#2563eb" />
               <Text className="text-gray-500 text-sm mt-2">Loading co-riders...</Text>

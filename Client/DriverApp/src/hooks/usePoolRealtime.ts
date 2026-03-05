@@ -34,6 +34,7 @@ export const usePoolRealtime = (poolId: string | null) => {
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const poolIdRef = useRef<string | null>(null);
   const isConnectedRef = useRef(false);
+  const hasFetchedRef = useRef(false);
 
   useEffect(() => {
     poolIdRef.current = poolId;
@@ -42,15 +43,18 @@ export const usePoolRealtime = (poolId: string | null) => {
   const fetchPoolData = useCallback(async () => {
     if (!poolId) return;
 
-    setState(prev => ({ ...prev, loading: true, error: null }));
+    // Only show loading spinner on first fetch
+    if (!hasFetchedRef.current) {
+      setState(prev => ({ ...prev, loading: true, error: null }));
+    }
 
     try {
       const response = await driverService.getActivePool();
 
       if (response.success && response.data) {
-        // Server returns { data: { active_pool: { ... } } }
         const pool = (response.data as any).active_pool || response.data;
         if (pool && pool.id) {
+          hasFetchedRef.current = true;
           setState(prev => ({
             ...prev,
             pool,
@@ -100,8 +104,12 @@ export const usePoolRealtime = (poolId: string | null) => {
             return {
               ...prev,
               pool,
+              loading: false,
               lastUpdated: new Date(),
             };
+          }
+          if (prev.loading) {
+            return { ...prev, loading: false };
           }
           return prev;
         });
