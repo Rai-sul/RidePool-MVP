@@ -620,6 +620,13 @@ export class GoogleMapsService {
   /**
    * Generate platform-specific navigation URLs
    * Returns different formats optimized for Android, iOS, and web
+   *
+   * IMPORTANT: When waypoints are present, ALL platforms use the universal
+   * https://www.google.com/maps/dir/ URL format because:
+   * - Android's google.navigation: scheme does NOT support waypoints
+   * - iOS's comgooglemaps:// scheme is unreliable for multi-stop routes
+   * The universal URL opens Google Maps app on both platforms when installed
+   * and properly preserves the optimized waypoint order.
    */
   generatePlatformNavigationLinks(
     origin: Location,
@@ -639,25 +646,17 @@ export class GoogleMapsService {
       universal = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destStr)}&travelmode=driving`;
     }
 
-    // Android: Use google.navigation intent for direct navigation (no waypoints support)
-    // If waypoints exist, fall back to directions URL
     let android: string;
-    if (waypoints && waypoints.length > 0) {
-      // Android with waypoints - use intent with multiple destinations
-      const allStops = [...waypoints.map(wp => `${wp.latitude},${wp.longitude}`), destStr];
-      android = `google.navigation:q=${allStops[allStops.length - 1]}&waypoints=${waypoints.map(wp => `${wp.latitude},${wp.longitude}`).join('|')}&mode=d`;
-    } else {
-      // Android without waypoints - direct navigation
-      android = `google.navigation:q=${destStr}&mode=d`;
-    }
-
-    // iOS: Use comgooglemaps:// scheme
     let ios: string;
+
     if (waypoints && waypoints.length > 0) {
-      const allStops = [...waypoints.map(wp => `${wp.latitude},${wp.longitude}`), destStr];
-      const daddrStr = allStops.join('+to:');
-      ios = `comgooglemaps://?saddr=${originStr}&daddr=${daddrStr}&directionsmode=driving`;
+      // Multi-stop route: use universal URL for all platforms
+      // Native schemes (google.navigation:, comgooglemaps://) silently drop waypoints
+      android = universal;
+      ios = universal;
     } else {
+      // Single destination: use native schemes for direct turn-by-turn navigation
+      android = `google.navigation:q=${destStr}&mode=d`;
       ios = `comgooglemaps://?saddr=${originStr}&daddr=${destStr}&directionsmode=driving`;
     }
 

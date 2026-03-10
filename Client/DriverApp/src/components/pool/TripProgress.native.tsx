@@ -141,7 +141,7 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
     return () => { isMounted = false; };
   }, [poolId, poolStatus]);
 
-  // Handle navigate button — opens Google Maps with turn-by-turn navigation
+  // Handle navigate button — opens Google Maps with optimized multi-stop route
   const handleStartNavigation = useCallback(async () => {
     if (!poolId) return;
 
@@ -150,8 +150,11 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
       const response = await driverService.getNavigationLink(poolId);
       if (response.success && response.data) {
         const navData = response.data as any;
-        let url = '';
+        const hasMultipleStops = (navData.meta?.waypointCount ?? 0) > 0;
 
+        // For multi-stop routes, prefer platform links (which now use universal URL
+        // format for waypoint support) then fall back to navigationUrl
+        let url = '';
         if (navData.platformLinks) {
           if (Platform.OS === 'android' && navData.platformLinks.android) {
             url = navData.platformLinks.android;
@@ -160,7 +163,7 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
           }
         }
         if (!url) {
-          url = navData.navigationUrl || '';
+          url = navData.platformLinks?.universal || navData.navigationUrl || '';
         }
 
         if (url) {
@@ -168,11 +171,12 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
           if (canOpen) {
             await Linking.openURL(url);
           } else {
+            // Fallback chain: universal → navigationUrl
             const fallback = navData.platformLinks?.universal || navData.navigationUrl;
-            if (fallback) {
+            if (fallback && fallback !== url) {
               await Linking.openURL(fallback);
             } else {
-              Alert.alert('Navigation', 'Could not open Google Maps.');
+              Alert.alert('Navigation', 'Could not open Google Maps. Please install Google Maps.');
             }
           }
         } else {

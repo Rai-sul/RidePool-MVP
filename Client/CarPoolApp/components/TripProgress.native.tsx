@@ -345,12 +345,13 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
   }, [poolStatus]);
 
   // Get the best navigation URL for the current platform
+  // For multi-stop routes, platform links now use the universal URL format
+  // (since native schemes drop waypoints), so all platforms work correctly
   const getBestNavigationUrl = useCallback((navLink: typeof navigationLink): string => {
     if (!navLink) return '';
     
-    // Try platform-specific URLs first for better navigation experience
+    // Try platform-specific URLs first (server returns universal format for multi-stop)
     if (navLink.platformLinks) {
-      // For React Native, we can detect platform
       const { Platform } = require('react-native');
       if (Platform.OS === 'android' && navLink.platformLinks.android) {
         return navLink.platformLinks.android;

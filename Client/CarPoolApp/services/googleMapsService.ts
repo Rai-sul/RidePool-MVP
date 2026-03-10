@@ -211,7 +211,7 @@ export function generateNavigationDeepLink(
  * 
  * @param origin - Driver's current location
  * @param destination - Final destination
- * @param waypoints - Pickup points along the way
+ * @param waypoints - Pickup points along the way (in optimized order)
  */
 export async function openGoogleMapsNavigation(
   origin: { latitude: number; longitude: number },
@@ -220,13 +220,14 @@ export async function openGoogleMapsNavigation(
 ): Promise<void> {
   const url = generateNavigationDeepLink(origin, destination, waypoints);
   
-  // For React Native / Expo, use Linking
-  // Import { Linking } from 'react-native'; at the top of your component
-  // await Linking.openURL(url);
-  
-  // For web, use window.open
-  if (typeof window !== 'undefined') {
-    window.open(url, '_blank');
+  // Use Linking for React Native / Expo
+  const { Linking } = require('react-native');
+  const canOpen = await Linking.canOpenURL(url);
+  if (canOpen) {
+    await Linking.openURL(url);
+  } else {
+    // Fallback: try opening as web URL
+    await Linking.openURL(url);
   }
 }
 
