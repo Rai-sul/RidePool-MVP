@@ -4,6 +4,9 @@ import { supabase } from '../lib/supabase';
 import { Pool, PoolMember } from '../types';
 import { poolService, SearchTiming } from '../services/pool.service';
 
+// Debounce delay to prevent rapid state updates from multiple realtime events
+const DEBOUNCE_DELAY_MS = 100;
+
 // Polling intervals
 const POLLING_INTERVAL_FAST = 3000;   // When realtime is disconnected
 const POLLING_INTERVAL_SLOW = 30000;  // Heartbeat when realtime is connected
@@ -68,6 +71,17 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
   const poolIdRef = useRef<string | null>(null);
   const isConnectedRef = useRef(false);
   const hasFetchedRef = useRef(!!initialPool);
+  const isMountedRef = useRef(true);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingUpdateRef = useRef<React.SetStateAction<PoolRealtimeState> | null>(null);
+  
+  // Track mounted state
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   
   // Keep poolId ref in sync
   useEffect(() => {
@@ -75,13 +89,44 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
   }, [poolId]);
 
   // Helper to safely update state without blocking UI
-  // Uses InteractionManager and startTransition to avoid navigation context errors
+  // Uses InteractionManager, startTransition, and debouncing to avoid navigation context errors
   const safeSetState = useCallback((updater: React.SetStateAction<PoolRealtimeState>) => {
-    InteractionManager.runAfterInteractions(() => {
-      startTransition(() => {
-        setState(updater);
+    // Don't update if unmounted
+    if (!isMountedRef.current) return;
+    
+    // Store the pending update for debouncing
+    pendingUpdateRef.current = updater;
+    
+    // Clear any existing debounce timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    // Debounce to prevent rapid state updates
+    debounceTimerRef.current = setTimeout(() => {
+      if (!isMountedRef.current) return;
+      
+      const updateToApply = pendingUpdateRef.current;
+      if (!updateToApply) return;
+      pendingUpdateRef.current = null;
+      
+      // Wait for any pending interactions to complete
+      InteractionManager.runAfterInteractions(() => {
+        if (!isMountedRef.current) return;
+        
+        // Use startTransition to mark this as a non-urgent update
+        startTransition(() => {
+          if (!isMountedRef.current) return;
+          
+          try {
+            setState(updateToApply);
+          } catch (err) {
+            // Silently ignore context errors during concurrent renders
+            console.warn('[usePoolRealtime] State update failed (likely context loss):', err);
+          }
+        });
       });
-    });
+    }, DEBOUNCE_DELAY_MS);
   }, []);
 
   // Fetch pool data — only shows loading spinner on the first fetch
@@ -207,7 +252,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           return prev;
         });
       }
-    } catch (err) {
+    } catch {
       // Clear loading on error
       safeSetState(prev => prev.loading ? { ...prev, loading: false } : prev);
     }
@@ -318,7 +363,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
     // Start with fast polling until realtime connects
     pollingRef.current = setInterval(pollForUpdates, POLLING_INTERVAL_FAST);
 
-    // Cleanup subscription and polling on unmount
+    // Cleanup subscription, polling, and debounce timer on unmount
     return () => {
       console.log('[usePoolRealtime] Unsubscribing from pool updates');
       if (channelRef.current) {
@@ -328,6 +373,10 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
         pollingRef.current = null;
+      }
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
       }
     };
   }, [poolId, currentUserId, fetchPoolData, pollForUpdates, restartPolling, safeSetState]);

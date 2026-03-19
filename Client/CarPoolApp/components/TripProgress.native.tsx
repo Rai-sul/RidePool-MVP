@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, useContext } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { NavigationContext } from '@react-navigation/native';
 import { MapPin, Phone, MessageCircle, User, Navigation, Clock, Star, Users, AlertCircle, RefreshCw, Plus, X, Route } from './Icons';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
@@ -27,6 +28,10 @@ type TripProgressProps = {
 };
 
 export default function TripProgress({ userProfile, pickupLocation, destination, selectedPool, onComplete, onChatDriver, onChatCoRider, onCreateNewPool, onCancelPool, onPoolCancelled }: TripProgressProps) {
+  // Check if navigation context is available - skip render if temporarily unavailable
+  // This prevents crashes during React 19 concurrent re-renders when context is transiently lost
+  const navigationContext = useContext(NavigationContext);
+  
   const [progress, setProgress] = useState(15);
   const [tripStatus, setTripStatus] = useState<'waiting' | 'on-the-way' | 'arrived' | 'in-progress' | 'completed'>('waiting');
   const [driverPosition, setDriverPosition] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -526,6 +531,20 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
     }
     return 'Arrived';
   };
+
+  // If navigation context is temporarily unavailable during a concurrent render,
+  // return a minimal placeholder to prevent crashes. The context will be restored
+  // on the next render cycle.
+  if (navigationContext === undefined) {
+    return (
+      <SafeAreaView className="flex-1 bg-gray-50">
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#2563eb" />
+          <Text className="mt-4 text-gray-500">Loading trip...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">

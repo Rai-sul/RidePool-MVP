@@ -7,6 +7,9 @@ import type { Pool } from '../types';
 const POLLING_INTERVAL_FAST = 3000;   // When realtime is disconnected
 const POLLING_INTERVAL_SLOW = 30000;  // Heartbeat when realtime is connected
 
+// Debounce delay to prevent rapid state updates from multiple realtime events
+const DEBOUNCE_DELAY_MS = 100;
+
 interface PoolRealtimeState {
   pool: Pool | null;
   loading: boolean;
@@ -36,19 +39,61 @@ export const usePoolRealtime = (poolId: string | null) => {
   const poolIdRef = useRef<string | null>(null);
   const isConnectedRef = useRef(false);
   const hasFetchedRef = useRef(false);
+  const isMountedRef = useRef(true);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingUpdateRef = useRef<React.SetStateAction<PoolRealtimeState> | null>(null);
+
+  // Track mounted state
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     poolIdRef.current = poolId;
   }, [poolId]);
 
   // Helper to safely update state without blocking UI
-  // Uses InteractionManager and startTransition to avoid navigation context errors
+  // Uses InteractionManager, startTransition, and debouncing to avoid navigation context errors
   const safeSetState = useCallback((updater: React.SetStateAction<PoolRealtimeState>) => {
-    InteractionManager.runAfterInteractions(() => {
-      startTransition(() => {
-        setState(updater);
+    // Don't update if unmounted
+    if (!isMountedRef.current) return;
+    
+    // Store the pending update for debouncing
+    pendingUpdateRef.current = updater;
+    
+    // Clear any existing debounce timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    // Debounce to prevent rapid state updates
+    debounceTimerRef.current = setTimeout(() => {
+      if (!isMountedRef.current) return;
+      
+      const updateToApply = pendingUpdateRef.current;
+      if (!updateToApply) return;
+      pendingUpdateRef.current = null;
+      
+      // Wait for any pending interactions to complete
+      InteractionManager.runAfterInteractions(() => {
+        if (!isMountedRef.current) return;
+        
+        // Use startTransition to mark this as a non-urgent update
+        startTransition(() => {
+          if (!isMountedRef.current) return;
+          
+          try {
+            setState(updateToApply);
+          } catch (err) {
+            // Silently ignore context errors during concurrent renders
+            console.warn('[usePoolRealtime] State update failed (likely context loss):', err);
+          }
+        });
       });
-    });
+    }, DEBOUNCE_DELAY_MS);
   }, []);
 
   const fetchPoolData = useCallback(async () => {
@@ -113,9 +158,17 @@ export const usePoolRealtime = (poolId: string | null) => {
           const passengersChanged = (prev.pool?.passengers?.length || 0) !== (pool.passengers?.length || 0);
           // Also check current_passengers count for more reliable detection
           const currentPassengersChanged = prev.pool?.current_passengers !== pool.current_passengers;
+          
+          // Check if passenger user_ids have changed (handles cancellations where count might be same)
+          const prevUserIds = new Set((prev.pool?.passengers || []).map((p: any) => p.user_id));
+          const newUserIds = new Set((pool.passengers || []).map((p: any) => p.user_id));
+          const membershipChanged = 
+            prevUserIds.size !== newUserIds.size ||
+            [...prevUserIds].some(id => !newUserIds.has(id)) ||
+            [...newUserIds].some(id => !prevUserIds.has(id));
 
-          if (statusChanged || passengersChanged || currentPassengersChanged) {
-            console.log(`[usePoolRealtime] Poll: changes detected — status=${pool.status}, passengers=${pool.passengers?.length || 0}, current=${pool.current_passengers}`);
+          if (statusChanged || passengersChanged || currentPassengersChanged || membershipChanged) {
+            console.log(`[usePoolRealtime] Poll: changes detected — status=${pool.status}, passengers=${pool.passengers?.length || 0}, current=${pool.current_passengers}, membershipChanged=${membershipChanged}`);
             return {
               ...prev,
               pool,
@@ -129,7 +182,7 @@ export const usePoolRealtime = (poolId: string | null) => {
           return prev;
         });
       }
-    } catch (err) {
+    } catch {
       // Silently fail on polling errors
     }
   }, [safeSetState]);
@@ -208,6 +261,10 @@ export const usePoolRealtime = (poolId: string | null) => {
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
         pollingRef.current = null;
+      }
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
       }
     };
   }, [poolId, fetchPoolData, pollForUpdates, restartPolling, safeSetState]);
