@@ -5,7 +5,8 @@ import { Pool, PoolMember } from '../types';
 import { poolService, SearchTiming } from '../services/pool.service';
 
 // Debounce delay to prevent rapid state updates from multiple realtime events
-const DEBOUNCE_DELAY_MS = 100;
+// Increased to 500ms to give React time to settle between updates
+const DEBOUNCE_DELAY_MS = 500;
 
 // Polling intervals
 const POLLING_INTERVAL_FAST = 3000;   // When realtime is disconnected
