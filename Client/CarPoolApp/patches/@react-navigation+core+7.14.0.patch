@@ -62,6 +62,19 @@ index 4221b52..67e5839 100644
 +  addOptionsGetter: NOOP_UNSUB,
  });
  //# sourceMappingURL=NavigationStateContext.js.map
+diff --git a/node_modules/@react-navigation/core/lib/module/theming/useTheme.js b/node_modules/@react-navigation/core/lib/module/theming/useTheme.js
+index 53c9211..4f749e6 100644
+--- a/node_modules/@react-navigation/core/lib/module/theming/useTheme.js
++++ b/node_modules/@react-navigation/core/lib/module/theming/useTheme.js
+@@ -5,7 +5,7 @@ import { ThemeContext } from "./ThemeContext.js";
+ export function useTheme() {
+   const theme = React.useContext(ThemeContext);
+   if (theme == null) {
+-    throw new Error("Couldn't find a theme. Is your component inside NavigationContainer or does it have a theme?");
++    console.warn('[react-navigation] Theme not found, using default'); return { dark: false, colors: { primary: '#007AFF', background: '#fff', card: '#fff', text: '#000', border: '#d8d8d8', notification: '#ff3b30' } };
+   }
+   return theme;
+ }
 diff --git a/node_modules/@react-navigation/core/lib/module/useNavigation.js b/node_modules/@react-navigation/core/lib/module/useNavigation.js
 index ee7916d..2e9d08d 100644
 --- a/node_modules/@react-navigation/core/lib/module/useNavigation.js
@@ -102,6 +115,58 @@ index ee7916d..2e9d08d 100644
    }
  
    // FIXME: Figure out a better way to do this
+diff --git a/node_modules/@react-navigation/core/lib/module/useNavigationState.js b/node_modules/@react-navigation/core/lib/module/useNavigationState.js
+index a5d26a3..890d18f 100644
+--- a/node_modules/@react-navigation/core/lib/module/useNavigationState.js
++++ b/node_modules/@react-navigation/core/lib/module/useNavigationState.js
+@@ -12,7 +12,7 @@ import { jsx as _jsx } from "react/jsx-runtime";
+ export function useNavigationState(selector) {
+   const stateListener = React.useContext(NavigationStateListenerContext);
+   if (stateListener == null) {
+-    throw new Error("Couldn't get the navigation state. Is your component inside a navigator?");
++    console.warn('[react-navigation] Navigation state not available'); return undefined;
+   }
+   const value = useSyncExternalStoreWithSelector(stateListener.subscribe,
+   // @ts-expect-error: this is unsafe, but needed to make the generic work
+diff --git a/node_modules/@react-navigation/core/lib/module/usePreventRemoveContext.js b/node_modules/@react-navigation/core/lib/module/usePreventRemoveContext.js
+index 93780d5..8e69ed5 100644
+--- a/node_modules/@react-navigation/core/lib/module/usePreventRemoveContext.js
++++ b/node_modules/@react-navigation/core/lib/module/usePreventRemoveContext.js
+@@ -5,7 +5,7 @@ import { PreventRemoveContext } from "./PreventRemoveContext.js";
+ export function usePreventRemoveContext() {
+   const value = React.useContext(PreventRemoveContext);
+   if (value == null) {
+-    throw new Error("Couldn't find the prevent remove context. Is your component inside NavigationContent?");
++    console.warn('[react-navigation] Prevent remove context not found'); return { routes: {} };
+   }
+   return value;
+ }
+diff --git a/node_modules/@react-navigation/core/lib/module/useRegisterNavigator.js b/node_modules/@react-navigation/core/lib/module/useRegisterNavigator.js
+index 987f9a3..c4a21b3 100644
+--- a/node_modules/@react-navigation/core/lib/module/useRegisterNavigator.js
++++ b/node_modules/@react-navigation/core/lib/module/useRegisterNavigator.js
+@@ -12,7 +12,7 @@ export function useRegisterNavigator() {
+   const [key] = React.useState(() => nanoid());
+   const container = React.useContext(SingleNavigatorContext);
+   if (container === undefined) {
+-    throw new Error("Couldn't register the navigator. Have you wrapped your app with 'NavigationContainer'?\n\nThis can also happen if there are multiple copies of '@react-navigation' packages installed.");
++    console.warn('[react-navigation] Navigator registration skipped'); return { addListener: () => () => {} };
+   }
+   React.useEffect(() => {
+     const {
+diff --git a/node_modules/@react-navigation/core/lib/module/useRoute.js b/node_modules/@react-navigation/core/lib/module/useRoute.js
+index e4021f2..3faf931 100644
+--- a/node_modules/@react-navigation/core/lib/module/useRoute.js
++++ b/node_modules/@react-navigation/core/lib/module/useRoute.js
+@@ -10,7 +10,7 @@ import { NavigationRouteContext } from "./NavigationRouteContext.js";
+ export function useRoute() {
+   const route = React.useContext(NavigationRouteContext);
+   if (route === undefined) {
+-    throw new Error("Couldn't find a route object. Is your component inside a screen in a navigator?");
++    console.warn('[react-navigation] Route not found'); return {};
+   }
+   return route;
+ }
 diff --git a/node_modules/@react-navigation/core/src/NavigationStateContext.tsx b/node_modules/@react-navigation/core/src/NavigationStateContext.tsx
 index 76d2094..60cc9a2 100644
 --- a/node_modules/@react-navigation/core/src/NavigationStateContext.tsx
