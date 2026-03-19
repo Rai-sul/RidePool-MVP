@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, startTransition } from 'react';
+import { InteractionManager } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { driverService } from '../services/driver.service';
 import type { Pool } from '../types';
@@ -40,6 +41,16 @@ export const usePoolRealtime = (poolId: string | null) => {
     poolIdRef.current = poolId;
   }, [poolId]);
 
+  // Helper to safely update state without blocking UI
+  // Uses InteractionManager and startTransition to avoid navigation context errors
+  const safeSetState = useCallback((updater: React.SetStateAction<PoolRealtimeState>) => {
+    InteractionManager.runAfterInteractions(() => {
+      startTransition(() => {
+        setState(updater);
+      });
+    });
+  }, []);
+
   const fetchPoolData = useCallback(async () => {
     if (!poolId) return;
 
@@ -55,7 +66,8 @@ export const usePoolRealtime = (poolId: string | null) => {
         const pool = (response.data as any).active_pool || response.data;
         if (pool && pool.id) {
           hasFetchedRef.current = true;
-          setState(prev => ({
+          console.log(`[usePoolRealtime] Pool fetched: status=${pool.status}, passengers=${pool.passengers?.length || 0}, current_passengers=${pool.current_passengers}`);
+          safeSetState(prev => ({
             ...prev,
             pool,
             loading: false,
@@ -63,27 +75,27 @@ export const usePoolRealtime = (poolId: string | null) => {
             error: null,
           }));
         } else {
-          setState(prev => ({
+          safeSetState(prev => ({
             ...prev,
             loading: false,
             error: prev.pool ? null : 'Pool not found',
           }));
         }
       } else {
-        setState(prev => ({
+        safeSetState(prev => ({
           ...prev,
           loading: false,
           error: prev.pool ? null : 'Pool not found',
         }));
       }
     } catch (err: any) {
-      setState(prev => ({
+      safeSetState(prev => ({
         ...prev,
         loading: false,
         error: prev.pool ? null : (err.message || 'Failed to load pool'),
       }));
     }
-  }, [poolId]);
+  }, [poolId, safeSetState]);
 
   const pollForUpdates = useCallback(async () => {
     const currentPoolId = poolIdRef.current;
@@ -96,11 +108,14 @@ export const usePoolRealtime = (poolId: string | null) => {
         const pool = (response.data as any).active_pool || response.data;
         if (!pool || !pool.id) return;
 
-        setState(prev => {
+        safeSetState(prev => {
           const statusChanged = prev.pool?.status !== pool.status;
           const passengersChanged = (prev.pool?.passengers?.length || 0) !== (pool.passengers?.length || 0);
+          // Also check current_passengers count for more reliable detection
+          const currentPassengersChanged = prev.pool?.current_passengers !== pool.current_passengers;
 
-          if (statusChanged || passengersChanged) {
+          if (statusChanged || passengersChanged || currentPassengersChanged) {
+            console.log(`[usePoolRealtime] Poll: changes detected — status=${pool.status}, passengers=${pool.passengers?.length || 0}, current=${pool.current_passengers}`);
             return {
               ...prev,
               pool,
@@ -117,7 +132,7 @@ export const usePoolRealtime = (poolId: string | null) => {
     } catch (err) {
       // Silently fail on polling errors
     }
-  }, []);
+  }, [safeSetState]);
 
   // Restart polling with the appropriate interval based on connection status
   const restartPolling = useCallback((connected: boolean) => {
@@ -125,6 +140,7 @@ export const usePoolRealtime = (poolId: string | null) => {
       clearInterval(pollingRef.current);
     }
     const interval = connected ? POLLING_INTERVAL_SLOW : POLLING_INTERVAL_FAST;
+    console.log(`[usePoolRealtime] Polling interval: ${interval / 1000}s (realtime ${connected ? 'connected' : 'disconnected'})`);
     pollingRef.current = setInterval(pollForUpdates, interval);
   }, [pollForUpdates]);
 
@@ -144,6 +160,7 @@ export const usePoolRealtime = (poolId: string | null) => {
           filter: `id=eq.${poolId}`,
         },
         (payload) => {
+          console.log('[usePoolRealtime] Pool update received:', payload.eventType);
           if (payload.eventType === 'UPDATE' && payload.new) {
             fetchPoolData();
           }
@@ -158,17 +175,21 @@ export const usePoolRealtime = (poolId: string | null) => {
           filter: `pool_id=eq.${poolId}`,
         },
         (payload) => {
+          // This fires when a passenger joins or leaves (INSERT/DELETE on pool_members)
+          console.log('[usePoolRealtime] Pool member change:', payload.eventType, payload.new || payload.old);
           fetchPoolData();
         }
       )
       .subscribe((status) => {
+        console.log('[usePoolRealtime] Subscription status:', status);
         if (status === 'SUBSCRIBED') {
           isConnectedRef.current = true;
-          setState(prev => ({ ...prev, isConnected: true }));
+          safeSetState(prev => ({ ...prev, isConnected: true }));
           restartPolling(true);
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          console.warn('[usePoolRealtime] Realtime failed, switching to fast polling');
           isConnectedRef.current = false;
-          setState(prev => ({ ...prev, isConnected: false }));
+          safeSetState(prev => ({ ...prev, isConnected: false }));
           restartPolling(false);
         }
       });
@@ -179,6 +200,7 @@ export const usePoolRealtime = (poolId: string | null) => {
     pollingRef.current = setInterval(pollForUpdates, POLLING_INTERVAL_FAST);
 
     return () => {
+      console.log('[usePoolRealtime] Unsubscribing from pool updates');
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
@@ -188,7 +210,7 @@ export const usePoolRealtime = (poolId: string | null) => {
         pollingRef.current = null;
       }
     };
-  }, [poolId, fetchPoolData, pollForUpdates, restartPolling]);
+  }, [poolId, fetchPoolData, pollForUpdates, restartPolling, safeSetState]);
 
   const poolStatus = state.pool?.status || 'READY_TO_START';
   const passengers = state.pool?.passengers || [];

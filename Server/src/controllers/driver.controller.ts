@@ -866,6 +866,7 @@ export class DriverController {
             user_id,
             ride_id,
             joined_at,
+            left_at,
             users:user_id(id, full_name, average_rating),
             rides(
               id,
@@ -892,6 +893,9 @@ export class DriverController {
         });
       }
 
+      // Filter out members who have left the pool
+      const activeMembers = pool.pool_members?.filter((pm: any) => pm.left_at === null) || [];
+
       res.json({
         success: true,
         data: {
@@ -905,7 +909,7 @@ export class DriverController {
             },
             vehicle: pool.vehicles,
             vehicle_type: pool.vehicle_type,
-            passengers: pool.pool_members?.map((pm: any) => {
+            passengers: activeMembers.map((pm: any) => {
               const user = pm.users;
               return {
                 user_id: pm.user_id,
@@ -924,7 +928,7 @@ export class DriverController {
                 },
                 status: pm.rides?.status,
               };
-            }) || [],
+            }),
             current_passengers: pool.current_passengers,
             max_passengers: pool.max_passengers,
             fare_per_person: pool.fare_per_person,

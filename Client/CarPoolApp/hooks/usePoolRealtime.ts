@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, startTransition } from 'react';
+import { InteractionManager } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { Pool, PoolMember } from '../types';
 import { poolService, SearchTiming } from '../services/pool.service';
@@ -73,12 +74,23 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
     poolIdRef.current = poolId;
   }, [poolId]);
 
+  // Helper to safely update state without blocking UI
+  // Uses InteractionManager and startTransition to avoid navigation context errors
+  const safeSetState = useCallback((updater: React.SetStateAction<PoolRealtimeState>) => {
+    InteractionManager.runAfterInteractions(() => {
+      startTransition(() => {
+        setState(updater);
+      });
+    });
+  }, []);
+
   // Fetch pool data — only shows loading spinner on the first fetch
   const fetchPoolData = useCallback(async () => {
     if (!poolId) return;
 
     // Only show loading spinner on first fetch (before we have any data)
     if (!hasFetchedRef.current) {
+      // Loading state can be set immediately (user expects feedback)
       setState(prev => ({ ...prev, loading: true, error: null }));
     }
 
@@ -90,7 +102,8 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
         const searchTiming = response.data.search_timing || null;
         hasFetchedRef.current = true;
         console.log(`[usePoolRealtime] Pool fetched: status=${pool.status}, driver=${pool.driver_id ? 'yes' : 'no'}, members=${pool.pool_members?.length || 0}`);
-        setState(prev => ({
+        // Use safe state update to prevent UI blocking
+        safeSetState(prev => ({
           ...prev,
           pool,
           members: pool.pool_members || [],
@@ -104,7 +117,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
         const isNotFound = errorMessage.toLowerCase().includes('not found');
         
         if (isNotFound) {
-          setState(prev => ({
+          safeSetState(prev => ({
             ...prev,
             pool: null,
             members: [],
@@ -113,7 +126,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
             error: 'This pool is no longer available',
           }));
         } else {
-          setState(prev => ({
+          safeSetState(prev => ({
             ...prev,
             loading: false,
             searchTiming: prev.searchTiming || null,
@@ -129,7 +142,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
       console.warn('[usePoolRealtime] Failed to fetch pool data:', errorMessage);
       
       if (isNotFound) {
-        setState(prev => ({
+        safeSetState(prev => ({
           ...prev,
           pool: null,
           members: [],
@@ -138,7 +151,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           error: 'This pool is no longer available',
         }));
       } else if (isCancelled) {
-        setState(prev => ({
+        safeSetState(prev => ({
           ...prev,
           pool: null,
           members: [],
@@ -147,7 +160,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           error: 'This pool was cancelled',
         }));
       } else {
-        setState(prev => ({
+        safeSetState(prev => ({
           ...prev,
           loading: false,
           searchTiming: prev.searchTiming || null,
@@ -155,7 +168,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
         }));
       }
     }
-  }, [poolId]);
+  }, [poolId, safeSetState]);
 
   // Polling function for fallback
   const pollForUpdates = useCallback(async () => {
@@ -168,7 +181,8 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
         const pool = response.data.pool;
         const pollingSearchTiming = response.data.search_timing;
         
-        setState(prev => {
+        // Use safe state update to prevent UI blocking during polling
+        safeSetState(prev => {
           const statusChanged = prev.pool?.status !== pool.status;
           const driverChanged = prev.pool?.driver_id !== pool.driver_id;
           const memberCountChanged = (pool.pool_members?.length || 0) !== (prev.members?.length || 0);
@@ -195,9 +209,9 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
       }
     } catch (err) {
       // Clear loading on error
-      setState(prev => prev.loading ? { ...prev, loading: false } : prev);
+      safeSetState(prev => prev.loading ? { ...prev, loading: false } : prev);
     }
-  }, []);
+  }, [safeSetState]);
 
   // Restart polling with the appropriate interval based on connection status
   const restartPolling = useCallback((connected: boolean) => {
@@ -235,7 +249,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
             // Realtime payload only has raw columns, no joins
             fetchPoolData();
           } else if (payload.eventType === 'DELETE') {
-            setState(prev => ({
+            safeSetState(prev => ({
               ...prev,
               pool: null,
               error: 'Pool was cancelled',
@@ -270,7 +284,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           if (newMessage.sender_id && newMessage.sender_id !== currentUserId) {
             console.log('[usePoolRealtime] New message from:', newMessage.sender_id);
             
-            setState(prev => ({
+            safeSetState(prev => ({
               ...prev,
               unreadMessageCounts: {
                 ...prev.unreadMessageCounts,
@@ -287,13 +301,13 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
         if (status === 'SUBSCRIBED') {
           console.log('[usePoolRealtime] Successfully subscribed to pool updates');
           isConnectedRef.current = true;
-          setState(prev => ({ ...prev, isConnected: true }));
+          safeSetState(prev => ({ ...prev, isConnected: true }));
           // Switch to slow heartbeat polling since realtime is delivering events
           restartPolling(true);
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           console.warn('[usePoolRealtime] Realtime failed, switching to fast polling');
           isConnectedRef.current = false;
-          setState(prev => ({ ...prev, isConnected: false }));
+          safeSetState(prev => ({ ...prev, isConnected: false }));
           // Switch to fast polling since realtime is not available
           restartPolling(false);
         }
@@ -316,7 +330,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
         pollingRef.current = null;
       }
     };
-  }, [poolId, currentUserId, fetchPoolData, pollForUpdates, restartPolling]);
+  }, [poolId, currentUserId, fetchPoolData, pollForUpdates, restartPolling, safeSetState]);
 
   // Clear unread messages for a specific user (call when opening chat with that user)
   const clearUnreadMessages = useCallback((userId: string) => {
