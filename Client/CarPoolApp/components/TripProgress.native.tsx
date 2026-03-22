@@ -49,6 +49,10 @@ function SafeTripProgress(props: TripProgressProps) {
 }
 
 function TripProgressInner({ userProfile, pickupLocation, destination, selectedPool, onComplete, onChatDriver, onChatCoRider, onCreateNewPool, onCancelPool, onPoolCancelled }: TripProgressProps) {
+  // Double-check navigation context to prevent errors during concurrent re-renders
+  // React 19 can lose context mid-render when realtime events trigger state updates
+  const navigationContext = useContext(NavigationContext);
+  
   const [progress, setProgress] = useState(15);
   const [tripStatus, setTripStatus] = useState<'waiting' | 'on-the-way' | 'arrived' | 'in-progress' | 'completed'>('waiting');
   const [driverPosition, setDriverPosition] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -549,6 +553,18 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
     return 'Arrived';
   };
 
+  // If navigation context is lost during concurrent re-render, show loading state
+  if (navigationContext === undefined || navigationContext === null) {
+    return (
+      <SafeAreaView className="flex-1 bg-gray-50">
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#2563eb" />
+          <Text className="mt-4 text-gray-500">Loading trip...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 100 }}>
@@ -738,7 +754,7 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
 
           {hasDriver ? (
             <View className="flex-row items-center gap-4">
-              <View className={`w-16 h-16 rounded-full items-center justify-center ${isFemale ? 'bg-pink-100' : 'bg-blue-100'} border-2 border-white shadow-md`}>
+              <View className={`w-16 h-16 rounded-full items-center justify-center ${isFemale ? 'bg-pink-100' : 'bg-blue-100'} border-2 border-white`}>
                 <Text className={`${isFemale ? 'text-pink-800' : 'text-blue-800'} text-xl font-semibold`}>{driver.initial}</Text>
               </View>
 
