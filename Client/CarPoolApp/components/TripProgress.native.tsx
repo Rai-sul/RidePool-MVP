@@ -27,11 +27,28 @@ type TripProgressProps = {
   onPoolCancelled?: () => void;
 };
 
-export default function TripProgress({ userProfile, pickupLocation, destination, selectedPool, onComplete, onChatDriver, onChatCoRider, onCreateNewPool, onCancelPool, onPoolCancelled }: TripProgressProps) {
-  // Check if navigation context is available - skip render if temporarily unavailable
-  // This prevents crashes during React 19 concurrent re-renders when context is transiently lost
+// Wrapper component that safely checks navigation context before rendering TripProgress
+// This prevents crashes when React 19 concurrent re-renders temporarily lose navigation context
+function SafeTripProgress(props: TripProgressProps) {
   const navigationContext = useContext(NavigationContext);
   
+  // If navigation context is unavailable, show loading state
+  // This can happen during Supabase realtime-triggered concurrent re-renders
+  if (navigationContext === undefined || navigationContext === null) {
+    return (
+      <SafeAreaView className="flex-1 bg-gray-50">
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#2563eb" />
+          <Text className="mt-4 text-gray-500">Loading trip...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+  
+  return <TripProgressInner {...props} />;
+}
+
+function TripProgressInner({ userProfile, pickupLocation, destination, selectedPool, onComplete, onChatDriver, onChatCoRider, onCreateNewPool, onCancelPool, onPoolCancelled }: TripProgressProps) {
   const [progress, setProgress] = useState(15);
   const [tripStatus, setTripStatus] = useState<'waiting' | 'on-the-way' | 'arrived' | 'in-progress' | 'completed'>('waiting');
   const [driverPosition, setDriverPosition] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -531,20 +548,6 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
     }
     return 'Arrived';
   };
-
-  // If navigation context is temporarily unavailable during a concurrent render,
-  // return a minimal placeholder to prevent crashes. The context will be restored
-  // on the next render cycle.
-  if (navigationContext === undefined) {
-    return (
-      <SafeAreaView className="flex-1 bg-gray-50">
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#2563eb" />
-          <Text className="mt-4 text-gray-500">Loading trip...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
@@ -1237,3 +1240,6 @@ export default function TripProgress({ userProfile, pickupLocation, destination,
     </SafeAreaView>
   );
 }
+
+// Export the safe wrapper as the default export
+export default SafeTripProgress;

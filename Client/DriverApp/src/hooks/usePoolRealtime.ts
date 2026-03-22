@@ -8,7 +8,8 @@ const POLLING_INTERVAL_FAST = 3000;   // When realtime is disconnected
 const POLLING_INTERVAL_SLOW = 30000;  // Heartbeat when realtime is connected
 
 // Debounce delay to prevent rapid state updates from multiple realtime events
-const DEBOUNCE_DELAY_MS = 100;
+// Using 50ms for snappy UI updates while still preventing rapid-fire events
+const DEBOUNCE_DELAY_MS = 50;
 
 interface PoolRealtimeState {
   pool: Pool | null;
@@ -42,6 +43,10 @@ export const usePoolRealtime = (poolId: string | null) => {
   const isMountedRef = useRef(true);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingUpdateRef = useRef<React.SetStateAction<PoolRealtimeState> | null>(null);
+  // Refs to always call the latest functions (avoids stale closures in realtime callbacks)
+  const fetchPoolDataRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const pollForUpdatesRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const restartPollingRef = useRef<(connected: boolean) => void>(() => {});
 
   // Track mounted state
   useEffect(() => {
@@ -142,6 +147,11 @@ export const usePoolRealtime = (poolId: string | null) => {
     }
   }, [poolId, safeSetState]);
 
+  // Keep the ref in sync so realtime callbacks always use the latest version
+  useEffect(() => {
+    fetchPoolDataRef.current = fetchPoolData;
+  }, [fetchPoolData]);
+
   const pollForUpdates = useCallback(async () => {
     const currentPoolId = poolIdRef.current;
     if (!currentPoolId) return;
@@ -187,6 +197,11 @@ export const usePoolRealtime = (poolId: string | null) => {
     }
   }, [safeSetState]);
 
+  // Keep pollForUpdates ref in sync
+  useEffect(() => {
+    pollForUpdatesRef.current = pollForUpdates;
+  }, [pollForUpdates]);
+
   // Restart polling with the appropriate interval based on connection status
   const restartPolling = useCallback((connected: boolean) => {
     if (pollingRef.current) {
@@ -194,8 +209,14 @@ export const usePoolRealtime = (poolId: string | null) => {
     }
     const interval = connected ? POLLING_INTERVAL_SLOW : POLLING_INTERVAL_FAST;
     console.log(`[usePoolRealtime] Polling interval: ${interval / 1000}s (realtime ${connected ? 'connected' : 'disconnected'})`);
-    pollingRef.current = setInterval(pollForUpdates, interval);
-  }, [pollForUpdates]);
+    // Use ref to always get latest pollForUpdates
+    pollingRef.current = setInterval(() => pollForUpdatesRef.current(), interval);
+  }, []);
+
+  // Keep restartPolling ref in sync
+  useEffect(() => {
+    restartPollingRef.current = restartPolling;
+  }, [restartPolling]);
 
   useEffect(() => {
     if (!poolId) return;
@@ -215,7 +236,8 @@ export const usePoolRealtime = (poolId: string | null) => {
         (payload) => {
           console.log('[usePoolRealtime] Pool update received:', payload.eventType);
           if (payload.eventType === 'UPDATE' && payload.new) {
-            fetchPoolData();
+            // Use ref to always call the latest version (avoids stale closure)
+            fetchPoolDataRef.current();
           }
         }
       )
@@ -228,9 +250,11 @@ export const usePoolRealtime = (poolId: string | null) => {
           filter: `pool_id=eq.${poolId}`,
         },
         (payload) => {
-          // This fires when a passenger joins or leaves (INSERT/DELETE on pool_members)
+          // This fires when a passenger joins/leaves/updates (INSERT/UPDATE/DELETE on pool_members)
+          // UPDATE is triggered when left_at is set (passenger cancels)
           console.log('[usePoolRealtime] Pool member change:', payload.eventType, payload.new || payload.old);
-          fetchPoolData();
+          // Use ref to always call the latest version (avoids stale closure)
+          fetchPoolDataRef.current();
         }
       )
       .subscribe((status) => {
@@ -238,19 +262,21 @@ export const usePoolRealtime = (poolId: string | null) => {
         if (status === 'SUBSCRIBED') {
           isConnectedRef.current = true;
           safeSetState(prev => ({ ...prev, isConnected: true }));
-          restartPolling(true);
+          // Use ref to always call latest restartPolling
+          restartPollingRef.current(true);
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           console.warn('[usePoolRealtime] Realtime failed, switching to fast polling');
           isConnectedRef.current = false;
           safeSetState(prev => ({ ...prev, isConnected: false }));
-          restartPolling(false);
+          // Use ref to always call latest restartPolling
+          restartPollingRef.current(false);
         }
       });
 
     channelRef.current = poolChannel;
 
     // Start with fast polling until realtime connects
-    pollingRef.current = setInterval(pollForUpdates, POLLING_INTERVAL_FAST);
+    pollingRef.current = setInterval(() => pollForUpdatesRef.current(), POLLING_INTERVAL_FAST);
 
     return () => {
       console.log('[usePoolRealtime] Unsubscribing from pool updates');
@@ -267,14 +293,15 @@ export const usePoolRealtime = (poolId: string | null) => {
         debounceTimerRef.current = null;
       }
     };
-  }, [poolId, fetchPoolData, pollForUpdates, restartPolling, safeSetState]);
+    // Only re-subscribe when poolId changes - callbacks use refs to avoid stale closures
+  }, [poolId, fetchPoolData, safeSetState]);
 
   const poolStatus = state.pool?.status || 'READY_TO_START';
   const passengers = state.pool?.passengers || [];
 
   const refresh = useCallback(() => {
-    fetchPoolData();
-  }, [fetchPoolData]);
+    fetchPoolDataRef.current();
+  }, []);
 
   return {
     pool: state.pool,
