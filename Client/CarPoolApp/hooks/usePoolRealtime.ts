@@ -147,6 +147,28 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
         const pool = response.data.pool;
         const searchTiming = response.data.search_timing || null;
         hasFetchedRef.current = true;
+        
+        // Check if pool was cancelled or completed - clear state and show error
+        if (pool.status === 'CANCELLED') {
+          console.log('[usePoolRealtime] Pool was cancelled');
+          safeSetState(prev => ({
+            ...prev,
+            pool: null,
+            members: [],
+            searchTiming: null,
+            loading: false,
+            lastUpdated: new Date(),
+            error: 'This pool was cancelled',
+          }));
+          return;
+        }
+        
+        // Check if driver was unassigned (driver cancelled their acceptance)
+        const driverWasRemoved = state.pool?.driver_id && !pool.driver_id;
+        if (driverWasRemoved) {
+          console.log('[usePoolRealtime] Driver was removed from pool');
+        }
+        
         console.log(`[usePoolRealtime] Pool fetched: status=${pool.status}, driver=${pool.driver_id ? 'yes' : 'no'}, members=${pool.pool_members?.length || 0}`);
         // Use safe state update to prevent UI blocking
         safeSetState(prev => ({
@@ -214,7 +236,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
         }));
       }
     }
-  }, [poolId, safeSetState]);
+  }, [poolId, safeSetState, state.pool?.driver_id]);
 
   // Polling function for fallback
   const pollForUpdates = useCallback(async () => {
@@ -288,9 +310,23 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           filter: `id=eq.${poolId}`,
         },
         (payload) => {
-          console.log('[usePoolRealtime] Pool update received:', payload.eventType);
+          console.log('[usePoolRealtime] Pool update received:', payload.eventType, payload.new);
           
           if (payload.eventType === 'UPDATE') {
+            const newPool = payload.new as any;
+            
+            // Check for cancelled status directly in the payload for immediate response
+            if (newPool?.status === 'CANCELLED') {
+              console.log('[usePoolRealtime] Pool was cancelled via realtime update');
+              safeSetState(prev => ({
+                ...prev,
+                pool: null,
+                members: [],
+                error: 'This pool was cancelled',
+              }));
+              return;
+            }
+            
             // Full refetch to get relation data (driver, vehicles, members)
             // Realtime payload only has raw columns, no joins
             fetchPoolData();

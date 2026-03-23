@@ -18,14 +18,18 @@ interface PoolRealtimeState {
   lastUpdated: Date | null;
   isConnected: boolean;
   driverLocation: { lat: number; lng: number } | null;
+  poolCancelled: boolean; // Track if pool was cancelled (rider left, pool cancelled, etc.)
 }
 
 /**
  * Hook for real-time pool updates in the DriverApp.
  * Subscribes to Supabase Realtime for pool & pool_members changes,
  * and tracks the driver's live location from the driver_locations table.
+ * 
+ * @param poolId - The pool ID to subscribe to
+ * @param onPoolCancelled - Optional callback fired when the pool is cancelled or all riders leave
  */
-export const usePoolRealtime = (poolId: string | null) => {
+export const usePoolRealtime = (poolId: string | null, onPoolCancelled?: () => void) => {
   const [state, setState] = useState<PoolRealtimeState>({
     pool: null,
     loading: false,
@@ -33,6 +37,7 @@ export const usePoolRealtime = (poolId: string | null) => {
     lastUpdated: null,
     isConnected: false,
     driverLocation: null,
+    poolCancelled: false,
   });
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -47,6 +52,12 @@ export const usePoolRealtime = (poolId: string | null) => {
   const fetchPoolDataRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const pollForUpdatesRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const restartPollingRef = useRef<(connected: boolean) => void>(() => {});
+  const onPoolCancelledRef = useRef<(() => void) | undefined>(onPoolCancelled);
+
+  // Keep the callback ref in sync
+  useEffect(() => {
+    onPoolCancelledRef.current = onPoolCancelled;
+  }, [onPoolCancelled]);
 
   // Track mounted state
   useEffect(() => {
@@ -116,27 +127,81 @@ export const usePoolRealtime = (poolId: string | null) => {
         const pool = (response.data as any).active_pool || response.data;
         if (pool && pool.id) {
           hasFetchedRef.current = true;
+          
+          // Check if pool was cancelled or has no passengers
+          const isCancelled = pool.status === 'CANCELLED' || pool.status === 'COMPLETED';
+          const hasNoPassengers = !pool.passengers || pool.passengers.length === 0;
+          
           console.log(`[usePoolRealtime] Pool fetched: status=${pool.status}, passengers=${pool.passengers?.length || 0}, current_passengers=${pool.current_passengers}`);
+          
+          if (isCancelled) {
+            console.log('[usePoolRealtime] Pool is cancelled/completed, clearing state');
+            safeSetState(prev => ({
+              ...prev,
+              pool: null,
+              loading: false,
+              lastUpdated: new Date(),
+              error: 'Pool was cancelled',
+              poolCancelled: true,
+            }));
+            // Trigger callback for parent component to handle navigation
+            if (onPoolCancelledRef.current) {
+              onPoolCancelledRef.current();
+            }
+            return;
+          }
+          
+          if (hasNoPassengers) {
+            console.log('[usePoolRealtime] Pool has no active passengers');
+            safeSetState(prev => ({
+              ...prev,
+              pool: { ...pool, passengers: [] },
+              loading: false,
+              lastUpdated: new Date(),
+              error: 'All passengers have left the pool',
+              poolCancelled: true,
+            }));
+            // Trigger callback
+            if (onPoolCancelledRef.current) {
+              onPoolCancelledRef.current();
+            }
+            return;
+          }
+          
           safeSetState(prev => ({
             ...prev,
             pool,
             loading: false,
             lastUpdated: new Date(),
             error: null,
+            poolCancelled: false,
           }));
         } else {
+          // No active pool found - pool might have been cancelled
+          console.log('[usePoolRealtime] No active pool found');
           safeSetState(prev => ({
             ...prev,
+            pool: null,
             loading: false,
-            error: prev.pool ? null : 'Pool not found',
+            error: 'Pool not found',
+            poolCancelled: prev.pool !== null, // Was cancelled if we previously had a pool
           }));
+          // If we previously had a pool, trigger the callback
+          if (state.pool !== null && onPoolCancelledRef.current) {
+            onPoolCancelledRef.current();
+          }
         }
       } else {
         safeSetState(prev => ({
           ...prev,
+          pool: null,
           loading: false,
-          error: prev.pool ? null : 'Pool not found',
+          error: 'Pool not found',
+          poolCancelled: prev.pool !== null,
         }));
+        if (state.pool !== null && onPoolCancelledRef.current) {
+          onPoolCancelledRef.current();
+        }
       }
     } catch (err: any) {
       safeSetState(prev => ({
@@ -145,7 +210,7 @@ export const usePoolRealtime = (poolId: string | null) => {
         error: prev.pool ? null : (err.message || 'Failed to load pool'),
       }));
     }
-  }, [poolId, safeSetState]);
+  }, [poolId, safeSetState, state.pool]);
 
   // Keep the ref in sync so realtime callbacks always use the latest version
   useEffect(() => {
@@ -161,7 +226,62 @@ export const usePoolRealtime = (poolId: string | null) => {
       if (response.success && response.data) {
         // Server returns { data: { active_pool: { ... } } }
         const pool = (response.data as any).active_pool || response.data;
-        if (!pool || !pool.id) return;
+        
+        // Handle case where pool no longer exists (cancelled or all riders left)
+        if (!pool || !pool.id) {
+          console.log('[usePoolRealtime] Poll: No active pool found');
+          safeSetState(prev => {
+            if (prev.pool !== null) {
+              // Pool was cancelled while we were polling
+              console.log('[usePoolRealtime] Poll: Pool was cancelled');
+              // Trigger callback
+              if (onPoolCancelledRef.current) {
+                setTimeout(() => onPoolCancelledRef.current?.(), 0);
+              }
+              return {
+                ...prev,
+                pool: null,
+                loading: false,
+                error: 'Pool was cancelled',
+                poolCancelled: true,
+              };
+            }
+            return prev;
+          });
+          return;
+        }
+        
+        // Check if pool was cancelled or completed
+        if (pool.status === 'CANCELLED' || pool.status === 'COMPLETED') {
+          console.log(`[usePoolRealtime] Poll: Pool status is ${pool.status}`);
+          safeSetState(prev => ({
+            ...prev,
+            pool: null,
+            loading: false,
+            error: `Pool was ${pool.status.toLowerCase()}`,
+            poolCancelled: true,
+          }));
+          if (onPoolCancelledRef.current) {
+            setTimeout(() => onPoolCancelledRef.current?.(), 0);
+          }
+          return;
+        }
+        
+        // Check if all passengers have left
+        if (!pool.passengers || pool.passengers.length === 0) {
+          console.log('[usePoolRealtime] Poll: All passengers have left');
+          safeSetState(prev => ({
+            ...prev,
+            pool: { ...pool, passengers: [] },
+            loading: false,
+            error: 'All passengers have left the pool',
+            poolCancelled: true,
+          }));
+          if (onPoolCancelledRef.current) {
+            setTimeout(() => onPoolCancelledRef.current?.(), 0);
+          }
+          return;
+        }
 
         safeSetState(prev => {
           const statusChanged = prev.pool?.status !== pool.status;
@@ -184,10 +304,29 @@ export const usePoolRealtime = (poolId: string | null) => {
               pool,
               loading: false,
               lastUpdated: new Date(),
+              poolCancelled: false,
             };
           }
           if (prev.loading) {
             return { ...prev, loading: false };
+          }
+          return prev;
+        });
+      } else {
+        // No data returned - pool may have been cancelled
+        safeSetState(prev => {
+          if (prev.pool !== null) {
+            console.log('[usePoolRealtime] Poll: No pool data returned, pool may be cancelled');
+            if (onPoolCancelledRef.current) {
+              setTimeout(() => onPoolCancelledRef.current?.(), 0);
+            }
+            return {
+              ...prev,
+              pool: null,
+              loading: false,
+              error: 'Pool was cancelled',
+              poolCancelled: true,
+            };
           }
           return prev;
         });
@@ -236,6 +375,25 @@ export const usePoolRealtime = (poolId: string | null) => {
         (payload) => {
           console.log('[usePoolRealtime] Pool update received:', payload.eventType);
           if (payload.eventType === 'UPDATE' && payload.new) {
+            const newPool = payload.new as any;
+            
+            // Check for cancelled/completed status directly for immediate response
+            if (newPool?.status === 'CANCELLED' || newPool?.status === 'COMPLETED') {
+              console.log(`[usePoolRealtime] Pool status changed to ${newPool.status} via realtime`);
+              safeSetState(prev => ({
+                ...prev,
+                pool: null,
+                loading: false,
+                error: `Pool was ${newPool.status.toLowerCase()}`,
+                poolCancelled: true,
+              }));
+              // Trigger callback
+              if (onPoolCancelledRef.current) {
+                setTimeout(() => onPoolCancelledRef.current?.(), 0);
+              }
+              return;
+            }
+            
             // Use ref to always call the latest version (avoids stale closure)
             fetchPoolDataRef.current();
           }
@@ -307,6 +465,7 @@ export const usePoolRealtime = (poolId: string | null) => {
     pool: state.pool,
     passengers,
     poolStatus,
+    poolCancelled: state.poolCancelled,
     loading: state.loading,
     error: state.error,
     lastUpdated: state.lastUpdated,

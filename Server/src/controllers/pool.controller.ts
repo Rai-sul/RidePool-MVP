@@ -689,6 +689,17 @@ export class PoolController {
           })
           .eq('id', poolId);
         
+        // Notify driver if one was assigned
+        if (poolWithMembers?.driver_id) {
+          await notificationService.sendPushNotification(poolWithMembers.driver_id, {
+            title: 'Pool Cancelled',
+            message: 'The pool was cancelled because all riders have left.',
+            type: 'POOL_CANCELLED',
+            metadata: { poolId, reason: 'all_riders_left' },
+          });
+          logger.info(`[Pool] Notified driver ${poolWithMembers.driver_id} that pool ${poolId} was cancelled`);
+        }
+        
         // If there's 1 remaining member (not the user who left), cancel their ride and notify them
         if (activeMembers.length === 1) {
           const lastMember = activeMembers[0];
@@ -772,6 +783,21 @@ export class PoolController {
 
       // Clear cached route when membership changes
       await smartRouteService.clearPoolRoute(poolId);
+
+      // Notify driver if one is assigned
+      if (poolWithMembers?.driver_id) {
+        await notificationService.sendPushNotification(poolWithMembers.driver_id, {
+          title: 'Rider Left Pool',
+          message: `A rider has left the pool. ${activeMembers.length} rider(s) remaining.`,
+          type: 'POOL_MEMBER_LEFT',
+          metadata: { 
+            poolId, 
+            remainingPassengers: activeMembers.length,
+            leftUserId: userId,
+          },
+        });
+        logger.info(`[Pool] Notified driver ${poolWithMembers.driver_id} that rider ${userId} left pool ${poolId}`);
+      }
 
       // Pre-calculate the new route with remaining members
       // This is needed when a member leaves during WAITING_FOR_DRIVER or READY_TO_START

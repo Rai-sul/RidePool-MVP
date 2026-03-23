@@ -24,17 +24,28 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
   const { colors } = useTheme();
   const mapRef = useRef<MapViewComponent>(null);
 
-  // Real-time pool data
+  // Callback for when pool is cancelled (all riders left, pool cancelled, etc.)
+  const handlePoolCancelled = useCallback(() => {
+    console.log('[TripProgress] Pool was cancelled, triggering onCancel');
+    Alert.alert(
+      'Pool Cancelled',
+      'All riders have left the pool or the pool was cancelled.',
+      [{ text: 'OK', onPress: onCancel }]
+    );
+  }, [onCancel]);
+
+  // Real-time pool data with cancellation callback
   const {
     pool,
     passengers,
     poolStatus,
+    poolCancelled,
     loading: loadingPool,
     error: poolError,
     lastUpdated,
     isConnected,
     refresh: refreshPool,
-  } = usePoolRealtime(poolId);
+  } = usePoolRealtime(poolId, handlePoolCancelled);
 
   // Driver location state (from device GPS)
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(
