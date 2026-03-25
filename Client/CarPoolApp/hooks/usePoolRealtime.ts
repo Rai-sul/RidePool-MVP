@@ -21,6 +21,7 @@ interface PoolRealtimeState {
   lastUpdated: Date | null;
   unreadMessageCounts: Record<string, number>; // userId -> unread count
   isConnected: boolean;
+  poolCancelled: boolean; // Track if pool was cancelled (so we return CANCELLED status even when pool is null)
 }
 
 interface CoRiderInfo {
@@ -65,6 +66,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
     lastUpdated: initialPool ? new Date() : null,
     unreadMessageCounts: {},
     isConnected: false,
+    poolCancelled: false,
   });
   
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -159,6 +161,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
             loading: false,
             lastUpdated: new Date(),
             error: 'This pool was cancelled',
+            poolCancelled: true,
           }));
           return;
         }
@@ -217,6 +220,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           searchTiming: null,
           loading: false,
           error: 'This pool is no longer available',
+          poolCancelled: true,
         }));
       } else if (isCancelled) {
         safeSetState(prev => ({
@@ -226,6 +230,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
           searchTiming: null,
           loading: false,
           error: 'This pool was cancelled',
+          poolCancelled: true,
         }));
       } else {
         safeSetState(prev => ({
@@ -323,6 +328,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
                 pool: null,
                 members: [],
                 error: 'This pool was cancelled',
+                poolCancelled: true,
               }));
               return;
             }
@@ -334,7 +340,9 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
             safeSetState(prev => ({
               ...prev,
               pool: null,
+              members: [],
               error: 'Pool was cancelled',
+              poolCancelled: true,
             }));
           }
         }
@@ -455,11 +463,11 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
       };
     }), [state.members, state.unreadMessageCounts, currentUserId]);
 
-  // Derived state: has driver
-  const hasDriver = !!state.pool?.driver_id;
+  // Derived state: has driver (false when pool is cancelled)
+  const hasDriver = !state.poolCancelled && !!state.pool?.driver_id;
 
-  // Derived state: pool status
-  const poolStatus = state.pool?.status || 'WAITING_FOR_RIDERS';
+  // Derived state: pool status (return CANCELLED if poolCancelled flag is set)
+  const poolStatus = state.poolCancelled ? 'CANCELLED' : (state.pool?.status || 'WAITING_FOR_RIDERS');
 
   // Manual refresh function
   const refresh = useCallback(() => {
@@ -473,6 +481,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
     coRiders,
     hasDriver,
     poolStatus,
+    poolCancelled: state.poolCancelled,
     loading: state.loading,
     error: state.error,
     lastUpdated: state.lastUpdated,

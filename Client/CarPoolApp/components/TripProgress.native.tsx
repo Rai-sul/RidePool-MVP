@@ -88,6 +88,7 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
     coRiders,
     hasDriver,
     poolStatus,
+    poolCancelled,
     loading: loadingPool,
     error: poolError,
     lastUpdated,
@@ -748,7 +749,8 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
           </View>
         )}
 
-        {/* Driver Card */}
+        {/* Driver Card - hide when pool is cancelled */}
+        {!poolCancelled && (
         <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
           <Text className="font-semibold mb-4">Your Driver</Text>
 
@@ -793,6 +795,7 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
             </View>
           )}
         </View>
+        )}
 
         {/* START NAVIGATION BUTTON - FREE Google Maps Navigation */}
         {/* Shows when pool is formed (waiting for driver or beyond) - users can see all pickup/dropoff points */}
@@ -959,8 +962,8 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
             <View className="gap-3">
               <View className="flex-row justify-between">
                 <Text className="text-gray-600">Status</Text>
-                <View className={`px-2 py-1 rounded ${hasDriver ? 'bg-green-100' : 'bg-yellow-100'}`}>
-                  <Text className={`text-xs font-medium ${hasDriver ? 'text-green-700' : 'text-yellow-700'}`}>
+                <View className={`px-2 py-1 rounded ${poolCancelled ? 'bg-red-100' : hasDriver ? 'bg-green-100' : 'bg-yellow-100'}`}>
+                  <Text className={`text-xs font-medium ${poolCancelled ? 'text-red-700' : hasDriver ? 'text-green-700' : 'text-yellow-700'}`}>
                     {poolStatus.replace(/_/g, ' ')}
                   </Text>
                 </View>
@@ -972,12 +975,15 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
                   <Text className="font-medium">{currentPassengers}/{maxPassengers}</Text>
                 </View>
               </View>
+              {/* Hide driver row when pool is cancelled */}
+              {!poolCancelled && (
               <View className="flex-row justify-between">
                 <Text className="text-gray-600">Driver</Text>
                 <Text className={`font-medium ${hasDriver ? 'text-green-600' : 'text-yellow-600'}`}>
                   {hasDriver ? 'Assigned' : 'Waiting for driver...'}
                 </Text>
               </View>
+              )}
               {lastUpdated && (
                 <Text className="text-xs text-gray-400 text-right">
                   Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
