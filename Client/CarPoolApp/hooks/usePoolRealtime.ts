@@ -464,10 +464,11 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
     }), [state.members, state.unreadMessageCounts, currentUserId]);
 
   // Derived state: has driver (false when pool is cancelled)
-  const hasDriver = !state.poolCancelled && !!state.pool?.driver_id;
+  const isCancelled = state.poolCancelled || state.pool?.status === 'CANCELLED';
+  const hasDriver = !isCancelled && !!state.pool?.driver_id;
 
-  // Derived state: pool status (return CANCELLED if poolCancelled flag is set)
-  const poolStatus = state.poolCancelled ? 'CANCELLED' : (state.pool?.status || 'WAITING_FOR_RIDERS');
+  // Derived state: pool status (return CANCELLED if poolCancelled flag is set or pool status is CANCELLED)
+  const poolStatus = isCancelled ? 'CANCELLED' : (state.pool?.status || 'WAITING_FOR_RIDERS');
 
   // Manual refresh function
   const refresh = useCallback(() => {
@@ -481,7 +482,7 @@ export const usePoolRealtime = (poolId: string | null, currentUserId: string | n
     coRiders,
     hasDriver,
     poolStatus,
-    poolCancelled: state.poolCancelled,
+    poolCancelled: isCancelled,
     loading: state.loading,
     error: state.error,
     lastUpdated: state.lastUpdated,
