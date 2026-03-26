@@ -65,6 +65,10 @@ export const driverService = {
     return apiClient.post<ApiResponse>(API_ENDPOINTS.DRIVER.REJECT_POOL(poolId));
   },
 
+  async unassignFromPool(poolId: string): Promise<ApiResponse> {
+    return apiClient.post<ApiResponse>(API_ENDPOINTS.DRIVER.UNASSIGN_POOL(poolId));
+  },
+
   async getActivePool(): Promise<ApiResponse<Pool>> {
     return apiClient.get<ApiResponse<Pool>>(API_ENDPOINTS.DRIVER.ACTIVE_POOL);
   },

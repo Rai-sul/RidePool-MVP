@@ -34,6 +34,7 @@ export const API_ENDPOINTS = {
     AVAILABLE_POOLS: '/driver/available-pools',
     ACCEPT_POOL: (poolId: string) => `/driver/pools/${poolId}/accept`,
     REJECT_POOL: (poolId: string) => `/driver/pools/${poolId}/reject`,
+    UNASSIGN_POOL: (poolId: string) => `/driver/pools/${poolId}/unassign`,
     ACTIVE_POOL: '/driver/active-pool',
     START_RIDE: '/driver/ride/start',
     COMPLETE_RIDE: '/driver/ride/complete',

@@ -239,16 +239,39 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
     }
   };
 
+  const [isCancellingRide, setIsCancellingRide] = useState(false);
+
   const handleCancelRide = () => {
     Alert.alert(
       'Cancel Ride',
-      'Are you sure you want to cancel this ride?',
+      'Are you sure you want to cancel this ride? Passengers will be notified and a new driver will be searched.',
       [
         { text: 'No', style: 'cancel' },
         {
           text: 'Yes, Cancel',
           style: 'destructive',
-          onPress: () => onCancel(),
+          onPress: async () => {
+            setIsCancellingRide(true);
+            try {
+              // Call server to unassign driver from pool
+              const response = await driverService.unassignFromPool(poolId);
+              if (response.success) {
+                Alert.alert('Cancelled', 'You have been unassigned from this pool.', [
+                  { text: 'OK', onPress: onCancel }
+                ]);
+              } else {
+                const errorMsg = typeof response.error === 'string' 
+                  ? response.error 
+                  : response.error?.message || 'Failed to cancel';
+                throw new Error(errorMsg);
+              }
+            } catch (error: any) {
+              console.error('[TripProgress] Failed to unassign from pool:', error);
+              Alert.alert('Error', error.message || 'Failed to cancel ride. Please try again.');
+            } finally {
+              setIsCancellingRide(false);
+            }
+          },
         },
       ]
     );

@@ -7,6 +7,7 @@ import { Pool, PoolStatus, Location } from '../types';
 import { CONSTANTS } from '../config/constants';
 import { config } from '../config/env';
 import { smartRouteService } from '../services/smartRoute.service';
+import { notificationService } from '../services/notification.service';
 import { logger } from '../utils/logger';
 
 interface DriverSession {
@@ -840,6 +841,138 @@ export class DriverController {
       res.json({
         success: true,
         data: { message: 'Pool rejected' },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Unassign driver from pool (driver cancels their acceptance)
+   * - Clears driver_id and vehicle_id from pool
+   * - Reverts pool status to WAITING_FOR_DRIVER (if not STARTED)
+   * - Notifies all pool members
+   * - Resumes driver search
+   */
+  async unassignFromPool(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { poolId } = req.params;
+
+      // Get pool with driver info and members
+      const { data: pool, error: poolError } = await supabaseAdmin
+        .from('pools')
+        .select(`
+          id, 
+          driver_id, 
+          vehicle_id, 
+          status,
+          pool_members(user_id, left_at)
+        `)
+        .eq('id', poolId)
+        .single();
+
+      if (poolError || !pool) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Verify driver is assigned to this pool
+      if (pool.driver_id !== userId) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'NOT_ASSIGNED', message: 'You are not assigned to this pool' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Can only unassign if pool is READY_TO_START (not yet started)
+      // If STARTED, driver must complete the ride
+      if (pool.status === 'STARTED') {
+        return res.status(400).json({
+          success: false,
+          error: { 
+            code: 'RIDE_IN_PROGRESS', 
+            message: 'Cannot cancel an in-progress ride. Please complete all drop-offs first.' 
+          },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      if (!['READY_TO_START', 'WAITING_FOR_DRIVER'].includes(pool.status)) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_STATUS', message: 'Pool is not in a cancellable state' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Clear driver assignment and revert status to WAITING_FOR_DRIVER
+      const { error: updateError } = await supabaseAdmin
+        .from('pools')
+        .update({
+          driver_id: null,
+          vehicle_id: null,
+          status: 'WAITING_FOR_DRIVER' as PoolStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', poolId);
+
+      if (updateError) {
+        logger.error(`[Driver] Failed to unassign from pool ${poolId}:`, updateError);
+        throw updateError;
+      }
+
+      // Update driver session back to ONLINE (no longer BUSY)
+      await supabaseAdmin
+        .from('driver_sessions')
+        .update({ status: 'ONLINE' })
+        .eq('driver_id', userId)
+        .eq('status', 'BUSY');
+
+      // Clear vehicle_locations pool assignment
+      await supabaseAdmin
+        .from('vehicle_locations')
+        .update({
+          pool_id: null,
+          is_available: true,
+        })
+        .eq('driver_id', userId);
+
+      // Clear cached route for this pool
+      await smartRouteService.clearPoolRoute(poolId);
+
+      // Notify all active pool members that driver was unassigned
+      const activeMembers = pool.pool_members?.filter((m: any) => m.left_at === null) || [];
+      for (const member of activeMembers) {
+        await notificationService.sendDriverUnassignedNotification(
+          member.user_id,
+          poolId,
+          'Driver cancelled'
+        );
+      }
+
+      logger.info(`[Driver] Driver ${userId} unassigned from pool ${poolId}, status reverted to WAITING_FOR_DRIVER`);
+
+      res.json({
+        success: true,
+        data: { 
+          message: 'Successfully unassigned from pool',
+          pool_id: poolId,
+          new_status: 'WAITING_FOR_DRIVER',
+        },
         timestamp: new Date().toISOString(),
       });
     } catch (error) {

@@ -338,6 +338,15 @@ export class NotificationService {
     });
   }
 
+  async sendDriverUnassignedNotification(userId: string, poolId: string, reason: string = 'Driver cancelled'): Promise<void> {
+    await this.sendPushNotification(userId, {
+      title: 'Driver Unassigned',
+      message: `${reason}. We're searching for a new driver.`,
+      type: 'DRIVER_UNASSIGNED',
+      metadata: { pool_id: poolId, reason },
+    });
+  }
+
   async sendDriverArrivingNotification(userId: string, etaMinutes: number): Promise<void> {
     await this.sendPushNotification(userId, {
       title: 'Driver Arriving',

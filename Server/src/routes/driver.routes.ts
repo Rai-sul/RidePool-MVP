@@ -20,6 +20,7 @@ router.put('/location', authenticate, validate(UpdateLocationSchema), driverCont
 router.get('/available-pools', authenticate, driverController.getAvailablePools.bind(driverController));
 router.post('/pools/:poolId/accept', authenticate, validate(PoolIdParamSchema, 'params'), driverController.acceptPool.bind(driverController));
 router.post('/pools/:poolId/reject', authenticate, validate(PoolIdParamSchema, 'params'), driverController.rejectPool.bind(driverController));
+router.post('/pools/:poolId/unassign', authenticate, validate(PoolIdParamSchema, 'params'), driverController.unassignFromPool.bind(driverController));
 router.get('/active-pool', authenticate, driverController.getActivePool.bind(driverController));
 
 router.post('/ride/start', authenticate, driverController.startRide.bind(driverController));
