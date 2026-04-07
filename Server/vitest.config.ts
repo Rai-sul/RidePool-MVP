@@ -11,5 +11,8 @@ export default defineConfig({
       include: ['src/**/*.ts'],
       exclude: ['src/app.ts', 'src/types/**'],
     },
+    typecheck: {
+      tsconfig: './tsconfig.test.json',
+    },
   },
 });

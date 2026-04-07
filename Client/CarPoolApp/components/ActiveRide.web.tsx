@@ -1,85 +1,88 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text } from 'react-native-web';
-import { MapPin, Shield, Phone, Share2, Navigation, Clock } from './Icons';
+import { View, Text, ActivityIndicator } from 'react-native-web';
+import { MapPin, Shield, Phone, Share2, Navigation, Clock, RefreshCw, Users, AlertCircle } from './Icons';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Progress } from './ui/progress';
-import type { Pool, Destination } from '../App';
-import { motion } from 'motion/react';
+import GoogleMapView from './GoogleMapView';
+import type { Pool, Location } from '../types';
+import { usePoolRealtime } from '../hooks/usePoolRealtime';
 
 type ActiveRideProps = {
   pool: Pool | null;
-  destination: Destination | null;
+  destination: Location | null;
+  pickupLocation?: Location | null;
+  userId?: string | null;
   onComplete: () => void;
 };
 
-export default function ActiveRide({ pool, destination, onComplete }: ActiveRideProps) {
-  const [progress, setProgress] = useState(30);
-  const [eta, setEta] = useState(18);
+export default function ActiveRide({ pool, destination, pickupLocation, userId, onComplete }: ActiveRideProps) {
+  // Use real-time pool updates
+  const {
+    pool: poolDetails,
+    coRiders,
+    hasDriver,
+    poolStatus,
+    loading: loadingPool,
+    error: poolError,
+    lastUpdated,
+    refresh: refreshPool,
+  } = usePoolRealtime(pool?.id || null, userId || null);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        const next = prev + 5;
-        if (next >= 100) {
-          clearInterval(interval);
-          setTimeout(() => onComplete(), 1000);
-          return 100;
-        }
-        return next;
-      });
-      setEta((prev) => Math.max(0, prev - 1));
-    }, 1000);
+  // Calculate progress based on pool status
+  const getProgress = () => {
+    switch (poolStatus) {
+      case 'WAITING_FOR_RIDERS': return 15;
+      case 'WAITING_FOR_DRIVER': return 30;
+      case 'READY_TO_START': return 50;
+      case 'STARTED': return 75;
+      case 'COMPLETED': return 100;
+      default: return 0;
+    }
+  };
 
-    return () => clearInterval(interval);
-  }, [onComplete]);
+  // Calculate ETA based on pool data
+  const eta = (pool as any)?.eta || 15;
+
+  // Use actual pickup location or default
+  const pickupCoords = pickupLocation 
+    ? { latitude: pickupLocation.latitude, longitude: pickupLocation.longitude }
+    : { latitude: 23.8103, longitude: 90.4125 };
+  
+  // Use actual destination or default
+  const dropoffCoords = destination?.latitude && destination?.longitude
+    ? { latitude: destination.latitude, longitude: destination.longitude }
+    : { latitude: 23.82, longitude: 90.43 };
 
   if (!pool || !destination) return null;
 
   return (
     <View className="h-full w-full flex flex-col bg-white">
-      {/* Map View */}
-      <View className="flex-1 bg-gradient-to-br from-gray-200 via-gray-100 to-blue-50 relative">
-        {/* Simulated map */}
-        <View className="absolute inset-0 opacity-20">
-          <View className="absolute top-1/4 left-0 w-full h-1 bg-gray-400 rotate-12"></View>
-          <View className="absolute top-1/2 left-0 w-full h-1 bg-gray-400 -rotate-6"></View>
-          <View className="absolute top-3/4 left-0 w-full h-1 bg-gray-400 rotate-3"></View>
-        </View>
-
-        {/* Route with multiple pins */}
-        <View className="absolute inset-0">
-          {/* Car position (moving) */}
-          <motion.div
-            animate={{
-              x: [50, 200, 300],
-              y: [100, 200, 300],
-            }}
-            transition={{
-              duration: 15,
-              ease: "linear",
-            }}
-            className="absolute top-1/4 left-1/4"
-          >
-            <View className="bg-blue-600 p-3 rounded-full shadow-lg">
-              <Navigation className="w-6 h-6 text-white" />
-            </View>
-          </motion.div>
-
-          {/* Drop-off points */}
-          <View className="absolute top-1/3 right-1/3">
-            <View className="bg-gray-400 p-2 rounded-full">
-              <MapPin className="w-5 h-5 text-white fill-white" />
-            </View>
-            <Text className="text-xs mt-1 bg-white px-2 py-1 rounded shadow text-center">Stop 1</Text>
-          </View>
-
-          <View className="absolute bottom-1/3 right-1/4">
-            <View className="bg-red-600 p-2 rounded-full shadow-lg">
-              <MapPin className="w-6 h-6 text-white fill-white" />
-            </View>
-            <Text className="text-xs mt-1 bg-white px-2 py-1 rounded shadow text-center">Your Stop</Text>
-          </View>
+      {/* Map View with real locations */}
+      <View className="flex-1 relative">
+        <GoogleMapView
+          center={pickupCoords}
+          zoom={14}
+          pickupLocation={pickupCoords}
+          dropoffLocation={dropoffCoords}
+          showDirections={true}
+          markers={[]}
+        />
+        {/* Pool Status Overlay */}
+        <View 
+          style={{
+            position: 'absolute',
+            top: 16,
+            left: 16,
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            borderRadius: 20,
+            backgroundColor: '#2563eb',
+          }}
+        >
+          <Text style={{ color: 'white', fontWeight: '600' }}>
+            {poolStatus === 'STARTED' ? 'Trip in progress' : poolStatus.replace(/_/g, ' ')}
+          </Text>
         </View>
       </View>
 
@@ -91,13 +94,19 @@ export default function ActiveRide({ pool, destination, onComplete }: ActiveRide
             <View className="flex flex-row items-center gap-3">
               <Avatar className="w-12 h-12">
                 <AvatarFallback className="bg-gradient-to-br from-blue-500 to-cyan-400 text-white">
-                  {pool.photo}
+                  {poolDetails?.driver?.id?.charAt(0).toUpperCase() || pool.driver?.id?.charAt(0).toUpperCase() || 'D'}
                 </AvatarFallback>
               </Avatar>
               <View>
-                <Text>{pool.driverName}</Text>
-                <Text className="text-sm text-gray-500">{pool.carModel}</Text>
+                <Text className="font-medium">{hasDriver ? 'Driver' : 'Waiting for driver...'}</Text>
+                <Text className="text-sm text-gray-500">{poolDetails?.vehicles?.model || pool.vehicles?.model || pool.vehicle_type}</Text>
               </View>
+            </View>
+            <View className="flex flex-row items-center gap-2">
+              {loadingPool && <ActivityIndicator size="small" color="#2563eb" />}
+              <Button variant="ghost" size="icon" onClick={refreshPool}>
+                <RefreshCw className="w-4 h-4 text-gray-500" />
+              </Button>
             </View>
           </View>
 
@@ -107,27 +116,62 @@ export default function ActiveRide({ pool, destination, onComplete }: ActiveRide
               <Clock className="w-6 h-6 text-blue-600" />
               <View>
                 <Text className="text-sm text-gray-600">Your ETA</Text>
-                <Text className="text-xl">{eta} min</Text>
+                <Text className="text-xl font-semibold">{eta} min</Text>
               </View>
             </View>
             <View>
               <Text className="text-sm text-gray-600 text-right">Destination</Text>
-              <Text className="text-sm text-right">{destination.name}</Text>
+              <Text className="text-sm text-right">{destination.address || 'Destination'}</Text>
             </View>
+          </View>
+
+          {/* Pool Status */}
+          <View className="bg-gray-50 p-4 rounded-xl">
+            <View className="flex flex-row items-center justify-between mb-2">
+              <View className="flex flex-row items-center gap-2">
+                <Text className="font-medium">Pool Status</Text>
+                <View className="w-2 h-2 rounded-full bg-green-500" />
+                <Text className="text-xs text-green-600">Live</Text>
+              </View>
+            </View>
+            {poolError ? (
+              <View className="flex flex-row items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500" />
+                <Text className="text-red-500 text-sm">{poolError}</Text>
+              </View>
+            ) : (
+              <View className="flex flex-row items-center justify-between">
+                <View className="flex flex-row items-center gap-2">
+                  <Users className="w-4 h-4 text-gray-600" />
+                  <Text className="text-sm text-gray-600">
+                    {poolDetails?.current_passengers || pool.current_passengers || 1}/{poolDetails?.max_passengers || pool.max_passengers || 4} passengers
+                  </Text>
+                </View>
+                <Text className={`text-sm font-medium ${hasDriver ? 'text-green-600' : 'text-yellow-600'}`}>
+                  {hasDriver ? 'Driver assigned' : 'Waiting for driver'}
+                </Text>
+              </View>
+            )}
+            {lastUpdated && (
+              <Text className="text-xs text-gray-400 mt-2">
+                Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </Text>
+            )}
           </View>
 
           {/* Trip Progress */}
           <View className="space-y-3">
             <View className="flex flex-row items-center justify-between">
               <Text className="text-sm text-gray-600">Trip Progress</Text>
-              <Text className="text-sm">{progress}%</Text>
+              <Text className="text-sm">{getProgress()}%</Text>
             </View>
-            <Progress value={progress} className="h-2" />
+            <Progress value={getProgress()} className="h-2" />
             
             <View className="flex flex-row items-center justify-between">
-              <Text className="text-xs text-gray-500">Picked Up</Text>
-              <Text className="text-xs text-gray-500">Drop Off 1</Text>
-              <Text className="text-xs text-gray-500">Your Drop Off</Text>
+              <Text className="text-xs text-gray-500">Waiting</Text>
+              <Text className="text-xs text-gray-500">Driver Assigned</Text>
+              <Text className="text-xs text-gray-500">In Progress</Text>
+              <Text className="text-xs text-gray-500">Completed</Text>
             </View>
           </View>
 

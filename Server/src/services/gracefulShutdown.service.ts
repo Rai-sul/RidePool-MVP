@@ -1,5 +1,5 @@
 import { Server } from 'http';
-import { cacheService } from './cache.service';
+import { unifiedCacheService } from './unifiedCache.service';
 import { logger } from '../utils/logger';
 
 interface ShutdownOptions {
@@ -74,7 +74,7 @@ class GracefulShutdownService {
 
       await this.runCleanupHandlers();
 
-      await this.closeRedis();
+      await this.closeCache();
 
       clearTimeout(forceExitTimeout);
       logger.info('[Shutdown] Graceful shutdown complete');
@@ -129,12 +129,12 @@ class GracefulShutdownService {
     }
   }
 
-  private async closeRedis(): Promise<void> {
+  private async closeCache(): Promise<void> {
     try {
-      await cacheService.disconnect();
-      logger.info('[Shutdown] Redis disconnected');
+      await unifiedCacheService.disconnect();
+      logger.info('[Shutdown] Cache disconnected');
     } catch (error) {
-      logger.error('[Shutdown] Error disconnecting Redis:', error);
+      logger.error('[Shutdown] Error disconnecting cache:', error);
     }
   }
 

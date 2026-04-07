@@ -37,15 +37,17 @@ export default function RidesScreen() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending':
+      case 'CREATING_POOL':
         return '#FFA500';
-      case 'accepted':
+      case 'WAITING_FOR_DRIVER':
+        return '#FFA500';
+      case 'DRIVER_ASSIGNED':
         return '#4CAF50';
-      case 'in_progress':
+      case 'STARTED':
         return '#2196F3';
-      case 'completed':
+      case 'COMPLETED':
         return '#8BC34A';
-      case 'cancelled':
+      case 'CANCELLED':
         return '#F44336';
       default:
         return '#999';
@@ -105,25 +107,25 @@ export default function RidesScreen() {
               <View style={styles.locationRow}>
                 <View style={styles.locationDot} />
                 <Text style={styles.locationText} numberOfLines={1}>
-                  {ride.pickup_location.address || 'Pickup location'}
+                  {ride.pickup_address || 'Pickup location'}
                 </Text>
               </View>
               <View style={styles.locationLine} />
               <View style={styles.locationRow}>
                 <View style={[styles.locationDot, styles.locationDotEnd]} />
                 <Text style={styles.locationText} numberOfLines={1}>
-                  {ride.dropoff_location.address || 'Dropoff location'}
+                  {ride.dropoff_address || 'Dropoff location'}
                 </Text>
               </View>
             </View>
 
-            {ride.pickup_time && (
+            {ride.started_at && (
               <Text style={styles.timeText}>
-                {new Date(ride.pickup_time).toLocaleString()}
+                {new Date(ride.started_at).toLocaleString()}
               </Text>
             )}
 
-            {(ride.status === 'pending' || ride.status === 'accepted') && (
+            {(ride.status === 'CREATING_POOL' || ride.status === 'WAITING_FOR_DRIVER') && (
               <TouchableOpacity
                 style={styles.cancelButton}
                 onPress={() => handleCancelRide(ride.id)}

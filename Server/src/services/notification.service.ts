@@ -1,5 +1,7 @@
 import { supabaseAdmin } from '../config/supabase';
 import { logger } from '../utils/logger';
+import { h3Utils, H3_RESOLUTION } from '../utils/h3.utils';
+import { config } from '../config/env';
 
 interface NotificationPayload {
   title: string;
@@ -34,7 +36,7 @@ export class NotificationService {
     }
   }
 
-  async sendPushNotification(userId: string, payload: NotificationPayload): Promise<void> {
+  async sendPushNotification(userId: string, payload: NotificationPayload, appType?: 'rider' | 'driver'): Promise<void> {
     try {
       await supabaseAdmin.from('notifications').insert({
         user_id: userId,
@@ -46,22 +48,24 @@ export class NotificationService {
       });
 
       if (this.fcmServerKey) {
-        await this.sendToFCM(userId, payload);
+        await this.sendToFCM(userId, payload, appType);
+      } else {
+        logger.warn(`[Notification] FCM_SERVER_KEY not set — push notification for ${userId} stored in DB only`);
       }
 
-      logger.info(`[Notification] Sent to ${userId}: ${payload.type}`);
+      logger.info(`[Notification] Sent to ${userId}: ${payload.type} (app: ${appType || 'any'})`);
     } catch (error) {
       logger.error(`[Notification] Failed to send to ${userId}:`, error);
     }
   }
 
-  async sendBulkNotification(userIds: string[], payload: NotificationPayload): Promise<{ sent: number; failed: number }> {
+  async sendBulkNotification(userIds: string[], payload: NotificationPayload, appType?: 'rider' | 'driver'): Promise<{ sent: number; failed: number }> {
     let sent = 0;
     let failed = 0;
 
     for (const userId of userIds) {
       try {
-        await this.sendPushNotification(userId, payload);
+        await this.sendPushNotification(userId, payload, appType);
         sent++;
       } catch {
         failed++;
@@ -71,12 +75,18 @@ export class NotificationService {
     return { sent, failed };
   }
 
-  private async sendToFCM(userId: string, payload: NotificationPayload): Promise<boolean> {
-    const { data: tokens } = await supabaseAdmin
+  private async sendToFCM(userId: string, payload: NotificationPayload, appType?: 'rider' | 'driver'): Promise<boolean> {
+    let query = supabaseAdmin
       .from('device_tokens')
       .select('token, platform')
       .eq('user_id', userId)
       .eq('is_active', true);
+
+    if (appType) {
+      query = query.eq('app_type', appType);
+    }
+
+    const { data: tokens } = await query;
 
     if (!tokens || tokens.length === 0) {
       logger.debug(`[Notification] No active device tokens for user ${userId}`);
@@ -133,7 +143,7 @@ export class NotificationService {
     return serialized;
   }
 
-  async registerDeviceToken(userId: string, token: string, platform: 'ios' | 'android' | 'web'): Promise<boolean> {
+  async registerDeviceToken(userId: string, token: string, platform: 'ios' | 'android' | 'web', appType: 'rider' | 'driver' = 'rider'): Promise<boolean> {
     try {
       const { error } = await supabaseAdmin
         .from('device_tokens')
@@ -141,6 +151,7 @@ export class NotificationService {
           user_id: userId,
           token,
           platform,
+          app_type: appType,
           is_active: true,
           updated_at: new Date().toISOString(),
         }, {
@@ -372,12 +383,23 @@ export class NotificationService {
     });
   }
 
-  async sendPriyoSathiInviteNotification(userId: string, inviterName: string, rideId: string): Promise<void> {
+  async sendPriyoSathiInviteNotification(
+    userId: string,
+    inviterName: string,
+    rideId: string,
+    poolId?: string,
+    inviterId?: string
+  ): Promise<void> {
     await this.sendPushNotification(userId, {
       title: 'Ride Invite',
       message: `${inviterName} is looking for a ride. Join them?`,
       type: 'MESSAGE',
-      metadata: { ride_id: rideId, inviter: inviterName },
+      metadata: {
+        ride_id: rideId,
+        inviter: inviterName,
+        inviter_id: inviterId || null,
+        pool_id: poolId || null,
+      },
     });
   }
 
@@ -417,6 +439,102 @@ export class NotificationService {
       .eq('is_read', false);
 
     return error ? 0 : (count || 0);
+  }
+
+  async notifyNearbyDrivers(poolId: string, pool: {
+    pickup_lat: number;
+    pickup_lng: number;
+    pickup_address?: string;
+    destination_lat: number;
+    destination_lng: number;
+    destination_address?: string;
+    vehicle_type: string;
+    fare_per_person: number;
+    current_passengers: number;
+  }): Promise<{ notified: number }> {
+    try {
+      const pickupLat = Number(pool.pickup_lat);
+      const pickupLng = Number(pool.pickup_lng);
+
+      const pickupH3 = h3Utils.latLngToH3(
+        { latitude: pickupLat, longitude: pickupLng },
+        H3_RESOLUTION.DRIVER_SEARCH
+      );
+      // Use ring 5 at Res 8 (~461m edge) ≈ 2.3km to match driver's ~2.1km pickup search radius
+      const searchHexagons = h3Utils.getH3Ring(pickupH3, 5);
+
+      const { data: nearbyDrivers } = await supabaseAdmin
+        .from('vehicle_locations')
+        .select('driver_id, vehicle_id, h3_index_res8')
+        .eq('is_active', true)
+        .eq('is_available', true)
+        .is('pool_id', null)
+        .in('h3_index_res8', searchHexagons);
+
+      if (!nearbyDrivers || nearbyDrivers.length === 0) {
+        logger.info(`[Notification] No nearby available drivers found for pool ${poolId}`);
+        return { notified: 0 };
+      }
+
+      const vehicleIds = nearbyDrivers.map(d => d.vehicle_id);
+      const { data: vehicles } = await supabaseAdmin
+        .from('vehicles')
+        .select('id, driver_id, vehicle_type')
+        .in('id', vehicleIds)
+        .eq('vehicle_type', pool.vehicle_type)
+        .eq('is_active', true);
+
+      if (!vehicles || vehicles.length === 0) {
+        logger.info(`[Notification] No drivers with matching vehicle type ${pool.vehicle_type} for pool ${poolId}`);
+        return { notified: 0 };
+      }
+
+      const eligibleDriverIds = vehicles.map(v => v.driver_id);
+
+      const { data: activePools } = await supabaseAdmin
+        .from('pools')
+        .select('driver_id')
+        .in('driver_id', eligibleDriverIds)
+        .in('status', ['READY_TO_START', 'STARTED']);
+
+      const busyDriverIds = new Set((activePools || []).map(p => p.driver_id));
+      const availableDriverIds = eligibleDriverIds.filter(id => !busyDriverIds.has(id));
+
+      if (availableDriverIds.length === 0) {
+        logger.info(`[Notification] All matching drivers are busy for pool ${poolId}`);
+        return { notified: 0 };
+      }
+
+      const pickupAddress = pool.pickup_address || 'Nearby';
+      const estimatedEarnings = pool.fare_per_person * pool.current_passengers * 0.8;
+
+      const payload: NotificationPayload = {
+        title: 'New Pool Request!',
+        message: `${pool.current_passengers} passengers waiting near ${pickupAddress}. ${pool.vehicle_type} ride → Est. ৳${Math.round(estimatedEarnings)}`,
+        type: 'POOL_REQUEST',
+        metadata: {
+          pool_id: poolId,
+          vehicle_type: pool.vehicle_type,
+          passengers: pool.current_passengers,
+          estimated_earnings: estimatedEarnings,
+          pickup_lat: pickupLat,
+          pickup_lng: pickupLng,
+          pickup_address: pickupAddress,
+          destination_lat: pool.destination_lat,
+          destination_lng: pool.destination_lng,
+          destination_address: pool.destination_address,
+          action: 'VIEW_POOL',
+        },
+      };
+
+      const result = await this.sendBulkNotification(availableDriverIds, payload, 'driver');
+
+      logger.info(`[Notification] Notified ${result.sent}/${availableDriverIds.length} drivers for pool ${poolId} (${pool.vehicle_type})`);
+      return { notified: result.sent };
+    } catch (error) {
+      logger.error(`[Notification] Failed to notify nearby drivers for pool ${poolId}:`, error);
+      return { notified: 0 };
+    }
   }
 }
 

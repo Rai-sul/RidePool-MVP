@@ -23,3 +23,9 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* Leaflet container styles */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+}

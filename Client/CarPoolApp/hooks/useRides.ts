@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import { rideService } from '../services/ride.service';
-import { Ride, Location } from '../types';
+import { useState, useCallback } from 'react';
+import { rideService, CreateRideRequest } from '../services/ride.service';
+import { Ride, VehicleType, GenderPreference } from '../types';
 
 export const useRides = () => {
   const [rides, setRides] = useState<Ride[]>([]);
@@ -8,15 +8,17 @@ export const useRides = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * Fetch ride history for current user
+   */
   const fetchRides = useCallback(async (params?: {
     page?: number;
     limit?: number;
-    status?: string;
   }) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await rideService.getRides(params);
+      const response = await rideService.getRideHistory(params);
       if (response.success && response.data) {
         setRides(response.data.data);
       }
@@ -27,23 +29,21 @@ export const useRides = () => {
     }
   }, []);
 
-  const createRide = useCallback(async (data: {
-    pickup_location: Location;
-    dropoff_location: Location;
-    pickup_time?: string;
-    pool_id?: string;
-  }) => {
+  /**
+   * Request a new ride with pickup and dropoff coordinates
+   */
+  const requestRide = useCallback(async (data: CreateRideRequest) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await rideService.createRide(data);
+      const response = await rideService.requestRide(data);
       if (response.success && response.data) {
         setCurrentRide(response.data);
         return { success: true, data: response.data };
       }
-      throw new Error(response.message || 'Failed to create ride');
+      throw new Error(response.message || 'Failed to request ride');
     } catch (err: any) {
-      const errorMessage = err.message || 'Failed to create ride';
+      const errorMessage = err.message || 'Failed to request ride';
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
@@ -51,30 +51,14 @@ export const useRides = () => {
     }
   }, []);
 
-  const getRideById = useCallback(async (id: string) => {
+  /**
+   * Cancel a ride with optional reason
+   */
+  const cancelRide = useCallback(async (rideId: string, reason?: string) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await rideService.getRideById(id);
-      if (response.success && response.data) {
-        setCurrentRide(response.data);
-        return { success: true, data: response.data };
-      }
-      throw new Error(response.message || 'Failed to fetch ride');
-    } catch (err: any) {
-      const errorMessage = err.message || 'Failed to fetch ride';
-      setError(errorMessage);
-      return { success: false, error: errorMessage };
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const cancelRide = useCallback(async (id: string, reason?: string) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await rideService.cancelRide(id, reason);
+      const response = await rideService.cancelRide(rideId, reason);
       if (response.success) {
         setCurrentRide(null);
         await fetchRides();
@@ -90,60 +74,12 @@ export const useRides = () => {
     }
   }, [fetchRides]);
 
-  const searchRides = useCallback(async (params: {
-    pickup_location: Location;
-    dropoff_location: Location;
-    pickup_time?: string;
-  }) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await rideService.searchRides(params);
-      if (response.success && response.data) {
-        return { success: true, data: response.data };
-      }
-      throw new Error(response.message || 'Search failed');
-    } catch (err: any) {
-      const errorMessage = err.message || 'Search failed';
-      setError(errorMessage);
-      return { success: false, error: errorMessage };
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const startRide = useCallback(async (id: string) => {
-    try {
-      setLoading(true);
-      const response = await rideService.startRide(id);
-      if (response.success && response.data) {
-        setCurrentRide(response.data);
-        return { success: true };
-      }
-      throw new Error(response.message || 'Failed to start ride');
-    } catch (err: any) {
-      setError(err.message);
-      return { success: false, error: err.message };
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const completeRide = useCallback(async (id: string) => {
-    try {
-      setLoading(true);
-      const response = await rideService.completeRide(id);
-      if (response.success && response.data) {
-        setCurrentRide(response.data);
-        return { success: true };
-      }
-      throw new Error(response.message || 'Failed to complete ride');
-    } catch (err: any) {
-      setError(err.message);
-      return { success: false, error: err.message };
-    } finally {
-      setLoading(false);
-    }
+  /**
+   * Clear current ride state
+   */
+  const clearRide = useCallback(() => {
+    setCurrentRide(null);
+    setError(null);
   }, []);
 
   return {
@@ -152,11 +88,8 @@ export const useRides = () => {
     loading,
     error,
     fetchRides,
-    createRide,
-    getRideById,
+    requestRide,
     cancelRide,
-    searchRides,
-    startRide,
-    completeRide,
+    clearRide,
   };
 };

@@ -42,9 +42,14 @@ export const CreateRideSchema = z.object({
 });
 
 export const CreatePoolSchema = z.object({
+  pickup_lat: z.number().min(-90).max(90),
+  pickup_lng: z.number().min(-180).max(180),
+  pickup_address: z.string().max(500).optional(),
+  pickup_name: z.string().max(200).optional(),
   destination_lat: z.number().min(-90).max(90),
   destination_lng: z.number().min(-180).max(180),
   destination_address: z.string().max(500).optional(),
+  destination_name: z.string().max(200).optional(),
   vehicle_type: VehicleTypeEnum,
   max_passengers: z.number().int().min(2).max(4).default(4),
   gender_restriction: GenderPreferenceEnum.optional().default('ANY'),
@@ -57,7 +62,7 @@ export const JoinPoolSchema = z.object({
 export const GoOnlineSchema = z.object({
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
-  vehicle_id: z.string().uuid(),
+  vehicle_id: z.string().uuid().optional(),
   heading: z.number().min(0).max(360).optional(),
 });
 
@@ -68,10 +73,12 @@ export const UpdateLocationSchema = z.object({
   speed_kmh: z.number().min(0).max(200).optional(),
 });
 
-export const SetPriorityLocationSchema = z.object({
-  priority_lat: z.number().min(-90).max(90),
-  priority_lng: z.number().min(-180).max(180),
-  priority_address: z.string().max(500).optional(),
+
+export const RegisterVehicleSchema = z.object({
+  vehicle_type: z.enum(['CAR', 'CNG']),
+  vehicle_number: z.string().min(1).max(20),
+  model: z.string().max(100).optional(),
+  color: z.string().max(50).optional(),
 });
 
 export const CancelRideSchema = z.object({
@@ -81,7 +88,7 @@ export const CancelRideSchema = z.object({
 export const UpdateProfileSchema = z.object({
   gender: GenderEnum.optional(),
   gender_preference: GenderPreferenceEnum.optional(),
-  is_driver: z.boolean().optional(),
+  full_name: z.string().min(2).max(100).optional(),
   driver_priority_lat: z.number().min(-90).max(90).optional(),
   driver_priority_lng: z.number().min(-180).max(180).optional(),
   driver_priority_address: z.string().max(500).optional(),
@@ -93,6 +100,18 @@ export const SearchPoolsSchema = z.object({
   dropoff_lat: z.string().transform((val) => parseFloat(val)).pipe(z.number().min(-90).max(90)),
   dropoff_lng: z.string().transform((val) => parseFloat(val)).pipe(z.number().min(-180).max(180)),
   vehicle_type: VehicleTypeEnum,
+  gender_restriction: GenderPreferenceEnum.optional().default('ANY'),
+});
+
+export const PoolPreviewSchema = z.object({
+  pickup_lat: z.string().transform((val) => parseFloat(val)).pipe(z.number().min(-90).max(90)),
+  pickup_lng: z.string().transform((val) => parseFloat(val)).pipe(z.number().min(-180).max(180)),
+  dropoff_lat: z.string().transform((val) => parseFloat(val)).pipe(z.number().min(-90).max(90)),
+  dropoff_lng: z.string().transform((val) => parseFloat(val)).pipe(z.number().min(-180).max(180)),
+  pickup_address: z.string().max(500).optional(),
+  pickup_name: z.string().max(200).optional(),
+  dropoff_address: z.string().max(500).optional(),
+  dropoff_name: z.string().max(200).optional(),
 });
 
 export const ProcessPaymentSchema = z.object({

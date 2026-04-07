@@ -1,30 +1,70 @@
 import { apiClient } from '../utils/apiClient';
-import { API_ENDPOINTS } from '../config/api.config';
-import { ApiResponse, User, UserPreferences, Location } from '../types';
+import { API_ENDPOINTS, API_CONFIG } from '../config/api.config';
+import { ApiResponse, User, UserPreferences, Location, AuthSession } from '../types';
 
 export const authService = {
   async register(data: {
     email: string;
     password: string;
     phone?: string;
+    first_name: string;
+    last_name: string;
     full_name?: string;
-  }): Promise<ApiResponse<{ user: User; token: string }>> {
-    const response = await apiClient.post(API_ENDPOINTS.AUTH.REGISTER, data);
-    if (response.data?.token) {
-      await apiClient.setToken(response.data.token);
+    gender: 'MALE' | 'FEMALE' | 'OTHER';
+    gender_preference?: 'ANY' | 'FEMALE_ONLY';
+  }): Promise<ApiResponse<{ user: User; token?: string; session?: AuthSession }>> {
+    console.log('[Auth] Registering user:', data.email);
+    console.log('[Auth] API URL:', API_CONFIG.BASE_URL + API_ENDPOINTS.AUTH.REGISTER);
+    try {
+      const response = await apiClient.post(API_ENDPOINTS.AUTH.REGISTER, data);
+      console.log('[Auth] Registration response:', response.success ? 'SUCCESS' : 'FAILED');
+      
+      const session = response.data?.session;
+      const token = session?.access_token || response.data?.token;
+      const refreshToken = session?.refresh_token;
+
+      if (token) {
+        if (refreshToken) {
+          await apiClient.setTokens(token, refreshToken);
+        } else {
+          await apiClient.setToken(token);
+        }
+        console.log('[Auth] Token stored successfully');
+      }
+      return response;
+    } catch (error: any) {
+      console.error('[Auth] Registration error:', error.message);
+      throw error;
     }
-    return response;
   },
 
   async login(data: {
     email: string;
     password: string;
-  }): Promise<ApiResponse<{ user: User; token: string }>> {
-    const response = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, data);
-    if (response.data?.token) {
-      await apiClient.setToken(response.data.token);
+  }): Promise<ApiResponse<{ user: User; token?: string; session?: AuthSession }>> {
+    console.log('[Auth] Logging in user:', data.email);
+    console.log('[Auth] API URL:', API_CONFIG.BASE_URL + API_ENDPOINTS.AUTH.LOGIN);
+    try {
+      const response = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, data);
+      console.log('[Auth] Login response:', response.success ? 'SUCCESS' : 'FAILED');
+      // Server returns session.access_token, store it as auth token
+      const session = response.data?.session;
+      const token = session?.access_token || response.data?.token;
+      const refreshToken = session?.refresh_token;
+
+      if (token) {
+        if (refreshToken) {
+          await apiClient.setTokens(token, refreshToken);
+        } else {
+          await apiClient.setToken(token);
+        }
+        console.log('[Auth] Token stored successfully');
+      }
+      return response;
+    } catch (error: any) {
+      console.error('[Auth] Login error:', error.message);
+      throw error;
     }
-    return response;
   },
 
   async logout(): Promise<ApiResponse> {
@@ -42,7 +82,7 @@ export const authService = {
   },
 
   async verifyEmail(token: string): Promise<ApiResponse> {
-    return apiClient.post(API_ENDPOINTS.AUTH.VERIFY_EMAIL, { token });
+    return apiClient.get(`${API_ENDPOINTS.AUTH.VERIFY_EMAIL}?token=${token}`);
   },
 
   async resetPassword(email: string): Promise<ApiResponse> {
@@ -55,6 +95,10 @@ export const authService = {
   }): Promise<ApiResponse> {
     return apiClient.post(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, data);
   },
+
+  async getCurrentUser(): Promise<ApiResponse<User>> {
+    return apiClient.get(API_ENDPOINTS.AUTH.ME);
+  },
 };
 
 export const userService = {
@@ -66,22 +110,38 @@ export const userService = {
     return apiClient.put(API_ENDPOINTS.USER.UPDATE_PROFILE, data);
   },
 
-  async updatePreferences(data: UserPreferences): Promise<ApiResponse> {
-    return apiClient.put(API_ENDPOINTS.USER.UPDATE_PREFERENCES, data);
+  async setGenderPreference(preference: string): Promise<ApiResponse> {
+    return apiClient.put(API_ENDPOINTS.USER.UPDATE_GENDER_PREFERENCE, { preference });
   },
 
-  async updateLocation(location: Location): Promise<ApiResponse> {
-    return apiClient.post(API_ENDPOINTS.USER.UPDATE_LOCATION, location);
+  async registerDeviceToken(token: string): Promise<ApiResponse> {
+    return apiClient.post(API_ENDPOINTS.USER.DEVICE_TOKEN, { token, app_type: 'rider' });
   },
 
-  async getRideHistory(params?: {
+  async unregisterDeviceToken(): Promise<ApiResponse> {
+    return apiClient.delete(API_ENDPOINTS.USER.DEVICE_TOKEN);
+  },
+
+  async getNotifications(params?: {
     page?: number;
     limit?: number;
   }): Promise<ApiResponse> {
-    return apiClient.get(API_ENDPOINTS.USER.GET_RIDE_HISTORY, params);
+    return apiClient.get(API_ENDPOINTS.USER.NOTIFICATIONS, params);
   },
 
-  async getStats(): Promise<ApiResponse> {
-    return apiClient.get(API_ENDPOINTS.USER.GET_STATS);
+  async markNotificationRead(notificationId: string): Promise<ApiResponse> {
+    return apiClient.post(API_ENDPOINTS.USER.NOTIFICATION_READ(notificationId));
+  },
+
+  async markAllNotificationsRead(): Promise<ApiResponse> {
+    return apiClient.post(API_ENDPOINTS.USER.NOTIFICATIONS_READ_ALL);
+  },
+
+  async getNotificationPreferences(): Promise<ApiResponse> {
+    return apiClient.get(API_ENDPOINTS.USER.NOTIFICATION_PREFERENCES);
+  },
+
+  async updateNotificationPreferences(data: any): Promise<ApiResponse> {
+    return apiClient.put(API_ENDPOINTS.USER.NOTIFICATION_PREFERENCES, data);
   },
 };

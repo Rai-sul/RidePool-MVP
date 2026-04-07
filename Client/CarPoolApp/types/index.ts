@@ -67,32 +67,135 @@ export interface Location {
   address?: string;
 }
 
+export type RideStatus = 
+  | 'CREATING_POOL'
+  | 'SEARCHING'      // Pool creator is searching for other riders
+  | 'MATCHED'        // Another rider has joined the pool
+  | 'CONFIRMED'      // Search time finished with riders joined
+  | 'WAITING_FOR_DRIVER'
+  | 'DRIVER_ASSIGNED'
+  | 'STARTED'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
 export interface Ride {
   id: string;
-  driver_id?: string;
-  passenger_id?: string;
-  pool_id?: string;
-  pickup_location: Location;
-  dropoff_location: Location;
-  pickup_time?: string;
-  dropoff_time?: string;
-  status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'cancelled';
-  fare?: number;
-  distance?: number;
-  duration?: number;
-  created_at?: string;
-  updated_at?: string;
+  user_id: string;
+  pool_id: string | null;
+  
+  // Pickup location
+  pickup_lat: number;
+  pickup_lng: number;
+  pickup_address: string | null;
+  pickup_h3_index: string;
+  
+  // Dropoff location
+  dropoff_lat: number;
+  dropoff_lng: number;
+  dropoff_address: string | null;
+  dropoff_h3_index: string;
+  
+  // Ride details
+  vehicle_type: VehicleType;
+  gender_restriction: GenderPreference;
+  status: RideStatus;
+  
+  // Pricing & distance
+  fare: number | null;
+  distance_km: number | null;
+  
+  // Route matching
+  is_on_front_route: boolean;
+  route_deviation_km: number | null;
+  
+  // Lifecycle
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  cancelled_reason: string | null;
 }
+
+export type PoolStatus =
+  | 'WAITING_FOR_RIDERS'
+  | 'WAITING_FOR_DRIVER'
+  | 'READY_TO_START'
+  | 'STARTED'
+  | 'COMPLETED'
+  | 'CANCELLED';
 
 export interface Pool {
   id: string;
-  name: string;
-  description?: string;
-  creator_id: string;
-  max_members?: number;
+  creator_user_id: string;
+  driver_id: string | null;
+  vehicle_id: string | null;
+  
+  status: PoolStatus;
+  
+  // Pickup location
+  pickup_lat: number;
+  pickup_lng: number;
+  pickup_address: string | null;
+  pickup_h3_index: string;
+  
+  // Destination location
+  destination_lat: number;
+  destination_lng: number;
+  destination_address: string | null;
+  destination_h3_index: string;
+  
+  // Pool details
+  vehicle_type: VehicleType;
+  gender_restriction: GenderPreference;
+  
+  // Passengers
+  current_passengers: number;
+  max_passengers: number;
+  
+  // Matching & viability
+  viability_score: number | null;
+  base_distance_km: number | null;
+  base_duration_minutes: number | null;
+  extended_search_h3: string[] | null;
+  extended_pickup_h3: string[] | null;
+  fare_per_person: number | null;
+  
+  // Lifecycle
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  deleted_at: string | null;
+  
+  // Relations (optional, from joins)
+  pool_members?: PoolMember[];
+  vehicles?: Vehicle;
+  driver?: { id: string; average_rating: number | null };
+}
+
+export interface PoolMember {
+  id: string;
+  pool_id: string;
+  user_id: string;
+  ride_id: string;
+  join_type: 'INITIAL' | 'MATCHED' | 'ADDED';
+  join_score: number | null;
+  is_front_route: boolean;
+  joined_at: string;
+  left_at: string | null;
+}
+
+export interface Vehicle {
+  id: string;
+  driver_id: string;
+  vehicle_type: VehicleType;
+  vehicle_number: string;
+  model: string | null;
+  color: string | null;
+  max_passengers: number;
   is_active: boolean;
-  created_at?: string;
-  members?: User[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Driver {

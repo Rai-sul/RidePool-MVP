@@ -347,6 +347,24 @@ export class H3Utils {
       return [];
     }
   }
+
+  /**
+   * Get extended neighbors for wider geographic search
+   * Used when initial pool search doesn't find matches
+   * 
+   * @param h3Index - Center H3 hexagon index
+   * @param ringDistance - How many rings to expand (default 2)
+   * @returns Array of H3 hexagon indices in extended area
+   */
+  getExtendedNeighbors(h3Index: string, ringDistance: number = 2): string[] {
+    try {
+      // Get all hexagons within the extended ring distance
+      return h3.gridDisk(h3Index, ringDistance);
+    } catch (error) {
+      console.error(`[H3Utils] Error getting extended neighbors: ${h3Index}`, error);
+      return [h3Index];
+    }
+  }
 }
 
 export const h3Utils = new H3Utils();

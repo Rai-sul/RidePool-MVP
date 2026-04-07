@@ -15,6 +15,10 @@ const DebitSchema = z.object({
   reference_id: z.string().uuid().optional(),
 });
 
+const WithdrawSchema = z.object({
+  amount: z.number().positive().max(50000),
+});
+
 export class WalletController {
   async getBalance(req: AuthRequest, res: Response, next: NextFunction) {
     try {
@@ -97,6 +101,59 @@ export class WalletController {
           amount,
           new_balance: result.newBalance,
           message: 'Wallet topped up successfully',
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async withdraw(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const parseResult = WithdrawSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Invalid request data',
+            details: parseResult.error.issues,
+          },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const { amount } = parseResult.data;
+
+      const result = await walletService.debit(userId, amount, 'WITHDRAW', undefined, {
+        initiated_at: new Date().toISOString(),
+      });
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'WITHDRAW_FAILED', message: result.error },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          transaction_id: result.transaction?.id,
+          amount,
+          new_balance: result.newBalance,
+          message: 'Withdrawal successful',
         },
         timestamp: new Date().toISOString(),
       });

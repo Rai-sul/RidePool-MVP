@@ -17,4 +17,6 @@ router.post('/notifications/read-all', authenticate, (req, res, next) => userCon
 router.get('/notifications/preferences', authenticate, (req, res, next) => userController.getNotificationPreferences(req, res, next));
 router.put('/notifications/preferences', authenticate, (req, res, next) => userController.updateNotificationPreferences(req, res, next));
 
+router.delete('/account', authenticate, (req, res, next) => userController.deleteAccount(req, res, next));
+
 export default router;

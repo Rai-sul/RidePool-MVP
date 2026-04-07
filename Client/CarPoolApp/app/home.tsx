@@ -5,7 +5,7 @@ import { useGlobalContext } from '../contexts/GlobalContext';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 
 export default function HomeScreen() {
-  const { userProfile, setSelectedDestination, setSelectedRideType } = useGlobalContext();
+  const { userProfile, setPickupLocation, setSelectedDestination, setSelectedRideType } = useGlobalContext();
   const router = useRouter();
   const params = useLocalSearchParams();
   const [showRatingModal, setShowRatingModal] = useState(false);
@@ -21,6 +21,10 @@ export default function HomeScreen() {
     setSelectedDestination(destination);
     setSelectedRideType(rideType);
     router.push('/ride-confirmation');
+  };
+
+  const handlePickupSelect = (location) => {
+    setPickupLocation(location);
   };
 
   const handleProfileClick = () => {
@@ -39,7 +43,8 @@ export default function HomeScreen() {
     <>
       <LandingPage 
         userProfile={userProfile} 
-        onDestinationSelect={handleDestinationSelect} 
+        onDestinationSelect={handleDestinationSelect}
+        onPickupSelect={handlePickupSelect}
         onProfileClick={handleProfileClick}
         onFriendsClick={handleFriendsClick}
       />

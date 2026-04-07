@@ -1,7 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
+import { View, StyleSheet, Text } from 'react-native';
+import Constants from 'expo-constants';
 import { getH3Boundary } from '../utils/h3Utils';
+import StaticMapView from './StaticMapView';
+
+const isExpoGo = Constants.appOwnership === 'expo';
+
+let NativeMapView: any = null;
+let NativeMarker: any = null;
+let NativePolyline: any = null;
+let PROVIDER_GOOGLE: any = null;
+
+if (!isExpoGo) {
+  try {
+    const RNMaps = require('react-native-maps');
+    NativeMapView = RNMaps.default;
+    NativeMarker = RNMaps.Marker;
+    NativePolyline = RNMaps.Polyline;
+    PROVIDER_GOOGLE = RNMaps.PROVIDER_GOOGLE;
+  } catch (e) {
+    console.log('react-native-maps not available');
+  }
+}
 
 interface MapViewProps {
   initialRegion?: {
@@ -34,12 +54,12 @@ export const MapComponent: React.FC<MapViewProps> = ({
   hexagons = [],
   onRegionChange,
 }) => {
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<any>(null);
   const [hexBoundaries, setHexBoundaries] = useState<Array<Array<{ latitude: number; longitude: number }>>>([]);
 
   useEffect(() => {
     if (hexagons.length > 0) {
-      const boundaries = hexagons.map(hex => {
+      const boundaries = hexagons.map((hex) => {
         const boundary = getH3Boundary(hex);
         return boundary.map(([lat, lng]) => ({ latitude: lat, longitude: lng }));
       });
@@ -47,12 +67,30 @@ export const MapComponent: React.FC<MapViewProps> = ({
     }
   }, [hexagons]);
 
+  if (isExpoGo || !NativeMapView) {
+    const pickupLocation = markers.length > 0 ? { latitude: markers[0].latitude, longitude: markers[0].longitude } : undefined;
+    const dropoffLocation = markers.length > 1 ? { latitude: markers[markers.length - 1].latitude, longitude: markers[markers.length - 1].longitude } : undefined;
+
+    return (
+      <View style={styles.container}>
+        <StaticMapView
+          center={{ latitude: initialRegion.latitude, longitude: initialRegion.longitude }}
+          zoom={14}
+          markers={markers.map((m) => ({ ...m, icon: 'default' as const }))}
+          pickupLocation={pickupLocation}
+          dropoffLocation={dropoffLocation}
+          showDirections={route.length > 0}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <MapView
+      <NativeMapView
         ref={mapRef}
         style={styles.map}
-        provider={PROVIDER_DEFAULT}
+        provider={PROVIDER_GOOGLE}
         initialRegion={initialRegion}
         onRegionChangeComplete={onRegionChange}
         showsUserLocation
@@ -60,9 +98,8 @@ export const MapComponent: React.FC<MapViewProps> = ({
         showsCompass
         showsScale
       >
-        {/* Markers */}
         {markers.map((marker) => (
-          <Marker
+          <NativeMarker
             key={marker.id}
             coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
             title={marker.title}
@@ -70,19 +107,12 @@ export const MapComponent: React.FC<MapViewProps> = ({
           />
         ))}
 
-        {/* Route polyline */}
         {route.length > 0 && (
-          <Polyline
-            coordinates={route}
-            strokeColor="#2563eb"
-            strokeWidth={4}
-            lineDashPattern={[1]}
-          />
+          <NativePolyline coordinates={route} strokeColor="#2563eb" strokeWidth={4} lineDashPattern={[1]} />
         )}
 
-        {/* H3 Hexagon boundaries */}
         {hexBoundaries.map((boundary, index) => (
-          <Polyline
+          <NativePolyline
             key={`hex-${index}`}
             coordinates={boundary}
             strokeColor="#10b981"
@@ -90,7 +120,7 @@ export const MapComponent: React.FC<MapViewProps> = ({
             fillColor="rgba(16, 185, 129, 0.2)"
           />
         ))}
-      </MapView>
+      </NativeMapView>
     </View>
   );
 };
@@ -100,8 +130,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   map: {
-    width: Dimensions.get('window').width,
-    height: Dimensions.get('window').height,
+    ...StyleSheet.absoluteFillObject,
   },
 });
 

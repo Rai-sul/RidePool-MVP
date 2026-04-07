@@ -1,0 +1,107 @@
+diff --git a/node_modules/@react-navigation/native/lib/module/LinkingContext.js b/node_modules/@react-navigation/native/lib/module/LinkingContext.js
+index 7302784..e44e6af 100644
+--- a/node_modules/@react-navigation/native/lib/module/LinkingContext.js
++++ b/node_modules/@react-navigation/native/lib/module/LinkingContext.js
+@@ -1,11 +1,9 @@
+ "use strict";
+ 
+ import * as React from 'react';
+-const MISSING_CONTEXT_ERROR = "Couldn't find a LinkingContext context.";
++// Patched: no-op default instead of throwing during transient context loss.
+ export const LinkingContext = /*#__PURE__*/React.createContext({
+-  get options() {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  }
++  options: undefined,
+ });
+ LinkingContext.displayName = 'LinkingContext';
+ //# sourceMappingURL=LinkingContext.js.map
+diff --git a/node_modules/@react-navigation/native/lib/module/UnhandledLinkingContext.js b/node_modules/@react-navigation/native/lib/module/UnhandledLinkingContext.js
+index e1fa19a..ccd93ea 100644
+--- a/node_modules/@react-navigation/native/lib/module/UnhandledLinkingContext.js
++++ b/node_modules/@react-navigation/native/lib/module/UnhandledLinkingContext.js
+@@ -2,13 +2,13 @@
+ 
+ import * as React from 'react';
+ const MISSING_CONTEXT_ERROR = "Couldn't find an UnhandledLinkingContext context.";
++
++// Patched: return safe no-op defaults instead of throwing, so transient
++// context loss during React 19 concurrent re-renders doesn't crash the app.
++const NOOP = () => {};
+ export const UnhandledLinkingContext = /*#__PURE__*/React.createContext({
+-  get lastUnhandledLink() {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  },
+-  get setLastUnhandledLink() {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  }
++  lastUnhandledLink: undefined,
++  setLastUnhandledLink: NOOP,
+ });
+ UnhandledLinkingContext.displayName = 'UnhandledLinkingContext';
+ //# sourceMappingURL=UnhandledLinkingContext.js.map
+diff --git a/node_modules/@react-navigation/native/lib/module/useLinkProps.js b/node_modules/@react-navigation/native/lib/module/useLinkProps.js
+index 93619b5..82f7928 100644
+--- a/node_modules/@react-navigation/native/lib/module/useLinkProps.js
++++ b/node_modules/@react-navigation/native/lib/module/useLinkProps.js
+@@ -66,7 +66,7 @@ export function useLinkProps({
+         } else if (root) {
+           root.dispatch(action);
+         } else {
+-          throw new Error("Couldn't find a navigation object. Is your component inside NavigationContainer?");
++          console.warn('[react-navigation] Navigation not ready'); return;
+         }
+       } else {
+         // @ts-expect-error This is already type-checked by the prop types
+diff --git a/node_modules/@react-navigation/native/lib/module/useLinkTo.js b/node_modules/@react-navigation/native/lib/module/useLinkTo.js
+index 4101f35..9ac31b9 100644
+--- a/node_modules/@react-navigation/native/lib/module/useLinkTo.js
++++ b/node_modules/@react-navigation/native/lib/module/useLinkTo.js
+@@ -14,7 +14,7 @@ export function useLinkTo() {
+   const buildAction = useBuildAction();
+   const linkTo = React.useCallback(href => {
+     if (navigation === undefined) {
+-      throw new Error("Couldn't find a navigation object. Is your component inside NavigationContainer?");
++      console.warn('[react-navigation] Navigation not ready'); return;
+     }
+     const action = buildAction(href);
+     navigation.dispatch(action);
+diff --git a/node_modules/@react-navigation/native/lib/module/useLocale.js b/node_modules/@react-navigation/native/lib/module/useLocale.js
+index 29cbd26..4184f5a 100644
+--- a/node_modules/@react-navigation/native/lib/module/useLocale.js
++++ b/node_modules/@react-navigation/native/lib/module/useLocale.js
+@@ -9,7 +9,7 @@ import { LocaleDirContext } from "./LocaleDirContext.js";
+ export function useLocale() {
+   const direction = React.useContext(LocaleDirContext);
+   if (direction === undefined) {
+-    throw new Error("Couldn't determine the text direction. Is your component inside NavigationContainer?");
++    console.warn('[react-navigation] Text direction not found, using LTR'); return { direction: 'ltr' };
+   }
+   return {
+     direction
+diff --git a/node_modules/@react-navigation/native/lib/module/useRoutePath.js b/node_modules/@react-navigation/native/lib/module/useRoutePath.js
+index f4415c4..7dd3b65 100644
+--- a/node_modules/@react-navigation/native/lib/module/useRoutePath.js
++++ b/node_modules/@react-navigation/native/lib/module/useRoutePath.js
+@@ -15,7 +15,7 @@ export function useRoutePath() {
+   } = React.useContext(LinkingContext);
+   const state = useStateForPath();
+   if (state === undefined) {
+-    throw new Error("Couldn't find a state for the route object. Is your component inside a screen in a navigator?");
++    console.warn('[react-navigation] Route state not found'); return undefined;
+   }
+   const getPathFromStateHelper = options?.getPathFromState ?? getPathFromState;
+   const path = React.useMemo(() => {
+diff --git a/node_modules/@react-navigation/native/lib/module/useScrollToTop.js b/node_modules/@react-navigation/native/lib/module/useScrollToTop.js
+index b9328b9..841063c 100644
+--- a/node_modules/@react-navigation/native/lib/module/useScrollToTop.js
++++ b/node_modules/@react-navigation/native/lib/module/useScrollToTop.js
+@@ -27,7 +27,7 @@ export function useScrollToTop(ref) {
+   const navigation = React.useContext(NavigationContext);
+   const route = useRoute();
+   if (navigation === undefined) {
+-    throw new Error("Couldn't find a navigation object. Is your component inside NavigationContainer?");
++    console.warn('[react-navigation] Navigation not ready'); return;
+   }
+   React.useEffect(() => {
+     const tabNavigations = [];

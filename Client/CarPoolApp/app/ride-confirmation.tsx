@@ -1,19 +1,26 @@
 
 import RideConfirmation from '../components/RideConfirmation.native';
-import { useGlobalContext } from '../contexts/GlobalContext';
+import { useGlobalContext, toDisplayPool } from '../contexts/GlobalContext';
 import { useRouter, router as staticRouter } from 'expo-router';
+import { Pool } from '../types';
 
 export default function RideConfirmationScreen() {
-  const { userProfile, selectedDestination, selectedRideType, setSelectedPool } = useGlobalContext();
+  const { userProfile, pickupLocation, selectedDestination, selectedRideType, setSelectedPool, startTrip } = useGlobalContext();
   const router = useRouter();
 
-  const handlePoolSelect = (pool) => {
-    setSelectedPool(pool);
-    // WORKAROUND for Expo Router bug #38423: Use static router import
-    // Static router doesn't rely on React context, avoiding the navigation context error
-    requestAnimationFrame(() => {
-      staticRouter.replace('/searching');
-    });
+  const handlePoolSelect = (pool: Pool) => {
+    // Convert API pool to display pool and start the trip
+    const displayPool = toDisplayPool(pool);
+    setSelectedPool(displayPool);
+    startTrip(displayPool);
+
+    // Wait 2 seconds to show brief confirmation, then go directly to trip-progress
+    // All countdown and search logic is handled on the trip-progress page
+    setTimeout(() => {
+      // WORKAROUND for Expo Router bug #38423: Use static router import
+      // Static router doesn't rely on React context, avoiding the navigation context error
+      staticRouter.replace('/trip-progress');
+    }, 2000);
   };
 
   const handleBack = () => {
@@ -22,6 +29,7 @@ export default function RideConfirmationScreen() {
 
   return (
     <RideConfirmation
+      pickupLocation={pickupLocation}
       destination={selectedDestination}
       userProfile={userProfile}
       rideType={selectedRideType}

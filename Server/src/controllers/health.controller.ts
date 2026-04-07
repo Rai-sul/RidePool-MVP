@@ -1,17 +1,19 @@
 import { Request, Response, Router } from 'express';
 import { supabase } from '../config/supabase';
-import { cacheService } from '../services/cache.service';
+import { unifiedCacheService } from '../services/unifiedCache.service';
 import { gracefulShutdownService } from '../services/gracefulShutdown.service';
 import { logger } from '../utils/logger';
+import { config } from '../config/env';
 
 interface HealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
   timestamp: string;
   version: string;
   uptime: number;
+  mvpMode: boolean;
   dependencies: {
     supabase: DependencyStatus;
-    redis: DependencyStatus;
+    cache: DependencyStatus;
     googleMaps?: DependencyStatus;
   };
   metrics?: {
@@ -59,25 +61,26 @@ async function checkSupabase(): Promise<DependencyStatus> {
   }
 }
 
-async function checkRedis(): Promise<DependencyStatus> {
+async function checkCache(): Promise<DependencyStatus> {
   const start = Date.now();
 
-  if (!cacheService.isReady()) {
+  if (!unifiedCacheService.isReady()) {
     return {
       status: 'degraded',
-      message: 'Redis not connected (caching disabled)',
+      message: config.mvpMode ? 'Memory cache not ready' : 'Redis not connected (caching disabled)',
     };
   }
 
   try {
     const testKey = 'health:ping';
-    await cacheService.set(testKey, { timestamp: Date.now() }, 5);
-    const result = await cacheService.get(testKey);
+    await unifiedCacheService.set(testKey, { timestamp: Date.now() }, 5);
+    const result = await unifiedCacheService.get(testKey);
 
     if (result) {
       return {
         status: 'healthy',
         latency_ms: Date.now() - start,
+        message: config.mvpMode ? 'In-memory cache (MVP mode)' : undefined,
       };
     }
 
@@ -90,7 +93,7 @@ async function checkRedis(): Promise<DependencyStatus> {
     return {
       status: 'unhealthy',
       latency_ms: Date.now() - start,
-      message: error instanceof Error ? error.message : 'Redis error',
+      message: error instanceof Error ? error.message : 'Cache error',
     };
   }
 }
@@ -139,14 +142,14 @@ export const healthController = {
       return;
     }
 
-    const [supabaseStatus, redisStatus] = await Promise.all([
+    const [supabaseStatus, cacheStatus] = await Promise.all([
       checkSupabase(),
-      checkRedis(),
+      checkCache(),
     ]);
 
     const dependencies = {
       supabase: supabaseStatus,
-      redis: redisStatus,
+      cache: cacheStatus,
     };
 
     const overallStatus = getOverallStatus(dependencies);
@@ -162,14 +165,14 @@ export const healthController = {
   },
 
   async detailed(req: Request, res: Response): Promise<void> {
-    const [supabaseStatus, redisStatus] = await Promise.all([
+    const [supabaseStatus, cacheStatus] = await Promise.all([
       checkSupabase(),
-      checkRedis(),
+      checkCache(),
     ]);
 
     const dependencies = {
       supabase: supabaseStatus,
-      redis: redisStatus,
+      cache: cacheStatus,
     };
 
     const overallStatus = getOverallStatus(dependencies);
@@ -180,6 +183,7 @@ export const healthController = {
       timestamp: new Date().toISOString(),
       version: process.env.npm_package_version || '1.0.0',
       uptime: Math.floor((Date.now() - startTime) / 1000),
+      mvpMode: config.mvpMode,
       dependencies,
       metrics: {
         activeConnections: gracefulShutdownService.getActiveConnections(),
@@ -198,7 +202,7 @@ export const healthController = {
   },
 
   async cacheStats(req: Request, res: Response): Promise<void> {
-    const stats = cacheService.getStats();
+    const stats = unifiedCacheService.getStats();
     res.json({
       cache: stats,
       hitRate: stats.hits > 0 || stats.misses > 0

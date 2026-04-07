@@ -60,11 +60,9 @@ export class MessagingController {
         .insert({
           conversation_id: conversationId,
           sender_id: userId,
-          receiver_id,
-          content: message,
-          ride_id: ride_id || null,
-          pool_id: pool_id || null,
-          is_read: false,
+          message_text: message,
+          message_type: 'TEXT',
+          is_system: false,
         })
         .select()
         .single();
@@ -78,7 +76,6 @@ export class MessagingController {
         .update({
           last_message_id: newMessage.id,
           last_message_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
         })
         .eq('id', conversationId);
 
@@ -145,50 +142,63 @@ export class MessagingController {
         .from('conversations')
         .select(`
           id,
-          ride_id,
           pool_id,
           last_message_at,
           created_at,
-          conversation_participants(user_id, users(id, phone, average_rating)),
-          messages(id, content, sender_id, is_read, created_at)
+          conversation_participants(user_id, users(id, phone, full_name, average_rating))
         `, { count: 'exact' })
         .in('id', conversationIds)
-        .order('last_message_at', { ascending: false })
+        .order('last_message_at', { ascending: false, nullsFirst: false })
         .range(offset, offset + limit - 1);
 
       if (error) {
+        logger.error('[MessagingController] Error fetching conversations:', { error, conversationIds });
         throw error;
       }
 
-      const formattedConversations = (conversations || []).map((conv) => {
+      // Fetch last message and unread count for each conversation separately
+      const formattedConversations = await Promise.all((conversations || []).map(async (conv) => {
         const otherParticipants = conv.conversation_participants?.filter(
           (p: any) => p.user_id !== userId
         ) || [];
 
-        const lastMessage = conv.messages?.[0];
-        const unreadCount = conv.messages?.filter(
-          (m: any) => !m.is_read && m.sender_id !== userId
-        ).length || 0;
+        // Get the last message for this conversation
+        const { data: lastMsgArray } = await supabaseAdmin
+          .from('messages')
+          .select('id, message_text, sender_id, read_at, created_at')
+          .eq('conversation_id', conv.id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        
+        const lastMsgData = lastMsgArray?.[0] || null;
+
+        // Get unread count (messages not from current user and not read)
+        const { count: unreadCount } = await supabaseAdmin
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('conversation_id', conv.id)
+          .neq('sender_id', userId)
+          .is('read_at', null);
 
         return {
           id: conv.id,
-          ride_id: conv.ride_id,
           pool_id: conv.pool_id,
           participants: otherParticipants.map((p: any) => ({
             user_id: p.user_id,
             phone: p.users?.phone,
+            full_name: p.users?.full_name,
             rating: p.users?.average_rating,
           })),
-          last_message: lastMessage ? {
-            content: lastMessage.content,
-            sender_id: lastMessage.sender_id,
-            sent_at: lastMessage.created_at,
-            is_read: lastMessage.is_read,
+          last_message: lastMsgData ? {
+            content: lastMsgData.message_text,
+            sender_id: lastMsgData.sender_id,
+            sent_at: lastMsgData.created_at,
+            is_read: !!lastMsgData.read_at,
           } : null,
-          unread_count: unreadCount,
+          unread_count: unreadCount || 0,
           last_message_at: conv.last_message_at,
         };
-      });
+      }));
 
       res.json({
         success: true,
@@ -242,7 +252,7 @@ export class MessagingController {
 
       const { data: messages, error, count } = await supabaseAdmin
         .from('messages')
-        .select('id, content, sender_id, is_read, created_at', { count: 'exact' })
+        .select('id, message_text, sender_id, read_at, created_at', { count: 'exact' })
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
@@ -251,17 +261,26 @@ export class MessagingController {
         throw error;
       }
 
+      // Mark messages as read - update the last_read_at in conversation_participants
       await supabaseAdmin
-        .from('messages')
-        .update({ is_read: true })
+        .from('conversation_participants')
+        .update({ last_read_at: new Date().toISOString() })
         .eq('conversation_id', conversationId)
-        .eq('receiver_id', userId)
-        .eq('is_read', false);
+        .eq('user_id', userId);
+
+      // Format messages for response
+      const formattedMessages = (messages || []).reverse().map((msg: any) => ({
+        id: msg.id,
+        content: msg.message_text,
+        sender_id: msg.sender_id,
+        is_read: !!msg.read_at,
+        created_at: msg.created_at,
+      }));
 
       res.json({
         success: true,
         data: {
-          messages: (messages || []).reverse(),
+          messages: formattedMessages,
           pagination: {
             page,
             limit,
@@ -289,11 +308,11 @@ export class MessagingController {
 
       const { messageId } = req.params;
 
+      // Update the read_at timestamp for the message
       const { error } = await supabaseAdmin
         .from('messages')
-        .update({ is_read: true, read_at: new Date().toISOString() })
-        .eq('id', messageId)
-        .eq('receiver_id', userId);
+        .update({ read_at: new Date().toISOString() })
+        .eq('id', messageId);
 
       if (error) {
         throw error;
@@ -322,12 +341,12 @@ export class MessagingController {
 
       const { conversationId } = req.params;
 
-      const { count, error } = await supabaseAdmin
-        .from('messages')
-        .update({ is_read: true, read_at: new Date().toISOString() })
+      // Update the last_read_at in conversation_participants
+      const { error } = await supabaseAdmin
+        .from('conversation_participants')
+        .update({ last_read_at: new Date().toISOString() })
         .eq('conversation_id', conversationId)
-        .eq('receiver_id', userId)
-        .eq('is_read', false);
+        .eq('user_id', userId);
 
       if (error) {
         throw error;
@@ -335,7 +354,7 @@ export class MessagingController {
 
       res.json({
         success: true,
-        data: { messages_marked: count || 0 },
+        data: { message: 'Conversation marked as read' },
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
@@ -354,19 +373,40 @@ export class MessagingController {
         });
       }
 
-      const { count, error } = await supabaseAdmin
-        .from('messages')
-        .select('*', { count: 'exact', head: true })
-        .eq('receiver_id', userId)
-        .eq('is_read', false);
+      // Get conversations where user is participant
+      const { data: participations } = await supabaseAdmin
+        .from('conversation_participants')
+        .select('conversation_id, last_read_at')
+        .eq('user_id', userId);
 
-      if (error) {
-        throw error;
+      if (!participations || participations.length === 0) {
+        return res.json({
+          success: true,
+          data: { unread_count: 0 },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Count messages in those conversations that are newer than last_read_at and not from current user
+      let totalUnread = 0;
+      for (const part of participations) {
+        const query = supabaseAdmin
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('conversation_id', part.conversation_id)
+          .neq('sender_id', userId);
+
+        if (part.last_read_at) {
+          query.gt('created_at', part.last_read_at);
+        }
+
+        const { count } = await query;
+        totalUnread += count || 0;
       }
 
       res.json({
         success: true,
-        data: { unread_count: count || 0 },
+        data: { unread_count: totalUnread },
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
@@ -397,10 +437,12 @@ export class MessagingController {
       return sharedConvId;
     }
 
+    // Create new conversation - type is required by schema
+    const conversationType = poolId ? 'POOL' : 'DIRECT';
     const { data: newConv, error: convError } = await supabaseAdmin
       .from('conversations')
       .insert({
-        ride_id: rideId || null,
+        type: conversationType,
         pool_id: poolId || null,
       })
       .select()

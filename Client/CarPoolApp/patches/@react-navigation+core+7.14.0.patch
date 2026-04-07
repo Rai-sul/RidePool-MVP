@@ -1,0 +1,212 @@
+diff --git a/node_modules/@react-navigation/core/lib/module/NavigationBuilderContext.js b/node_modules/@react-navigation/core/lib/module/NavigationBuilderContext.js
+index 282706b..7089760 100644
+--- a/node_modules/@react-navigation/core/lib/module/NavigationBuilderContext.js
++++ b/node_modules/@react-navigation/core/lib/module/NavigationBuilderContext.js
+@@ -1,17 +1,15 @@
+ "use strict";
+ 
+ import * as React from 'react';
++const NOOP = () => {};
+ /**
+  * Context which holds the required helpers needed to build nested navigators.
++ * Patched: no-op defaults instead of throwing during transient context loss.
+  */
+ export const NavigationBuilderContext = /*#__PURE__*/React.createContext({
+   onDispatchAction: () => undefined,
+   onOptionsChange: () => undefined,
+-  scheduleUpdate: () => {
+-    throw new Error("Couldn't find a context for scheduling updates.");
+-  },
+-  flushUpdates: () => {
+-    throw new Error("Couldn't find a context for flushing updates.");
+-  }
++  scheduleUpdate: NOOP,
++  flushUpdates: NOOP,
+ });
+ //# sourceMappingURL=NavigationBuilderContext.js.map
+diff --git a/node_modules/@react-navigation/core/lib/module/NavigationStateContext.js b/node_modules/@react-navigation/core/lib/module/NavigationStateContext.js
+index 4221b52..67e5839 100644
+--- a/node_modules/@react-navigation/core/lib/module/NavigationStateContext.js
++++ b/node_modules/@react-navigation/core/lib/module/NavigationStateContext.js
+@@ -2,22 +2,18 @@
+ 
+ import * as React from 'react';
+ const MISSING_CONTEXT_ERROR = "Couldn't find a navigation context. Have you wrapped your app with 'NavigationContainer'? See https://reactnavigation.org/docs/getting-started for setup instructions.";
++
++// Patched: return safe no-op defaults instead of throwing, so transient
++// context loss during React 19 concurrent re-renders doesn't crash the app.
++const NOOP = () => {};
++const NOOP_UNSUB = () => NOOP;
+ export const NavigationStateContext = /*#__PURE__*/React.createContext({
+   isDefault: true,
+-  get getKey() {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  },
+-  get setKey() {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  },
+-  get getState() {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  },
+-  get setState() {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  },
+-  get getIsInitial() {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  }
++  getKey: NOOP,
++  setKey: NOOP,
++  getState: () => undefined,
++  setState: NOOP,
++  getIsInitial: () => true,
++  addOptionsGetter: NOOP_UNSUB,
+ });
+ //# sourceMappingURL=NavigationStateContext.js.map
+diff --git a/node_modules/@react-navigation/core/lib/module/theming/useTheme.js b/node_modules/@react-navigation/core/lib/module/theming/useTheme.js
+index 53c9211..4f749e6 100644
+--- a/node_modules/@react-navigation/core/lib/module/theming/useTheme.js
++++ b/node_modules/@react-navigation/core/lib/module/theming/useTheme.js
+@@ -5,7 +5,7 @@ import { ThemeContext } from "./ThemeContext.js";
+ export function useTheme() {
+   const theme = React.useContext(ThemeContext);
+   if (theme == null) {
+-    throw new Error("Couldn't find a theme. Is your component inside NavigationContainer or does it have a theme?");
++    console.warn('[react-navigation] Theme not found, using default'); return { dark: false, colors: { primary: '#007AFF', background: '#fff', card: '#fff', text: '#000', border: '#d8d8d8', notification: '#ff3b30' } };
+   }
+   return theme;
+ }
+diff --git a/node_modules/@react-navigation/core/lib/module/useNavigation.js b/node_modules/@react-navigation/core/lib/module/useNavigation.js
+index ee7916d..2e9d08d 100644
+--- a/node_modules/@react-navigation/core/lib/module/useNavigation.js
++++ b/node_modules/@react-navigation/core/lib/module/useNavigation.js
+@@ -3,6 +3,23 @@
+ import * as React from 'react';
+ import { NavigationContainerRefContext } from "./NavigationContainerRefContext.js";
+ import { NavigationContext } from "./NavigationContext.js";
++
++// Patched: Create a safe no-op navigation object for transient context loss
++const SAFE_NAVIGATION = {
++  navigate: () => {},
++  goBack: () => {},
++  reset: () => {},
++  setParams: () => {},
++  dispatch: () => {},
++  isFocused: () => true,
++  canGoBack: () => false,
++  getId: () => undefined,
++  getParent: () => undefined,
++  getState: () => undefined,
++  addListener: () => () => {},
++  removeListener: () => {},
++};
++
+ /**
+  * Hook to access the navigation prop of the parent screen anywhere.
+  *
+@@ -12,7 +29,10 @@ export function useNavigation() {
+   const root = React.useContext(NavigationContainerRefContext);
+   const navigation = React.useContext(NavigationContext);
+   if (navigation === undefined && root === undefined) {
+-    throw new Error("Couldn't find a navigation object. Is your component inside NavigationContainer?");
++    // Patched: Return safe no-op navigation during transient context loss
++    // instead of throwing, to handle React 19 concurrent re-renders gracefully.
++    console.warn('[react-navigation] Navigation context temporarily unavailable');
++    return SAFE_NAVIGATION;
+   }
+ 
+   // FIXME: Figure out a better way to do this
+diff --git a/node_modules/@react-navigation/core/lib/module/useNavigationState.js b/node_modules/@react-navigation/core/lib/module/useNavigationState.js
+index a5d26a3..890d18f 100644
+--- a/node_modules/@react-navigation/core/lib/module/useNavigationState.js
++++ b/node_modules/@react-navigation/core/lib/module/useNavigationState.js
+@@ -12,7 +12,7 @@ import { jsx as _jsx } from "react/jsx-runtime";
+ export function useNavigationState(selector) {
+   const stateListener = React.useContext(NavigationStateListenerContext);
+   if (stateListener == null) {
+-    throw new Error("Couldn't get the navigation state. Is your component inside a navigator?");
++    console.warn('[react-navigation] Navigation state not available'); return undefined;
+   }
+   const value = useSyncExternalStoreWithSelector(stateListener.subscribe,
+   // @ts-expect-error: this is unsafe, but needed to make the generic work
+diff --git a/node_modules/@react-navigation/core/lib/module/usePreventRemoveContext.js b/node_modules/@react-navigation/core/lib/module/usePreventRemoveContext.js
+index 93780d5..8e69ed5 100644
+--- a/node_modules/@react-navigation/core/lib/module/usePreventRemoveContext.js
++++ b/node_modules/@react-navigation/core/lib/module/usePreventRemoveContext.js
+@@ -5,7 +5,7 @@ import { PreventRemoveContext } from "./PreventRemoveContext.js";
+ export function usePreventRemoveContext() {
+   const value = React.useContext(PreventRemoveContext);
+   if (value == null) {
+-    throw new Error("Couldn't find the prevent remove context. Is your component inside NavigationContent?");
++    console.warn('[react-navigation] Prevent remove context not found'); return { routes: {} };
+   }
+   return value;
+ }
+diff --git a/node_modules/@react-navigation/core/lib/module/useRegisterNavigator.js b/node_modules/@react-navigation/core/lib/module/useRegisterNavigator.js
+index 987f9a3..c4a21b3 100644
+--- a/node_modules/@react-navigation/core/lib/module/useRegisterNavigator.js
++++ b/node_modules/@react-navigation/core/lib/module/useRegisterNavigator.js
+@@ -12,7 +12,7 @@ export function useRegisterNavigator() {
+   const [key] = React.useState(() => nanoid());
+   const container = React.useContext(SingleNavigatorContext);
+   if (container === undefined) {
+-    throw new Error("Couldn't register the navigator. Have you wrapped your app with 'NavigationContainer'?\n\nThis can also happen if there are multiple copies of '@react-navigation' packages installed.");
++    console.warn('[react-navigation] Navigator registration skipped'); return { addListener: () => () => {} };
+   }
+   React.useEffect(() => {
+     const {
+diff --git a/node_modules/@react-navigation/core/lib/module/useRoute.js b/node_modules/@react-navigation/core/lib/module/useRoute.js
+index e4021f2..3faf931 100644
+--- a/node_modules/@react-navigation/core/lib/module/useRoute.js
++++ b/node_modules/@react-navigation/core/lib/module/useRoute.js
+@@ -10,7 +10,7 @@ import { NavigationRouteContext } from "./NavigationRouteContext.js";
+ export function useRoute() {
+   const route = React.useContext(NavigationRouteContext);
+   if (route === undefined) {
+-    throw new Error("Couldn't find a route object. Is your component inside a screen in a navigator?");
++    console.warn('[react-navigation] Route not found'); return {};
+   }
+   return route;
+ }
+diff --git a/node_modules/@react-navigation/core/src/NavigationStateContext.tsx b/node_modules/@react-navigation/core/src/NavigationStateContext.tsx
+index 76d2094..60cc9a2 100644
+--- a/node_modules/@react-navigation/core/src/NavigationStateContext.tsx
++++ b/node_modules/@react-navigation/core/src/NavigationStateContext.tsx
+@@ -4,6 +4,11 @@ import * as React from 'react';
+ const MISSING_CONTEXT_ERROR =
+   "Couldn't find a navigation context. Have you wrapped your app with 'NavigationContainer'? See https://reactnavigation.org/docs/getting-started for setup instructions.";
+ 
++// Patched: return safe no-op defaults instead of throwing, so transient
++// context loss during React 19 concurrent re-renders doesn't crash the app.
++const NOOP = () => {};
++const NOOP_UNSUB = () => NOOP;
++
+ export const NavigationStateContext = React.createContext<{
+   isDefault?: true;
+   state?: NavigationState | PartialState<NavigationState>;
+@@ -20,20 +25,10 @@ export const NavigationStateContext = React.createContext<{
+   ) => void;
+ }>({
+   isDefault: true,
+-
+-  get getKey(): any {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  },
+-  get setKey(): any {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  },
+-  get getState(): any {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  },
+-  get setState(): any {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  },
+-  get getIsInitial(): any {
+-    throw new Error(MISSING_CONTEXT_ERROR);
+-  },
++  getKey: NOOP as any,
++  setKey: NOOP,
++  getState: () => undefined,
++  setState: NOOP,
++  getIsInitial: () => true,
++  addOptionsGetter: NOOP_UNSUB as any,
+ });

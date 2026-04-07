@@ -10,4 +10,7 @@ router.post('/voice-instruction', authenticateToken, (req, res, next) => navigat
 router.get('/waypoint-message', authenticateToken, (req, res, next) => navigationController.getWaypointApproachMessage(req, res, next));
 router.get('/recalculating', authenticateToken, (req, res, next) => navigationController.getRecalculatingMessage(req, res, next));
 
+// FREE navigation using Google Maps app (no API cost)
+router.post('/deep-link', authenticateToken, (req, res, next) => navigationController.getNavigationDeepLink(req, res, next));
+
 export default router;

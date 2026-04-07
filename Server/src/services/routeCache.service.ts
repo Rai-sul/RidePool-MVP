@@ -1,8 +1,9 @@
-import { cacheService } from './cache.service';
+import { unifiedCacheService } from './unifiedCache.service';
 import { googleMapsService, GoogleMapsRoute } from './googleMaps.service';
 import { H3_RESOLUTION } from '../utils/h3.utils';
 import * as h3 from 'h3-js';
 import { logger } from '../utils/logger';
+import { AVERAGE_CITY_SPEED_KMH } from '../utils/helper';
 
 interface Location {
   latitude: number;
@@ -24,7 +25,7 @@ interface CachedRouteResult {
 }
 
 const ROUTE_CACHE_TTL = 3600;
-const FALLBACK_SPEED_KMH = 25;
+const FALLBACK_SPEED_KMH = AVERAGE_CITY_SPEED_KMH;
 
 class RouteCacheService {
   private requestCount = 0;
@@ -33,11 +34,11 @@ class RouteCacheService {
   async getRoute(origin: Location, destination: Location): Promise<CachedRouteResult> {
     const originH3 = h3.latLngToCell(origin.latitude, origin.longitude, H3_RESOLUTION.DESTINATION);
     const destH3 = h3.latLngToCell(destination.latitude, destination.longitude, H3_RESOLUTION.DESTINATION);
-    const cacheKey = cacheService.routeKey(originH3, destH3);
+    const cacheKey = unifiedCacheService.routeKey(originH3, destH3);
 
     this.requestCount++;
 
-    const cached = await cacheService.get<RouteInfo>(cacheKey);
+    const cached = await unifiedCacheService.get<RouteInfo>(cacheKey);
     if (cached) {
       this.cacheHits++;
       logger.debug(`[RouteCache] Cache hit for ${originH3} -> ${destH3}`);
@@ -62,7 +63,7 @@ class RouteCacheService {
           polyline: routeData.geometry?.encoded,
         };
 
-        await cacheService.set(cacheKey, routeInfo, ROUTE_CACHE_TTL);
+        await unifiedCacheService.set(cacheKey, routeInfo, ROUTE_CACHE_TTL);
         logger.debug(`[RouteCache] Cached route ${originH3} -> ${destH3}`);
 
         return {
@@ -95,9 +96,9 @@ class RouteCacheService {
       const { origin, destination } = routes[i];
       const originH3 = h3.latLngToCell(origin.latitude, origin.longitude, H3_RESOLUTION.DESTINATION);
       const destH3 = h3.latLngToCell(destination.latitude, destination.longitude, H3_RESOLUTION.DESTINATION);
-      const cacheKey = cacheService.routeKey(originH3, destH3);
+      const cacheKey = unifiedCacheService.routeKey(originH3, destH3);
 
-      const cached = await cacheService.get<RouteInfo>(cacheKey);
+      const cached = await unifiedCacheService.get<RouteInfo>(cacheKey);
       if (cached) {
         this.cacheHits++;
         results[i] = {

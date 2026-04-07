@@ -12,7 +12,6 @@ export default function DriverChat() {
       userProfile={userProfile} 
       driverId={params.driverId as string}
       driverName={params.driverName as string}
-      driverAvatar={params.driverAvatar as string}
       onBack={() => router.back()}
     />
   );

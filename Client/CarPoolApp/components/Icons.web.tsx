@@ -99,3 +99,7 @@ export const Smile = createIcon(LucideIcons.Smile);
 export const Paperclip = createIcon(LucideIcons.Paperclip);
 export const Video = createIcon(LucideIcons.Video);
 export const Bot = createIcon(LucideIcons.Bot);
+export const UserX = createIcon(LucideIcons.UserX);
+export const UserMinus = createIcon(LucideIcons.UserMinus);
+export const RefreshCw = createIcon(LucideIcons.RefreshCw);
+export const Route = createIcon(LucideIcons.Route);

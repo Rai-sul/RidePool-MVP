@@ -11,6 +11,7 @@ import {
 import { supabase } from '../config/supabase';
 import { calculateDistance } from '../utils/helper';
 import { h3Utils } from '../utils/h3.utils';
+import { SEARCH_TIMING } from './lookupTime.service';
 
 export class PoolSearchResponseService {
   private readonly PEAK_HOURS = [
@@ -122,16 +123,28 @@ export class PoolSearchResponseService {
       const destinationH3 = h3Utils.latLngToH3(destination, 7);
       const searchHexagons = h3Utils.getH3Ring(destinationH3, 3); // Wider search
 
-      const { data: pools, error } = await supabase
+      const { data: rawPools, error } = await supabase
         .from('pools')
         .select('*')
         .in('destination_h3_index', searchHexagons)
         .in('status', ['WAITING_FOR_RIDERS', 'WAITING_FOR_DRIVER'] as any[])
         .limit(10);
 
-      if (error || !pools) {
+      if (error || !rawPools) {
         return [];
       }
+
+      // Filter out expired pools (WAITING_FOR_RIDERS but older than lookup time)
+      const TOTAL_SEARCH_MS = SEARCH_TIMING.TOTAL_SECONDS * 1000; // 40 seconds
+      const now = Date.now();
+      const pools = rawPools.filter((pool: any) => {
+        if (pool.status !== 'WAITING_FOR_RIDERS') {
+          return true;
+        }
+        const poolCreatedAt = new Date(pool.created_at).getTime();
+        const poolAge = now - poolCreatedAt;
+        return poolAge < TOTAL_SEARCH_MS;
+      });
 
       const nearbyPools: NearbyPoolInfo[] = [];
 

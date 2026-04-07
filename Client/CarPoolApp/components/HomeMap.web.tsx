@@ -1,9 +1,10 @@
-import { View, Text, TouchableOpacity } from 'react-native-web';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native-web';
 import { MapPin, Home, Briefcase, Dumbbell, Plane, Search } from './Icons';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
-import { useState } from 'react';
 import DestinationSearch from './DestinationSearch';
+import WebMap from './WebMap';
 import type { UserProfile, Destination } from '../App';
 
 type HomeMapProps = {
@@ -21,13 +22,30 @@ const quickDestinations = [
 export default function HomeMap({ userProfile, onDestinationSelect }: HomeMapProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [selectedRideType, setSelectedRideType] = useState<'female-only' | 'regular' | null>(null);
+  const [currentLocation, setCurrentLocation] = useState({ latitude: 23.8103, longitude: 90.4125 }); // Default Dhaka
   const initials = userProfile ? `${userProfile.firstName[0]}${userProfile.lastName[0]}` : 'U';
   const isFemale = userProfile?.gender === 'female';
 
+  // Try to get user's current location
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCurrentLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.log('Geolocation error:', error.message);
+        }
+      );
+    }
+  }, []);
+
   const handleDestinationClick = () => {
-    // For female users, they must select ride type first
     if (isFemale && !selectedRideType) {
-      return; // Do nothing if ride type not selected
+      return;
     }
     setIsSearchOpen(true);
   };
@@ -37,63 +55,50 @@ export default function HomeMap({ userProfile, onDestinationSelect }: HomeMapPro
   };
 
   const handleQuickDestinationSelect = (destination: Destination) => {
-    // For female users, they must select ride type first
     if (isFemale && !selectedRideType) {
-      return; // Do nothing if ride type not selected
+      return;
     }
     onDestinationSelect(destination, selectedRideType || undefined);
   };
 
   return (
-    <View className="h-full w-full relative bg-gray-100">
+    <View style={styles.container}>
       {/* Map Background */}
-      <View className="absolute inset-0 bg-gradient-to-br from-gray-200 via-gray-100 to-blue-50">
-        <View className="absolute inset-0 opacity-20">
-          {/* Simulated map roads */}
-          <View className="absolute top-1/4 left-0 w-full h-1 bg-gray-400 rotate-12"></View>
-          <View className="absolute top-1/2 left-0 w-full h-1 bg-gray-400 -rotate-6"></View>
-          <View className="absolute top-3/4 left-0 w-full h-1 bg-gray-400 rotate-3"></View>
-          <View className="absolute top-0 left-1/4 w-1 h-full bg-gray-400 rotate-12"></View>
-          <View className="absolute top-0 left-1/2 w-1 h-full bg-gray-400 -rotate-6"></View>
-          <View className="absolute top-0 left-3/4 w-1 h-full bg-gray-400 rotate-3"></View>
-        </View>
-        
-        {/* Current location pin */}
-        <View className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-full">
-          <MapPin className="w-10 h-10 text-blue-600 fill-blue-600" />
-        </View>
+      <View style={styles.mapContainer}>
+        <WebMap
+          center={currentLocation}
+          zoom={14}
+          style={{ height: '100%', width: '100%' }}
+        />
       </View>
 
       {/* Top Card */}
-      <View className="absolute top-0 left-0 right-0 p-4 z-10">
-        <View className="bg-white rounded-2xl shadow-lg p-4 space-y-3">
+      <View style={styles.topCard}>
+        <View style={styles.searchCard}>
           <TouchableOpacity
             onPress={handleDestinationClick}
-            className={`flex items-center gap-3 w-full transition-transform ${
-              isFemale && !selectedRideType 
-                ? 'opacity-50 cursor-not-allowed' 
-                : 'active:scale-[0.98]'
-            }`}
+            style={[
+              styles.searchTouchable,
+              isFemale && !selectedRideType && styles.searchDisabled,
+            ]}
             disabled={isFemale && !selectedRideType}
           >
-            <Search className="w-5 h-5 text-gray-400" />
-            <Text className="flex-1 text-gray-500">
+            <Search style={styles.searchIcon} />
+            <Text style={styles.searchText}>
               {isFemale && !selectedRideType ? 'Select ride type first' : 'Where to?'}
             </Text>
           </TouchableOpacity>
           
-          <TouchableOpacity
-            className="flex items-center gap-2 w-full active:opacity-70 transition-opacity"
-          >
-            <MapPin className="w-4 h-4 text-blue-600" />
-            <Text className="text-sm text-gray-600">Current Location</Text>
+          <TouchableOpacity style={styles.locationRow}>
+            <MapPin style={styles.locationIcon} />
+            <Text style={styles.locationText}>Current Location</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Profile Avatar Button */}
-      <View className="absolute top-4 right-4 z-10">
-        <TouchableOpacity className="active:scale-95 transition-transform">
+      <View style={styles.avatarContainer}>
+        <TouchableOpacity>
           <Avatar className="w-12 h-12 border-2 border-white shadow-md">
             <AvatarFallback className="bg-blue-600 text-white">{initials}</AvatarFallback>
           </Avatar>
@@ -101,56 +106,54 @@ export default function HomeMap({ userProfile, onDestinationSelect }: HomeMapPro
       </View>
 
       {/* Bottom Sheet */}
-      <View className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl p-6 z-10 pb-20">
-        <View className="space-y-4">
-          {/* Ride Type Selection for Female Users - Must select before destination */}
+      <View style={styles.bottomSheet}>
+        <View style={styles.bottomContent}>
+          {/* Ride Type Selection for Female Users */}
           {isFemale && (
-            <View className="space-y-3">
-              <Text className="text-gray-600">Select Ride Type</Text>
-              <View className="flex gap-3">
+            <View style={styles.rideTypeSection}>
+              <Text style={styles.rideTypeLabel}>Select Ride Type</Text>
+              <View style={styles.rideTypeButtons}>
                 <Button 
                   onPress={() => setSelectedRideType('female-only')}
-                  className={`flex-1 h-12 transition-all ${
+                  className={`flex-1 h-12 ${
                     selectedRideType === 'female-only'
-                      ? 'bg-pink-500 text-white border-2 border-pink-500 hover:bg-pink-600'
-                      : 'bg-pink-50 text-pink-700 border-2 border-pink-300 hover:bg-pink-100'
-                  } active:scale-[0.98]`}
+                      ? 'bg-pink-500 text-white'
+                      : 'bg-pink-50 text-pink-700 border-2 border-pink-300'
+                  }`}
                 >
                   RideShare with Female
                 </Button>
                 <Button 
                   onPress={() => setSelectedRideType('regular')}
                   variant={selectedRideType === 'regular' ? 'default' : 'outline'}
-                  className={`flex-1 h-12 transition-all ${
+                  className={`flex-1 h-12 ${
                     selectedRideType === 'regular'
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      ? 'bg-blue-600 text-white'
                       : 'border-2'
-                  } active:scale-[0.98]`}
+                  }`}
                 >
                   Regular RideShare
                 </Button>
               </View>
               {!selectedRideType && (
-                <Text className="text-sm text-pink-600 text-center">
+                <Text style={styles.rideTypeHint}>
                   Please select a ride type to continue
                 </Text>
               )}
             </View>
           )}
           
-          <Text className="text-gray-600">Quick Destinations</Text>
+          <Text style={styles.quickDestLabel}>Quick Destinations</Text>
           
-          <View className="flex gap-3 overflow-x-auto pb-2 -mx-2 px-2">
+          <View style={styles.quickDestRow}>
             {quickDestinations.map((dest) => {
               const Icon = dest.icon;
               return (
                 <Button
                   key={dest.name}
                   variant="outline"
-                  className={`flex-shrink-0 h-auto px-6 py-3 rounded-full border-2 transition-transform ${
-                    isFemale && !selectedRideType 
-                      ? 'opacity-50 cursor-not-allowed' 
-                      : 'active:scale-95'
+                  className={`flex-shrink-0 h-auto px-6 py-3 rounded-full border-2 ${
+                    isFemale && !selectedRideType ? 'opacity-50' : ''
                   }`}
                   onPress={() => handleQuickDestinationSelect({ name: dest.name, address: dest.address })}
                   disabled={isFemale && !selectedRideType}
@@ -173,3 +176,118 @@ export default function HomeMap({ userProfile, onDestinationSelect }: HomeMapPro
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    position: 'relative',
+    backgroundColor: '#f3f4f6',
+  },
+  mapContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  topCard: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    zIndex: 10,
+  },
+  searchCard: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  searchTouchable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+  },
+  searchDisabled: {
+    opacity: 0.5,
+  },
+  searchIcon: {
+    width: 20,
+    height: 20,
+    color: '#9ca3af',
+  },
+  searchText: {
+    flex: 1,
+    color: '#6b7280',
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+  },
+  locationIcon: {
+    width: 16,
+    height: 16,
+    color: '#2563eb',
+  },
+  locationText: {
+    fontSize: 14,
+    color: '#4b5563',
+  },
+  avatarContainer: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 10,
+  },
+  bottomSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'white',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 80,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 10,
+  },
+  bottomContent: {
+    gap: 16,
+  },
+  rideTypeSection: {
+    gap: 12,
+  },
+  rideTypeLabel: {
+    color: '#4b5563',
+  },
+  rideTypeButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  rideTypeHint: {
+    fontSize: 14,
+    color: '#db2777',
+    textAlign: 'center',
+  },
+  quickDestLabel: {
+    color: '#4b5563',
+  },
+  quickDestRow: {
+    flexDirection: 'row',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+});

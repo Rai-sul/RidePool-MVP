@@ -7,7 +7,7 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native builds (generated)
+# Native builds
 ios/
 android/
 *.jks

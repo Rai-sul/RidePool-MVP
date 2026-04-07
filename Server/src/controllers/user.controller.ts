@@ -7,7 +7,6 @@ import { z } from 'zod';
 const UpdateProfileSchema = z.object({
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
   gender_preference: z.enum(['FEMALE_ONLY', 'ANY']).optional(),
-  is_driver: z.boolean().optional(),
   driver_priority_lat: z.number().min(-90).max(90).optional(),
   driver_priority_lng: z.number().min(-180).max(180).optional(),
   driver_priority_address: z.string().max(500).optional(),
@@ -17,6 +16,7 @@ const UpdateProfileSchema = z.object({
 const RegisterDeviceTokenSchema = z.object({
   token: z.string().min(10),
   platform: z.enum(['ios', 'android', 'web']),
+  app_type: z.enum(['rider', 'driver']).default('rider'),
 });
 
 const SetGenderPreferenceSchema = z.object({
@@ -58,10 +58,22 @@ export class UserController {
 
       const requiresGenderPreference = user.gender === 'FEMALE' && !user.gender_preference;
 
+      let vehicle = null;
+      if (user.is_driver) {
+        const { data: vehicleData } = await supabaseAdmin
+          .from('vehicles')
+          .select('id, vehicle_type, vehicle_number, model, max_passengers')
+          .eq('driver_id', userId)
+          .eq('is_active', true)
+          .single();
+        vehicle = vehicleData;
+      }
+
       res.json({
         success: true,
         data: {
           user,
+          vehicle,
           requires_gender_preference: requiresGenderPreference,
         },
         timestamp: new Date().toISOString(),
@@ -240,9 +252,9 @@ export class UserController {
         });
       }
 
-      const { token, platform } = parseResult.data;
+      const { token, platform, app_type } = parseResult.data;
 
-      const success = await notificationService.registerDeviceToken(userId, token, platform);
+      const success = await notificationService.registerDeviceToken(userId, token, platform, app_type);
 
       if (!success) {
         return res.status(500).json({
@@ -424,6 +436,44 @@ export class UserController {
       res.json({
         success: true,
         data: { message: 'Notification preferences updated' },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async deleteAccount(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Delete from public.users table first (handles related data via cascade/triggers)
+      const { error: dbError } = await supabaseAdmin
+        .from('users')
+        .delete()
+        .eq('id', userId);
+
+      if (dbError) {
+        throw dbError;
+      }
+
+      // Delete from auth.users using Admin API cd server then npx ts-node scripts/delete-all-users.ts
+      const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+
+      if (authError) {
+        throw authError;
+      }
+
+      res.json({
+        success: true,
+        data: { message: 'User account deleted successfully' },
         timestamp: new Date().toISOString(),
       });
     } catch (error) {

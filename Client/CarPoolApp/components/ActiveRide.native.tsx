@@ -88,12 +88,12 @@ export default function ActiveRide({ pool, destination, onComplete }: ActiveRide
             <View className="flex flex-row items-center gap-3">
               <Avatar className="w-12 h-12">
                 <AvatarFallback className="bg-gradient-to-br from-blue-500 to-cyan-400 text-white">
-                  {pool.photo}
+                  {pool.photo ?? pool.driver?.id?.charAt(0).toUpperCase() ?? 'D'}
                 </AvatarFallback>
               </Avatar>
               <View>
-                <Text>{pool.driverName}</Text>
-                <Text className="text-sm text-gray-500">{pool.carModel}</Text>
+                <Text>{pool.driverName ?? 'Driver'}</Text>
+                <Text className="text-sm text-gray-500">{pool.carModel ?? pool.vehicles?.model ?? pool.vehicle_type}</Text>
               </View>
             </View>
           </View>
@@ -109,7 +109,7 @@ export default function ActiveRide({ pool, destination, onComplete }: ActiveRide
             </View>
             <View>
               <Text className="text-sm text-gray-600 text-right">Destination</Text>
-              <Text className="text-sm text-right">{destination.name}</Text>
+              <Text className="text-sm text-right">{destination.name ?? pool.destination_address ?? 'Destination'}</Text>
             </View>
           </View>
 

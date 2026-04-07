@@ -20,11 +20,24 @@ const registerSchema = z.object({
     .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
     .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
     .regex(/[0-9]/, 'Password must contain at least one number'),
-  phone: z.string().regex(/^\+?[1-9]\d{9,14}$/, 'Invalid phone number format'),
-  full_name: z.string().min(2, 'Full name must be at least 2 characters').max(100),
+  phone: z.string().regex(/^\+?[1-9]\d{9,14}$/, 'Invalid phone number format').optional(),
+  first_name: z.string().min(1, 'First name is required').max(50),
+  last_name: z.string().min(1, 'Last name is required').max(50),
+  full_name: z.string().min(2, 'Full name must be at least 2 characters').max(100).optional(),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
-  gender_preference: z.enum(['FEMALE_ONLY', 'ANY']).optional(),
-});
+  gender_preference: z.enum(['FEMALE_ONLY', 'ANY']).optional().default('ANY'),
+  vehicle_type: z.enum(['CAR', 'CNG']).optional(),
+  vehicle_model: z.string().min(1).max(100).optional(),
+  vehicle_plate: z.string().min(1).max(20).optional(),
+  driving_license: z.string().min(1).max(50).optional(),
+}).refine(
+  (data) => {
+    const hasAny = data.vehicle_type || data.vehicle_plate || data.vehicle_model || data.driving_license;
+    if (!hasAny) return true;
+    return !!(data.vehicle_type && data.vehicle_plate && data.vehicle_model && data.driving_license);
+  },
+  { message: 'All vehicle fields (vehicle_type, vehicle_plate, vehicle_model, driving_license) are required when registering as a driver' }
+);
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email format'),
@@ -62,8 +75,10 @@ class AuthController {
         return validationErrorResponse(res, 'Validation failed', { errors });
       }
 
-      const { email, password, phone, full_name, gender, gender_preference } =
+      const { email, password, phone, first_name, last_name, full_name, gender, gender_preference, vehicle_type, vehicle_model, vehicle_plate, driving_license } =
         validationResult.data;
+
+      const computedFullName = full_name || `${first_name} ${last_name}`;
 
       if (gender === 'FEMALE' && !gender_preference) {
         return validationErrorResponse(
@@ -72,22 +87,24 @@ class AuthController {
         );
       }
 
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
         email,
         password,
-        options: {
-          data: {
-            full_name,
-            phone,
-            gender,
-          },
+        email_confirm: true,
+        user_metadata: {
+          full_name: computedFullName,
+          first_name: first_name,
+          last_name: last_name,
+          phone: phone || null,
+          gender: gender,
+          driving_license: driving_license || null,
         },
       });
 
       if (authError) {
         logger.error('Auth signup error:', authError);
 
-        if (authError.message.includes('already registered')) {
+        if (authError.message.includes('already registered') || authError.message.includes('already been registered')) {
           return conflictResponse(res, 'User with this email already exists');
         }
 
@@ -103,11 +120,14 @@ class AuthController {
         return errorResponse(res, 'AUTH_ERROR', 'Failed to create user', 500);
       }
 
+      const wantsDriver = !!(vehicle_type && vehicle_plate && vehicle_plate.trim().length > 0);
+
       const { error: profileError } = await supabaseAdmin.from('users').insert({
         id: authData.user.id,
-        phone,
+        full_name: computedFullName,
+        phone: phone || null,
         phone_verified: false,
-        gender,
+        gender: gender,
         gender_preference: gender_preference || 'ANY',
         is_driver: false,
         average_rating: null,
@@ -136,6 +156,47 @@ class AuthController {
         logger.warn('Wallet creation warning:', walletError);
       }
 
+      let isDriver = false;
+      let vehicleRecord: { id: string; vehicle_type: string; vehicle_number: string } | null = null;
+
+      if (wantsDriver && vehicle_type && vehicle_plate) {
+        const maxPassengers = vehicle_type === 'CNG' ? 3 : 4;
+        const { data: createdVehicle, error: vehicleError } = await supabaseAdmin
+          .from('vehicles')
+          .insert({
+            driver_id: authData.user.id,
+            vehicle_type: vehicle_type,
+            vehicle_number: vehicle_plate,
+            model: vehicle_model || null,
+            max_passengers: maxPassengers,
+            is_active: true,
+          })
+          .select('id, vehicle_type, vehicle_number')
+          .single();
+
+        if (vehicleError) {
+          logger.error(`Vehicle creation failed for user ${authData.user.id}: ${vehicleError.message}`);
+        } else {
+          vehicleRecord = createdVehicle;
+          const { error: driverUpdateError } = await supabaseAdmin
+            .from('users')
+            .update({ is_driver: true })
+            .eq('id', authData.user.id);
+
+          if (driverUpdateError) {
+            logger.error(`Failed to set is_driver for user ${authData.user.id}: ${driverUpdateError.message}`);
+          } else {
+            isDriver = true;
+            logger.info(`Driver registered: ${authData.user.id}, vehicle_type: ${vehicle_type}`);
+          }
+        }
+      }
+
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
       logger.info(`User registered: ${authData.user.id}`);
 
       return createdResponse(
@@ -144,20 +205,23 @@ class AuthController {
           user: {
             id: authData.user.id,
             email: authData.user.email,
-            phone,
-            full_name,
-            gender,
+            phone: phone || null,
+            full_name: computedFullName,
+            gender: gender || null,
             gender_preference: gender_preference || 'ANY',
+            is_driver: isDriver,
+            vehicle_type: vehicle_type || null,
           },
-          session: authData.session
+          vehicle: vehicleRecord,
+          session: signInData?.session
             ? {
-                access_token: authData.session.access_token,
-                refresh_token: authData.session.refresh_token,
-                expires_at: authData.session.expires_at,
+                access_token: signInData.session.access_token,
+                refresh_token: signInData.session.refresh_token,
+                expires_at: signInData.session.expires_at,
               }
             : null,
         },
-        'Registration successful. Please verify your email.'
+        'Registration successful'
       );
     } catch (error) {
       next(error);
@@ -198,6 +262,17 @@ class AuthController {
         .eq('id', data.user.id)
         .single();
 
+      let vehicle = null;
+      if (profile?.is_driver) {
+        const { data: vehicleData } = await supabaseAdmin
+          .from('vehicles')
+          .select('id, vehicle_type, vehicle_number, model, max_passengers')
+          .eq('driver_id', data.user.id)
+          .eq('is_active', true)
+          .single();
+        vehicle = vehicleData;
+      }
+
       logger.info(`User logged in: ${data.user.id}`);
 
       return successResponse(res, {
@@ -206,6 +281,7 @@ class AuthController {
           email: data.user.email,
           ...profile,
         },
+        vehicle,
         session: {
           access_token: data.session.access_token,
           refresh_token: data.session.refresh_token,
@@ -372,10 +448,24 @@ class AuthController {
         return errorResponse(res, 'PROFILE_ERROR', 'User profile not found', 404);
       }
 
+      let vehicle = null;
+      if (profile.is_driver) {
+        const { data: vehicleData } = await supabaseAdmin
+          .from('vehicles')
+          .select('id, vehicle_type, vehicle_number, model, max_passengers')
+          .eq('driver_id', req.user.id)
+          .eq('is_active', true)
+          .single();
+        vehicle = vehicleData;
+      }
+
       return successResponse(res, {
-        id: req.user.id,
-        email: req.user.email,
-        ...profile,
+        user: {
+          id: req.user.id,
+          email: req.user.email,
+          ...profile,
+        },
+        vehicle,
       });
     } catch (error) {
       next(error);

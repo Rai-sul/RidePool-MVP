@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Animated, Keyboard, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Platform, Keyboard, Animated } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Send, Smile, Paperclip, MoreVertical } from './Icons';
 import type { UserProfile } from '../contexts/GlobalContext';
 
@@ -22,6 +22,7 @@ type Message = {
 export default function DriverChatScreen({ userProfile, driverId = 'DRV001', driverName = 'Karim Ahmed', onBack }: DriverChatScreenProps) {
   const friendName = driverName;
   const [message, setMessage] = useState('');
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -34,27 +35,34 @@ export default function DriverChatScreen({ userProfile, driverId = 'DRV001', dri
   
   const scrollViewRef = useRef<ScrollView>(null);
   const keyboardHeight = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
   const isFemale = userProfile?.gender === 'female';
   const accentColor = isFemale ? '#ec4899' : '#1f2937';
 
+  // Handle keyboard show/hide
   useEffect(() => {
     const keyboardWillShow = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
       (e) => {
+        setKeyboardVisible(true);
         Animated.timing(keyboardHeight, {
           toValue: e.endCoordinates.height,
-          duration: Platform.OS === 'ios' ? 250 : 0,
+          duration: Platform.OS === 'ios' ? 250 : 100,
           useNativeDriver: false,
         }).start();
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
       }
     );
 
     const keyboardWillHide = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
       () => {
+        setKeyboardVisible(false);
         Animated.timing(keyboardHeight, {
           toValue: 0,
-          duration: Platform.OS === 'ios' ? 250 : 0,
+          duration: Platform.OS === 'ios' ? 250 : 100,
           useNativeDriver: false,
         }).start();
       }
@@ -64,7 +72,7 @@ export default function DriverChatScreen({ userProfile, driverId = 'DRV001', dri
       keyboardWillShow.remove();
       keyboardWillHide.remove();
     };
-  }, []);
+  }, [keyboardHeight]);
 
   const handleSendMessage = () => {
     if (message.trim()) {
@@ -192,10 +200,13 @@ export default function DriverChatScreen({ userProfile, driverId = 'DRV001', dri
           </View>
         </ScrollView>
 
-        {/* Input Area */}
+        {/* Input Area - with animated bottom margin for keyboard */}
         <Animated.View 
           className="px-4 py-3 bg-white border-t border-gray-200"
-          style={{ marginBottom: keyboardHeight }}
+          style={{ 
+            paddingBottom: keyboardVisible ? 8 : Math.max(8, insets.bottom),
+            marginBottom: keyboardHeight,
+          }}
         >
           <View className="flex-row items-end gap-2">
             <TouchableOpacity className="p-2.5 mb-0.5" activeOpacity={0.7}>
