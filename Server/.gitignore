@@ -1,5 +1,24 @@
+# Dependencies
 node_modules/
+
+# Build
 dist/
+*.tsbuildinfo
+
+# Environment
 .env
+!.env.example
+
+# Logs
+logs/
 *.log
+
+# OS
 .DS_Store
+
+# Coverage
+coverage/
+
+# Temp files
+*.tmp
+*.bak
