@@ -1,0 +1,13 @@
+# Source (publish dist only)
+src/
+*.test.ts
+*.spec.ts
+
+# Config
+tsconfig.json
+.env*
+
+# Misc
+.gitignore
+coverage/
+*.md

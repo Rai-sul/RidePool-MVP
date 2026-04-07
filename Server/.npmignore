@@ -1,0 +1,35 @@
+# Source (publish dist only)
+src/
+tests/
+*.test.ts
+*.spec.ts
+
+# Config
+tsconfig.json
+tsconfig.test.json
+vitest.config.ts
+.env*
+!.env.example
+
+# Docker
+Dockerfile
+docker-compose*.yml
+nginx/
+
+# Scripts
+scripts/
+get-test-token.ts
+
+# Docs
+*.md
+
+# Logs
+logs/
+*.log
+
+# Supabase
+supabase/
+
+# Misc
+.gitignore
+coverage/

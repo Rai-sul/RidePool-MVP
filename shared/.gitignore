@@ -5,20 +5,12 @@ node_modules/
 dist/
 *.tsbuildinfo
 
-# Environment
-.env
-!.env.example
-
 # Logs
-logs/
 *.log
 
 # OS
 .DS_Store
 
-# Coverage
-coverage/
-
-# Temp files
+# Temp
 *.tmp
 *.bak
