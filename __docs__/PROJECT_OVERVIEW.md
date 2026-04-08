@@ -2,8 +2,8 @@
 
 > A production-grade carpooling platform built for Bangladesh, enabling shared rides with smart matching, real-time tracking, and cost-effective transportation.
 
-**Version:** 1.0.0  
-**Last Updated:** 2026-03-18  
+**Version:** 1.1.0  
+**Last Updated:** 2026-04-08  
 **Repository Structure:** Monorepo with Server + CarPoolApp (Rider) + DriverApp + Shared Types
 
 ---
@@ -47,12 +47,18 @@
 
 | Metric | Value |
 |--------|-------|
-| Total Lines of Code | ~50,000+ |
 | Database Tables | 44 |
-| API Endpoints | 70+ |
-| Controllers | 22 |
-| Services | 37+ |
-| Mobile Screens | 30+ per app |
+| API Endpoints | 153+ |
+| Route Files | 22 |
+| Controllers | 23 |
+| Services | 37 |
+| Middleware | 8 |
+| CarPoolApp Screens | 34 |
+| CarPoolApp Components | 190+ |
+| DriverApp Screens | 12 |
+| DriverApp Components | 75+ |
+| Shared Type Definitions | 81+ interfaces/types |
+| Unit Test Files | 18 |
 
 ---
 
@@ -194,34 +200,37 @@ To revolutionize urban transportation in Bangladesh by making carpooling the def
 | **Language** | TypeScript 5.9 | Type safety |
 | **Database** | PostgreSQL (Supabase) | Primary data store |
 | **Cache** | Redis / In-memory | Performance optimization |
-| **Geospatial** | H3-js + PostGIS | Location indexing |
+| **Geospatial** | H3-js 4.3 + PostGIS | Location indexing |
 | **Auth** | Supabase Auth | JWT authentication |
 | **Validation** | Zod v4 | Schema validation |
-| **Queue** | BullMQ | Background jobs |
-| **Testing** | Vitest | Unit & integration tests |
+| **Queue** | BullMQ 5.66 | Background jobs |
+| **Circuit Breaker** | Opossum 9.0 | Fault tolerance |
+| **Testing** | Vitest 4.0 | Unit & integration tests |
+| **Logging** | Winston 3.19 | Structured logging |
 
 ### Mobile Apps (CarPoolApp & DriverApp)
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
-| **Framework** | React Native 0.81 | Cross-platform mobile |
+| **Framework** | React Native 0.81.5 | Cross-platform mobile |
 | **Build System** | Expo 54 | Development & deployment |
 | **Routing** | Expo Router 6 | File-based navigation |
 | **State** | Zustand 5.0 | Global state management |
 | **Context** | React Context | Auth, theme, notifications |
-| **Styling** | NativeWind + Tailwind | Utility-first CSS |
-| **Maps** | react-native-maps | Native Google Maps |
-| **Web Maps** | Leaflet + react-leaflet | Web platform maps |
+| **Styling** | NativeWind 4.2 + Tailwind 3.4 | Utility-first CSS |
+| **Maps (Native)** | react-native-maps 1.20 | Native Google Maps |
+| **Maps (Web)** | Leaflet 1.9 + react-leaflet 5.0 | Web platform maps |
 | **Storage** | AsyncStorage | Local persistence |
-| **Testing** | Jest | Component testing |
+| **Icons** | Lucide React Native 0.548 | Consistent iconography |
+| **Testing** | Jest (CarPoolApp) / Jest 30 (DriverApp) | Component testing |
 
 ### Shared Types
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
 | **Package** | @ridepool/shared-types | Shared type definitions |
-| **Language** | TypeScript | Type safety across packages |
-| **Domains** | User, Ride, Pool, Payment, etc. | 40+ interfaces |
+| **Language** | TypeScript 5.0 | Type safety across packages |
+| **Domains** | User, Ride, Pool, Driver, Payment, etc. | 81+ interfaces/types across 9 modules |
 
 ### External Services
 
@@ -246,50 +255,145 @@ Carpool-dev/
 │   │   │   ├── env.ts              # Centralized configuration
 │   │   │   ├── supabase.ts         # Supabase client
 │   │   │   └── redis.ts            # Redis client
-│   │   ├── controllers/            # Request handlers (22 files)
+│   │   ├── controllers/            # Request handlers (23 files)
 │   │   │   ├── auth.controller.ts
 │   │   │   ├── pool.controller.ts
 │   │   │   ├── driver.controller.ts
-│   │   │   └── ...
-│   │   ├── services/               # Business logic (37+ files)
+│   │   │   ├── analytics.controller.ts
+│   │   │   ├── heatmap.controller.ts
+│   │   │   ├── i18n.controller.ts
+│   │   │   ├── navigation.controller.ts
+│   │   │   ├── shift.controller.ts
+│   │   │   └── ... (15 more)
+│   │   ├── services/               # Business logic (37 files)
 │   │   │   ├── poolMatching.service.ts
 │   │   │   ├── fare.service.ts
 │   │   │   ├── googleMaps.service.ts
-│   │   │   └── ...
+│   │   │   ├── smartRoute.service.ts
+│   │   │   ├── routeOverlap.service.ts
+│   │   │   ├── heatmap.service.ts
+│   │   │   ├── geofencing.service.ts
+│   │   │   ├── fraudDetection.service.ts
+│   │   │   ├── voiceNavigation.service.ts
+│   │   │   ├── circuitBreaker.service.ts
+│   │   │   └── ... (27 more)
 │   │   ├── middleware/             # Request pipeline (8 files)
-│   │   │   ├── auth.ts
-│   │   │   ├── validation.ts
-│   │   │   └── rateLimiter.ts
-│   │   ├── routes/                 # API routes
+│   │   │   ├── auth.ts             # JWT authentication
+│   │   │   ├── validation.ts       # Input validation
+│   │   │   ├── rateLimiter.ts      # Rate limiting
+│   │   │   ├── errorHandler.ts     # Error handling
+│   │   │   ├── inputSanitizer.ts   # XSS/injection protection
+│   │   │   ├── securityHeaders.ts  # Helmet security headers
+│   │   │   ├── authorization.ts    # Role-based access
+│   │   │   └── auditMiddleware.ts  # Audit logging
+│   │   ├── routes/                 # API routes (22 files)
+│   │   │   ├── auth.routes.ts
+│   │   │   ├── pool.routes.ts
+│   │   │   ├── driver.routes.ts
+│   │   │   ├── analytics.routes.ts
+│   │   │   ├── heatmap.routes.ts
+│   │   │   ├── navigation.routes.ts
+│   │   │   ├── shift.routes.ts
+│   │   │   ├── i18n.routes.ts
+│   │   │   └── ... (14 more)
 │   │   ├── types/                  # TypeScript types
 │   │   └── utils/                  # Utilities (H3, logging)
-│   ├── supabase/migrations/        # Database migrations
+│   ├── supabase/migrations/        # Database migrations (5 files)
 │   ├── tests/                      # Test suites
+│   │   ├── unit/                   # 18 unit test files
+│   │   └── integration/
+│   ├── scripts/                    # Utility scripts
+│   ├── nginx/                      # Nginx configuration
+│   ├── Dockerfile                  # Container build
+│   ├── docker-compose.yml          # Production setup
+│   ├── docker-compose.mvp.yml      # MVP setup (no Redis)
 │   └── package.json
 │
 ├── Client/
 │   ├── CarPoolApp/                 # Rider Mobile App
-│   │   ├── app/                    # Expo Router screens
+│   │   ├── app/                    # Expo Router screens (34 files)
 │   │   │   ├── (tabs)/             # Tab navigation
-│   │   │   ├── login.tsx
-│   │   │   ├── home.tsx
+│   │   │   │   ├── index.tsx       # Home tab
+│   │   │   │   └── explore.tsx     # Explore tab
+│   │   │   ├── _layout.tsx         # Root layout
+│   │   │   ├── home.tsx            # Home screen
+│   │   │   ├── login.tsx           # Authentication
 │   │   │   ├── ride-confirmation.tsx
-│   │   │   ├── trip-progress.tsx
-│   │   │   └── ...
-│   │   ├── components/             # Reusable components
-│   │   ├── contexts/               # React contexts
-│   │   ├── hooks/                  # Custom hooks
-│   │   ├── services/               # API services
+│   │   │   ├── searching.tsx       # Pool search
+│   │   │   ├── trip-progress.tsx   # Active trip
+│   │   │   ├── wallet.tsx          # Payment wallet
+│   │   │   ├── safety-center.tsx   # Safety features
+│   │   │   ├── friends.tsx         # Priyo Sathi
+│   │   │   └── ... (24 more screens)
+│   │   ├── components/             # Reusable components (190+ files)
+│   │   │   ├── HomeMap.tsx         # Map components (native/web)
+│   │   │   ├── TripProgress.tsx    # Trip tracking
+│   │   │   ├── RideConfirmation.tsx
+│   │   │   ├── WalletScreen.tsx
+│   │   │   ├── SafetyCenter.tsx
+│   │   │   ├── ui/                 # Base UI components
+│   │   │   └── figma/              # Figma-derived components
+│   │   ├── contexts/               # React contexts (3 files)
+│   │   │   ├── AuthContext.tsx     # Authentication state
+│   │   │   ├── GlobalContext.tsx   # App-wide state
+│   │   │   └── NotificationContext.tsx
+│   │   ├── hooks/                  # Custom hooks (11 files)
+│   │   │   ├── useAuth.ts          # Auth utilities
+│   │   │   ├── usePoolRealtime.ts  # Pool subscriptions
+│   │   │   ├── useChatRealtime.ts  # Chat subscriptions
+│   │   │   ├── useLocation.ts      # GPS tracking
+│   │   │   ├── usePayments.ts      # Payment operations
+│   │   │   └── ... (6 more)
+│   │   ├── services/               # API services (9 files)
+│   │   │   ├── auth.service.ts
+│   │   │   ├── pool.service.ts
+│   │   │   ├── ride.service.ts
+│   │   │   ├── driver.service.ts
+│   │   │   ├── payment.service.ts
+│   │   │   ├── safety.service.ts
+│   │   │   ├── messaging.service.ts
+│   │   │   ├── priyoSathi.service.ts
+│   │   │   └── googleMapsService.ts
 │   │   ├── store/                  # Zustand store
+│   │   │   └── useAppStore.ts      # Global app state
 │   │   └── package.json
 │   │
 │   └── DriverApp/                  # Driver Mobile App
-│       ├── app/                    # Expo Router screens
+│       ├── app/                    # Expo Router screens (12 files)
+│       │   ├── (tabs)/             # Tab navigation
+│       │   │   ├── _layout.tsx     # Tab layout
+│       │   │   ├── home.tsx        # Pool discovery
+│       │   │   ├── earnings.tsx    # Earnings tracking
+│       │   │   └── profile.tsx     # Driver profile
+│       │   ├── _layout.tsx         # Root layout
+│       │   ├── index.tsx           # Entry screen
+│       │   ├── register.tsx        # Driver registration
+│       │   ├── trip-progress.tsx   # Active trip management
+│       │   ├── settings.tsx        # App settings
+│       │   ├── safety.tsx          # Safety features
+│       │   └── help.tsx            # Help & support
 │       ├── src/
-│       │   ├── components/         # UI components
-│       │   ├── services/           # API services
+│       │   ├── components/         # UI components (75+ files)
+│       │   │   ├── driver/         # Driver-specific components
+│       │   │   ├── home/           # Home screen components
+│       │   │   ├── pool/           # Pool-related components
+│       │   │   ├── map/            # Map components
+│       │   │   ├── screens/        # Screen components
+│       │   │   ├── layout/         # Layout components
+│       │   │   └── ui/             # Base UI components
+│       │   ├── services/           # API services (4 files)
+│       │   │   ├── auth.service.ts
+│       │   │   ├── driver.service.ts
+│       │   │   ├── location.service.ts
+│       │   │   └── notification.service.ts
+│       │   ├── hooks/              # Custom hooks
+│       │   │   └── usePoolRealtime.ts
 │       │   ├── store/              # Zustand store
-│       │   └── utils/              # Utilities
+│       │   │   └── useDriverStore.ts
+│       │   ├── contexts/           # React contexts
+│       │   ├── config/             # App configuration
+│       │   ├── utils/              # Utilities
+│       │   └── types/              # TypeScript types
 │       └── package.json
 │
 ├── shared/                         # Shared Type Definitions
@@ -301,14 +405,27 @@ Carpool-dev/
 │   │   ├── payment.ts              # Payment & Wallet types
 │   │   ├── messaging.ts            # Chat types
 │   │   ├── safety.ts               # Safety types
+│   │   ├── api.ts                  # API types
 │   │   └── misc.ts                 # Ratings, Promo, etc.
 │   └── package.json
 │
-└── __docs__/                       # Documentation
-    ├── architecture/
-    ├── database/
-    ├── security/
-    └── ...
+├── __docs__/                       # Documentation
+│   ├── PROJECT_OVERVIEW.md         # This file
+│   ├── architecture/               # Architecture docs
+│   ├── database/                   # Schema documentation
+│   ├── security/                   # Security guidelines
+│   ├── operations/                 # Deployment & ops
+│   ├── troubleshooting/            # Troubleshooting guides
+│   └── planning/                   # Planning documents
+│
+├── .github/workflows/              # CI/CD (5 files)
+│   ├── ci.yml                      # Main CI pipeline
+│   ├── codeql.yml                  # Security scanning
+│   ├── e2e.yml                     # End-to-end tests
+│   ├── expo-preview.yml            # Expo preview builds
+│   └── security-scan.yml           # Security audits
+│
+└── package.json                    # Root package.json
 ```
 
 ---
@@ -328,9 +445,10 @@ The heart of RidePool - automatically matching riders heading in similar directi
 6. User selects preferred pool or creates new one
 
 **Key Technologies:**
-- **H3 Hexagonal Indexing**: Resolution 9 for pickups (86m precision), Resolution 7 for destinations (1.2km precision)
+- **H3 Hexagonal Indexing**: Resolution 9 for pickups (~174m precision), Resolution 7 for destinations (~1.2km precision)
 - **Multi-phase scoring**: Distance + Route overlap + Hexagon matching + Destination proximity
 - **Cache optimization**: Routes cached for 10 minutes, reducing API costs by 66%
+- **Smart Route Service**: Traffic-aware combined routing with optimized waypoint ordering
 
 ### 2. Real-time Tracking
 
@@ -402,17 +520,25 @@ Social feature allowing preferential matching with friends.
 - Map view of nearby available pools
 - Push notifications for new pool requests
 - 15-second polling for real-time updates
+- Filter by vehicle type and preferences
 
 **Ride Management:**
 - Accept/reject pool requests
 - Mark individual passenger pickups/dropoffs
-- Optimized multi-stop navigation
+- Optimized multi-stop navigation via smart route service
 - Per-passenger earnings display
+- Traffic-aware combined route calculation
 
 **Earnings Tracking:**
 - Daily/weekly/monthly breakdown
 - 20% platform commission (driver keeps 80%)
 - Performance bonuses for completed rides
+- Real-time earnings updates
+
+**Shift Management:**
+- Track online/offline hours
+- Shift-based earnings reporting
+- Availability scheduling
 
 ### 7. Wallet & Payments
 
@@ -426,6 +552,39 @@ Social feature allowing preferential matching with friends.
 2. Wallet debited automatically
 3. Driver credited (minus commission)
 4. Receipt notification sent
+
+### 8. Advanced Features
+
+**Analytics & Heatmaps:**
+- Demand heatmap visualization
+- Pool density analytics
+- Driver availability tracking
+- Peak hour insights
+
+**Internationalization (i18n):**
+- Multi-language support
+- Localized content delivery
+- Bengali and English support
+
+**Voice Navigation:**
+- Turn-by-turn voice instructions
+- Traffic-aware routing updates
+- Multi-language voice support
+
+**Geofencing:**
+- Service area boundaries
+- Pickup/dropoff zone validation
+- Restricted area detection
+
+**Fraud Detection:**
+- Suspicious activity monitoring
+- Rate abuse prevention
+- Location spoofing detection
+
+**Offline Support:**
+- Offline data synchronization
+- Queue-based request handling
+- Graceful degradation
 
 ---
 
@@ -558,7 +717,7 @@ PHASE 3: GOOGLE MAPS ENRICHMENT (Top candidates only)
 
 **H3 Geospatial Indexing:**
 - Convert pickup/dropoff to H3 hexagons
-- Pickup: Resolution 9 (~86m hexagons) → 6-ring search = 2.1km radius
+- Pickup: Resolution 9 (~174m hexagons) → 6-ring search = 2.1km radius
 - Destination: Resolution 7 (~1.2km hexagons) → 2-ring search = 4.8km radius
 
 **SQL Query Filters:**
@@ -771,6 +930,32 @@ All tables have RLS enabled with policies ensuring:
 
 ## API Reference
 
+### Route Modules (22 route files, 153+ endpoints)
+
+| Module | Base Path | Description |
+|--------|-----------|-------------|
+| `auth.routes.ts` | `/auth` | Authentication & registration |
+| `user.routes.ts` | `/users` | User profiles & preferences |
+| `pool.routes.ts` | `/pools` | Pool search, create, join, route |
+| `ride.routes.ts` | `/rides` | Ride requests & history |
+| `driver.routes.ts` | `/driver` | Driver operations & earnings |
+| `payment.routes.ts` | `/payments` | Payment processing |
+| `wallet.routes.ts` | `/wallet` | Wallet operations |
+| `safety.routes.ts` | `/safety` | SOS & incident reporting |
+| `priyoSathi.routes.ts` | `/priyo-sathi` | Trusted companions |
+| `rating.routes.ts` | `/ratings` | User & driver ratings |
+| `rideSharing.routes.ts` | `/sharing` | Trip sharing links |
+| `messaging.routes.ts` | `/messages` | In-app messaging |
+| `promo.routes.ts` | `/promos` | Promo code management |
+| `savedPlaces.routes.ts` | `/saved-places` | Saved locations |
+| `emergencyContacts.routes.ts` | `/emergency-contacts` | Emergency contacts |
+| `analytics.routes.ts` | `/analytics` | Usage analytics |
+| `heatmap.routes.ts` | `/heatmap` | Demand heatmaps |
+| `shift.routes.ts` | `/shifts` | Driver shift management |
+| `offline.routes.ts` | `/offline` | Offline sync |
+| `navigation.routes.ts` | `/navigation` | Navigation & voice |
+| `i18n.routes.ts` | `/i18n` | Internationalization |
+
 ### Authentication
 
 | Endpoint | Method | Description |
@@ -814,7 +999,7 @@ All tables have RLS enabled with policies ensuring:
 | `/pools/:id/join` | POST | Join pool |
 | `/pools/:id/leave` | POST | Leave pool |
 | `/pools/:id/route` | GET | Get pool route |
-| `/pools/:id/combined-route` | GET | Route with driver |
+| `/pools/:id/combined-route` | GET | Route with driver (traffic-aware) |
 | `/pools/:id/fare` | GET | Fare breakdown |
 | `/pools/:id/navigation-link` | GET | Google Maps link |
 
@@ -866,6 +1051,40 @@ All tables have RLS enabled with policies ensuring:
 | `/messages/conversations` | GET | List conversations |
 | `/messages/conversations/:id` | GET | Conversation messages |
 | `/messages/send` | POST | Send message |
+
+### Analytics & Heatmaps
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/analytics/usage` | GET | Usage statistics |
+| `/analytics/pools` | GET | Pool analytics |
+| `/heatmap/demand` | GET | Demand heatmap data |
+| `/heatmap/drivers` | GET | Driver availability map |
+
+### Shifts & Navigation
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/shifts/current` | GET | Current shift info |
+| `/shifts/start` | POST | Start shift |
+| `/shifts/end` | POST | End shift |
+| `/shifts/history` | GET | Shift history |
+| `/navigation/voice` | GET | Voice navigation data |
+| `/navigation/route` | POST | Get navigation route |
+
+### Internationalization
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/i18n/translations` | GET | Get translations |
+| `/i18n/languages` | GET | Available languages |
+
+### Offline Sync
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/offline/sync` | POST | Sync offline data |
+| `/offline/pending` | GET | Pending sync items |
 
 ---
 
@@ -1084,11 +1303,26 @@ RidePool is a **production-ready carpooling platform** with:
 ✅ **Local Payments**: Designed for bKash, Nagad, local payment methods  
 ✅ **Scalable Architecture**: From $0 MVP to enterprise scale  
 ✅ **Cross-Platform**: Single codebase for iOS, Android, and Web  
+✅ **Advanced Features**: Heatmaps, voice navigation, geofencing, fraud detection  
+✅ **Internationalization**: Multi-language support (Bengali, English)  
+✅ **Fault Tolerance**: Circuit breakers, graceful degradation, offline sync  
 
 The codebase is well-organized with clear separation of concerns, comprehensive error handling, and production-ready security measures.
 
+### Key Services Breakdown
+
+| Service Category | Count | Examples |
+|-----------------|-------|----------|
+| **Core Business** | 10 | poolMatching, fare, route, rideEstimation |
+| **Infrastructure** | 8 | cache, memoryCache, unifiedCache, circuitBreaker |
+| **External APIs** | 3 | googleMaps, notification, promo |
+| **Analytics** | 4 | analytics, heatmap, lookupTime, tracing |
+| **Safety** | 4 | emergency, fraudDetection, geofencing, penalty |
+| **Driver** | 4 | shift, voiceNavigation, smartRoute, routeOverlap |
+| **Misc** | 4 | i18n, offline, wallet, priyoSathi |
+
 ---
 
-**Document Version:** 1.0.0  
-**Generated:** 2026-03-18  
-**Total Exploration:** Server (37 services, 22 controllers) + CarPoolApp (30+ screens) + DriverApp (20+ screens) + Shared Types (40+ interfaces)
+**Document Version:** 1.1.0  
+**Generated:** 2026-04-08  
+**Total Exploration:** Server (37 services, 23 controllers, 22 route files, 153+ endpoints) + CarPoolApp (34 screens, 190+ components) + DriverApp (12 screens, 75+ components) + Shared Types (81+ interfaces/types across 9 modules)
