@@ -1,7 +1,7 @@
 # RidePool — Complete Documentation & Flow Reference
 
-**Last Updated**: 2026-03-05  
-**Version**: 1.0  
+**Last Updated**: 2026-05-31  
+**Version**: 1.1  
 **Status**: Active Development (MVP)
 
 ---
@@ -54,8 +54,8 @@ RidePool is a carpooling platform built for Bangladesh (Dhaka). Passengers creat
 ### Currency & Locale
 
 - Currency: **BDT (Bangladeshi Taka)**
-- Payment gateways: SSLCommerz, bKash
-- Routing provider: Mapbox (default), Google Maps (configurable via `ROUTING_PROVIDER` env)
+- Payment methods: Wallet, Cash, Card, Mobile Banking (wallet top-ups support bKash, Nagad, Rocket)
+- Routing provider: Google Maps Directions API + Google Maps app deep links (client maps via react-native-maps and Leaflet; Mapbox token optional for tiles)
 - Language: English (default), Bangla (i18n support)
 
 ---
@@ -72,7 +72,7 @@ RidePool is a carpooling platform built for Bangladesh (Dhaka). Passengers creat
 └────────┬────────────┘    └────────┬────────────┘
          │                          │
          │  HTTPS / REST API        │
-         │  Supabase Realtime WS    │
+         │  Supabase Realtime (client) │
          ▼                          ▼
 ┌─────────────────────────────────────────────────┐
 │              Server (Express 5 / Node 20)       │
@@ -90,7 +90,8 @@ RidePool is a carpooling platform built for Bangladesh (Dhaka). Passengers creat
 ┌──────────────┐ ┌────────┐ ┌──────────┐
 │  Supabase    │ │ Redis  │ │ Google   │
 │  (PostgreSQL │ │ /In-   │ │ Maps API │
-│  + Realtime) │ │ Memory │ │ + Mapbox │
+│  + Realtime) │ │ Memory │ │ + Deep   │
+│              │ │        │ │ Links   │
 └──────────────┘ └────────┘ └──────────┘
 ```
 
@@ -151,15 +152,15 @@ Carpool-dev/
 | Layer | Technology | Version |
 |-------|-----------|---------|
 | **Server Runtime** | Node.js | 20.x |
-| **Server Framework** | Express | 5.x |
-| **Language** | TypeScript (CommonJS on server) | 5.x |
+| **Server Framework** | Express | 5.1.x |
+| **Language** | TypeScript (CommonJS on server) | 5.9.x |
 | **Database** | PostgreSQL (via Supabase) | 15.x |
 | **Spatial Extension** | PostGIS | — |
-| **Real-time** | Supabase Realtime (WebSocket) | — |
+| **Real-time** | Supabase Realtime (client) + polling fallback | — |
 | **Cache** | Redis / In-memory (MVP mode) | — |
-| **Validation** | Zod v4 (server), Zod v3 (DriverApp) | — |
+| **Validation** | Zod 4.3.x (server), Zod 3.24.x (DriverApp) | — |
 | **Mobile Framework** | React Native | 0.81.5 |
-| **Mobile Toolkit** | Expo | 54 |
+| **Mobile Toolkit** | Expo | 54.0.x |
 | **Navigation** | Expo Router (file-based) | 6.x |
 | **React** | React 19.1 | — |
 | **Styling** | NativeWind (Tailwind CSS for RN) | — |
@@ -167,7 +168,7 @@ Carpool-dev/
 | **Maps (Web)** | Leaflet / react-leaflet | — |
 | **Maps (Native)** | react-native-maps | — |
 | **Geospatial Indexing** | Uber H3 | — |
-| **Testing** | Vitest (server), Jest (client) | — |
+| **Testing** | Vitest 4.x (server), Jest 29/30 (client) | — |
 | **CI/CD** | GitHub Actions | — |
 
 ---
@@ -180,7 +181,6 @@ Carpool-dev/
 Server/
 ├── src/
 │   ├── app.ts                    # Express app setup, middleware, route mounting
-│   ├── server.ts                 # Server startup, port binding
 │   ├── config/
 │   │   └── env.ts                # Centralized env config (config.mvpMode, etc.)
 │   ├── routes/
@@ -214,9 +214,9 @@ Server/
 │   │   ├── rateLimiter.ts        # apiLimiter, authLimiter, searchLimiter, etc.
 │   │   ├── validation.ts         # Zod schemas + validate() middleware
 │   │   ├── inputSanitizer.ts     # XSS/injection prevention
-│   │   ├── security.ts           # CORS, Helmet, security headers
+│   │   ├── securityHeaders.ts    # CORS, Helmet, security headers
 │   │   ├── errorHandler.ts       # Global error handler
-│   │   └── audit.ts              # Request auditing
+│   │   └── auditMiddleware.ts    # Request auditing
 │   └── utils/
 │       └── h3.utils.ts           # H3 hex conversion utilities
 ├── supabase/
@@ -693,8 +693,8 @@ Earnings Dashboard
 ### Architecture
 
 Two mechanisms work together:
-1. **Supabase Realtime**: WebSocket-based `postgres_changes` for instant updates
-2. **Polling Fallback**: Automatic fallback when WebSocket connection fails
+1. **Supabase Realtime (client)**: WebSocket-based `postgres_changes` for chat/pool updates
+2. **Polling Fallback**: Always-on polling safety net for realtime disconnects
 
 ### Passenger Hook (`usePoolRealtime.ts` — CarPoolApp)
 
@@ -741,6 +741,7 @@ usePoolRealtime(poolId)
 ### Important: Supabase Realtime Limitation
 
 > **Realtime `payload.new` only contains raw column data — NO relation/join data.**
+> The server does not host a custom WebSocket gateway; realtime is handled by Supabase channels in the clients.
 > 
 > When the `pools` table is updated (e.g., `driver_id` set), the realtime payload has `{ driver_id: 'xxx', status: 'READY_TO_START', ... }` but NOT the `driver` relation (full_name, average_rating) or `vehicles` relation. This is why we always do a **full API refetch** on realtime events instead of merging the partial payload.
 
@@ -831,7 +832,6 @@ Step 4: Score each match (0–100)
   │ Hexagon Match Score  20 pts max     │ Common H3 cells between routes
   │ Exact Match Bonus     5 pts        │ Same H3 res-9 pickup hex
   │ Destination Proximity 10 pts max   │ Dropoff distance
-  │ Full Pool Bonus       5 pts        │ When pool has 4+ passengers
   └─────────────────────────────────────┘
   Minimum threshold: 30 points
 
@@ -859,8 +859,8 @@ A ride is compatible with a pool when:
 | Method | Implementation |
 |--------|---------------|
 | Wallet | Internal balance (primary) |
-| bKash | Mobile banking API (Bangladesh) |
-| SSLCommerz | Card payments |
+| Mobile Banking | Generic gateway placeholder (bKash/Nagad/Rocket via wallet top-up) |
+| Card | Generic card gateway placeholder |
 | Cash | Driver collects, recorded in system |
 
 ### Wallet Operations
@@ -868,10 +868,12 @@ A ride is compatible with a pool when:
 | Operation | Endpoint | Description |
 |-----------|----------|-------------|
 | Get Balance | `GET /api/wallet/balance` | Current wallet balance |
-| Top Up | `POST /api/wallet/topup` | Add funds via bKash/card |
+| Top Up | `POST /api/wallet/topup` | Add funds (bKash/Nagad/Rocket/Card) |
+| Top Up (alias) | `POST /api/wallet/add-funds` | Frontend compatibility alias |
 | Pay for Ride | `POST /api/wallet/pay` | Debit for completed ride |
 | Withdraw | `POST /api/wallet/withdraw` | Cash out to bank |
 | Transactions | `GET /api/wallet/transactions` | Paginated transaction history |
+| Payment History | `GET /api/payments/history` | Paginated payment records |
 
 ### Payment Flow
 
@@ -883,16 +885,17 @@ Server calculates fare (farePerPerson + surcharge)
      │
      ▼
 POST /api/payments/process
-     │
-     ├── Wallet: walletService.debit(userId, amount)
-     │     └── Creates WalletTransaction (type: DEBIT)
-     │
-     ├── bKash/Card: redirect to payment gateway
-     │
-     └── Cash: record as CASH payment, driver collects
-     │
-     ▼
-Payment record created (status: COMPLETED)
+  │
+  ├── atomic_process_payment (Supabase RPC)
+  │
+  ├── Wallet: walletService.debit(userId, amount)
+  │
+  ├── Cash/Card/Mobile Banking: placeholder gateway flow
+  │
+  ├── complete_payment or fail_payment (Supabase RPC)
+  │
+  ▼
+Payment record updated (status: COMPLETED/FAILED)
 Driver earnings credited (minus 20% commission)
 ```
 
@@ -955,8 +958,10 @@ Badge shown on co-rider's chat icon in TripProgress.
 |----------|-------------|
 | `GET /api/emergency-contacts` | List emergency contacts |
 | `POST /api/emergency-contacts` | Add emergency contact |
+| `PUT /api/emergency-contacts/:id` | Update emergency contact |
 | `DELETE /api/emergency-contacts/:id` | Remove contact |
 | `POST /api/emergency-contacts/:id/primary` | Set as primary |
+| `GET /api/safety/emergency-contacts` | Safety namespace aliases |
 
 ### Trip Sharing
 
@@ -1040,8 +1045,7 @@ User's `average_rating` in the `users` table is automatically updated after each
 
 | Provider | Use Case | Config |
 |----------|----------|--------|
-| **Mapbox** | Default routing, route geometry | `ROUTING_PROVIDER=mapbox` |
-| **Google Maps** | Fallback routing, navigation deep links | `ROUTING_PROVIDER=google` |
+| **Google Maps** | Directions API, traffic-aware routes, navigation deep links | `GOOGLE_MAPS_API_KEY` |
 
 ### Combined Route
 
@@ -1127,7 +1131,7 @@ Error response:
 | POST | `/device-token` | Yes | Register push notification token |
 | DELETE | `/device-token` | Yes | Unregister push notification token |
 | GET | `/notifications` | Yes | Get notifications |
-| POST | `/notifications/:id/read` | Yes | Mark notification as read |
+| POST | `/notifications/:notificationId/read` | Yes | Mark notification as read |
 | POST | `/notifications/read-all` | Yes | Mark all notifications as read |
 | GET | `/notifications/preferences` | Yes | Get notification preferences |
 | PUT | `/notifications/preferences` | Yes | Update notification preferences |
@@ -1173,6 +1177,7 @@ Error response:
 | GET | `/available-pools` | Yes | Get nearby available pools |
 | POST | `/pools/:poolId/accept` | Yes | Accept a pool (atomic) |
 | POST | `/pools/:poolId/reject` | Yes | Reject a pool |
+| POST | `/pools/:poolId/unassign` | Yes | Unassign from pool |
 | GET | `/active-pool` | Yes | Get current active pool |
 | POST | `/ride/start` | Yes | Start the ride |
 | POST | `/ride/complete` | Yes | Complete the ride |
@@ -1182,6 +1187,8 @@ Error response:
 | GET | `/earnings/history` | Yes | Get earnings history |
 | GET | `/stats` | Yes | Get driver statistics |
 | POST | `/vehicle` | Yes | Register a vehicle |
+
+**Client note:** CarPoolApp references `/api/driver/priority-location`, but the server does not expose that route. Use `PUT /api/users/profile` with `driver_priority_lat/lng/address` instead.
 
 #### Wallet (`/api/wallet`)
 
@@ -1218,9 +1225,12 @@ Error response:
 |--------|------|------|-------------|
 | POST | `/` | Yes | Send a message |
 | GET | `/conversations` | Yes | List conversations |
-| GET | `/conversations/:id` | Yes | Get messages |
+| GET | `/conversations/:conversationId` | Yes | Get messages |
+| GET | `/:conversationId` | Yes | Get messages (alias) |
 | GET | `/unread-count` | Yes | Get unread message count |
-| POST | `/conversations/:id/read` | Yes | Mark conversation as read |
+| POST | `/conversations/:conversationId/read` | Yes | Mark conversation as read |
+| POST | `/messages/:messageId/read` | Yes | Mark a message as read |
+| POST | `/:messageId/read` | Yes | Mark a message as read (alias) |
 
 #### Safety (`/api/safety`)
 
@@ -1232,21 +1242,21 @@ Error response:
 | POST | `/share-trip` | Yes | Share trip link |
 | GET | `/emergency-contacts` | Yes | Get emergency contacts |
 | POST | `/emergency-contacts` | Yes | Add emergency contact |
-| DELETE | `/emergency-contacts/:id` | Yes | Remove emergency contact |
+| DELETE | `/emergency-contacts/:contactId` | Yes | Remove emergency contact |
 
 #### Additional Endpoints
 
-- **Priyo Sathi** (`/api/priyo-sathi/`) — Companion management
-- **Promos** (`/api/promos/`) — Promo code validation/management
-- **Saved Places** (`/api/saved-places/`) — CRUD for saved locations
-- **Emergency Contacts** (`/api/emergency-contacts/`) — Contact management
-- **Ride Sharing** (`/api/sharing/`) — Live trip sharing
-- **Analytics** (`/api/analytics/`) — Dashboard and reports
-- **Heatmap** (`/api/heatmap/`) — Demand heatmap for drivers
-- **Shifts** (`/api/shifts/`) — Driver shift scheduling
-- **Navigation** (`/api/navigation/`) — Turn-by-turn routing
-- **Offline** (`/api/offline/`) — Offline data sync
-- **i18n** (`/api/i18n/`) — Internationalization
+- **Priyo Sathi** (`/api/priyo-sathi`) — `GET /`, `POST /`, `GET /requests`, `POST /requests/:requestId/respond`, `POST /:companionId/invite`, `GET /invite/:rideId`, `POST /invite/:rideId/accept`, `DELETE /:companionId`, `POST /:companionId/block`, `GET /nearby`
+- **Promos** (`/api/promos`) — `POST /validate`, `GET /active`, `GET /history`, `POST /`, `DELETE /:promoId`
+- **Saved Places** (`/api/saved-places`) — `GET /`, `POST /`, `GET /:placeId`, `PUT /:placeId`, `DELETE /:placeId`
+- **Emergency Contacts** (`/api/emergency-contacts`) — `GET /`, `POST /`, `PUT /:contactId`, `DELETE /:contactId`, `POST /:contactId/primary`, `GET /primary`
+- **Ride Sharing** (`/api/sharing`) — `POST /share`, `GET /active`, `DELETE /:shareId`, `GET /track/:token`
+- **Analytics** (`/api/analytics`) — `GET /dashboard`, `GET /rides`, `GET /drivers`, `GET /users`, `GET /revenue`
+- **Heatmap** (`/api/heatmap`) — `GET /`, `GET /demand`, `GET /surge-zones`, `GET /recommendations`, `GET /peak-hours`, `GET /patterns`
+- **Shifts** (`/api/shifts`) — `GET /`, `POST /`, `PUT /:shiftId`, `DELETE /:shiftId`, `DELETE /day/:dayOfWeek`, `GET /stats`, `GET /reminders`, `GET /status`
+- **Navigation** (`/api/navigation`) — `POST /route`, `POST /state`, `POST /voice-instruction`, `GET /waypoint-message`, `GET /recalculating`, `POST /deep-link`
+- **Offline** (`/api/offline`) — `GET /package`, `POST /sync`, `POST /resolve-conflicts`, `GET /pending`, `GET /status`, `DELETE /clear`
+- **i18n** (`/api/i18n`) — `GET /translations`, `GET /languages`, `POST /translate`, `GET /format/currency`, `GET /format/distance`, `GET /format/duration`, `GET /user-language`, `PUT /user-language`
 - **Health** (`/health`) — Server health checks
 
 ---
@@ -1411,6 +1421,7 @@ patches/
 NODE_ENV=development
 PORT=3000
 MVP_MODE=true                    # true = in-memory cache, false = Redis
+SKIP_REDIS=true                  # alias that also enables MVP mode
 
 # Supabase
 SUPABASE_URL=https://xxx.supabase.co
@@ -1427,10 +1438,12 @@ H3_RESOLUTION_DRIVER=8          # ~461m hexagon
 H3_SEARCH_RADIUS_PICKUP=6       # Ring size for pickup search
 H3_SEARCH_RADIUS_DESTINATION=2  # Ring size for destination search
 
-# Cache (when MVP_MODE=false)
+# Cache
 REDIS_URL=redis://localhost:6379
-CACHE_MEMORY_MAX_SIZE=500
-CACHE_MEMORY_TTL=300000          # 5 minutes
+REDIS_KEY_PREFIX=ridepool:
+REDIS_DEFAULT_TTL=300
+MEMORY_CACHE_MAX_SIZE=1000
+MEMORY_CACHE_TTL=300
 ```
 
 ### Client Apps
@@ -1441,6 +1454,7 @@ EXPO_PUBLIC_API_URL=http://localhost:3000
 EXPO_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=xxx
 EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=xxx
+EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN=optional
 ```
 
 ### MVP Mode
@@ -1563,7 +1577,7 @@ Defined in `.github/workflows/ci.yml`:
 
 | What | Where |
 |------|-------|
-| Server entry point | `Server/src/server.ts` |
+| Server entry point | `Server/src/app.ts` |
 | Express app setup | `Server/src/app.ts` |
 | Route mounting | `Server/src/routes/index.ts` |
 | Database config | `Server/src/config/env.ts` |
@@ -1927,7 +1941,7 @@ RideConfirmation search → Server searchPools (H3 matching) →
 - **File:** `Client/CarPoolApp/components/RideConfirmation.native.tsx` → `handleConfirm()`
 
 **Step 4a: Create ride request**
-- `requestRide()` from `useRides` hook → `POST /api/rides`
+- `requestRide()` from `useRides` hook → `POST /api/rides/request`
 - Creates `rides` table entry with status `SEARCHING`
 - Returns: `rideResult.data.id` (the ride_id)
 
@@ -2523,7 +2537,7 @@ Trip completed notification → Navigate to payment-summary →
 - Gateway processing:
   - WALLET: `walletService.debit(userId, amount, 'RIDE_PAYMENT', rideId)`
   - CASH: mark as success (driver collects)
-  - CARD/MOBILE_BANKING: gateway integration (SSLCommerz/bKash)
+  - CARD/MOBILE_BANKING: gateway integration placeholder (provider not wired)
 - RPC: `complete_payment` → stores transaction_id, gateway response
 - Audit log: `auditService.logUserAction('PAYMENT_COMPLETED', ...)`
 - **Response:** `{ payment_id, status: 'COMPLETED', amount, transaction_id }`
@@ -2651,26 +2665,26 @@ Tap Cancel → leavePool/cancelPool API → Server removes member or cancels poo
 
 | Scenario | Client Files | Service File | Server Route | Controller | Service | DB Tables |
 |----------|-------------|-------------|-------------|------------|---------|-----------|
-| **Create Pool** | `RideConfirmation.native.tsx` → `searching.tsx` | `pool.service.ts` | `POST /pools/create` | `pool.controller.ts` → `createPool()` | `poolMatching.service.ts`, `lookupTime.service.ts` | `rides`, `pools`, `pool_members` |
-| **Search Pools** | `RideConfirmation.native.tsx` | `pool.service.ts` | `GET /pools/search` | `pool.controller.ts` → `searchPools()` | `poolMatching.service.ts` | `pools`, `pool_members`, `rides` |
-| **Join Pool** | `RideConfirmation.native.tsx` → `searching.tsx` | `pool.service.ts`, `ride.service.ts` | `POST /rides` + `POST /pools/:id/join` | `pool.controller.ts` → `joinPool()` | `poolMatching.service.ts`, `rideEstimation.service.ts` | `rides`, `pools`, `pool_members` |
-| **View Trip** | `TripProgress.native.tsx` | `pool.service.ts` | `GET /pools/:id` | `pool.controller.ts` → `getPool()` | — | `pools`, `pool_members`, `rides`, `users`, `vehicles` |
-| **Cancel/Leave** | `TripProgress.native.tsx` | `pool.service.ts` | `POST /pools/:id/cancel` or `/leave` | `pool.controller.ts` | — | `pools`, `pool_members`, `rides` |
-| **Payment** | `PaymentSummary.native.tsx` | `payment.service.ts` | `POST /payments/process` | `payment.controller.ts` | `wallet.service.ts` | `payments`, `wallets` |
-| **Rating** | `RateReview.native.tsx` | — | `POST /ratings` | `rating.controller.ts` | — | `ratings`, `users` |
+| **Create Pool** | `RideConfirmation.native.tsx` → `searching.tsx` | `pool.service.ts` | `POST /api/pools/create` | `pool.controller.ts` → `createPool()` | `poolMatching.service.ts`, `lookupTime.service.ts` | `rides`, `pools`, `pool_members` |
+| **Search Pools** | `RideConfirmation.native.tsx` | `pool.service.ts` | `GET /api/pools/search` | `pool.controller.ts` → `searchPools()` | `poolMatching.service.ts` | `pools`, `pool_members`, `rides` |
+| **Join Pool** | `RideConfirmation.native.tsx` → `searching.tsx` | `pool.service.ts`, `ride.service.ts` | `POST /api/rides/request` + `POST /api/pools/:id/join` | `pool.controller.ts` → `joinPool()` | `poolMatching.service.ts`, `rideEstimation.service.ts` | `rides`, `pools`, `pool_members` |
+| **View Trip** | `TripProgress.native.tsx` | `pool.service.ts` | `GET /api/pools/:id` | `pool.controller.ts` → `getPool()` | — | `pools`, `pool_members`, `rides`, `users`, `vehicles` |
+| **Cancel/Leave** | `TripProgress.native.tsx` | `pool.service.ts` | `POST /api/pools/:id/cancel` or `/leave` | `pool.controller.ts` | — | `pools`, `pool_members`, `rides` |
+| **Payment** | `PaymentSummary.native.tsx` | `payment.service.ts` | `POST /api/payments/process` | `payment.controller.ts` | `wallet.service.ts` | `payments`, `wallets` |
+| **Rating** | `RateReview.native.tsx` | — | `POST /api/ratings` | `rating.controller.ts` | — | `ratings`, `users` |
 
 #### Driver Scenarios — File Trace
 
 | Scenario | Client Files | Service File | Server Route | Controller | Service | DB Tables |
 |----------|-------------|-------------|-------------|------------|---------|-----------|
-| **Go Online** | `home.tsx` | `driver.service.ts` | `POST /driver/go-online` | `driver.controller.ts` → `goOnline()` | — | `driver_sessions`, `vehicle_locations`, `vehicles` |
-| **Discover Pools** | `home.tsx` | `driver.service.ts` | `GET /driver/available-pools` | `driver.controller.ts` → `getAvailablePools()` | `h3.utils.ts` | `pools`, `pool_members`, `vehicle_locations` |
-| **Accept Pool** | `home.tsx` | `driver.service.ts` | `POST /driver/pools/:id/accept` | `driver.controller.ts` → `acceptPool()` | `smartRoute.service.ts` | `pools` (RPC), `driver_sessions`, `vehicle_locations` |
-| **Start Ride** | `TripProgress.native.tsx` | `driver.service.ts` | `POST /driver/ride/start` | `driver.controller.ts` → `startRide()` | — | `pools`, `rides` |
-| **Pickup** | `TripProgress.native.tsx` | `driver.service.ts` | `POST /driver/pickup/:id` | `driver.controller.ts` → `pickupPassenger()` | — | `rides` |
-| **Dropoff** | `TripProgress.native.tsx` | `driver.service.ts` | `POST /driver/dropoff/:id` | `driver.controller.ts` → `dropoffPassenger()` | — | `rides` |
-| **Complete Ride** | `TripProgress.native.tsx` | `driver.service.ts` | `POST /driver/ride/complete` | `driver.controller.ts` → `completeRide()` | — | `pools`, `driver_sessions`, `vehicle_locations`, `driver_earnings` |
-| **Go Offline** | `home.tsx` | `driver.service.ts` | `POST /driver/go-offline` | `driver.controller.ts` → `goOffline()` | — | `driver_sessions`, `vehicle_locations` |
+| **Go Online** | `home.tsx` | `driver.service.ts` | `POST /api/driver/go-online` | `driver.controller.ts` → `goOnline()` | — | `driver_sessions`, `vehicle_locations`, `vehicles` |
+| **Discover Pools** | `home.tsx` | `driver.service.ts` | `GET /api/driver/available-pools` | `driver.controller.ts` → `getAvailablePools()` | `h3.utils.ts` | `pools`, `pool_members`, `vehicle_locations` |
+| **Accept Pool** | `home.tsx` | `driver.service.ts` | `POST /api/driver/pools/:id/accept` | `driver.controller.ts` → `acceptPool()` | `smartRoute.service.ts` | `pools` (RPC), `driver_sessions`, `vehicle_locations` |
+| **Start Ride** | `TripProgress.native.tsx` | `driver.service.ts` | `POST /api/driver/ride/start` | `driver.controller.ts` → `startRide()` | — | `pools`, `rides` |
+| **Pickup** | `TripProgress.native.tsx` | `driver.service.ts` | `POST /api/driver/pickup/:id` | `driver.controller.ts` → `pickupPassenger()` | — | `rides` |
+| **Dropoff** | `TripProgress.native.tsx` | `driver.service.ts` | `POST /api/driver/dropoff/:id` | `driver.controller.ts` → `dropoffPassenger()` | — | `rides` |
+| **Complete Ride** | `TripProgress.native.tsx` | `driver.service.ts` | `POST /api/driver/ride/complete` | `driver.controller.ts` → `completeRide()` | — | `pools`, `driver_sessions`, `vehicle_locations`, `driver_earnings` |
+| **Go Offline** | `home.tsx` | `driver.service.ts` | `POST /api/driver/go-offline` | `driver.controller.ts` → `goOffline()` | — | `driver_sessions`, `vehicle_locations` |
 
 #### Realtime Update Propagation
 

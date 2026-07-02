@@ -2,8 +2,8 @@
 
 > A production-grade carpooling platform built for Bangladesh, enabling shared rides with smart matching, real-time tracking, and cost-effective transportation.
 
-**Version:** 1.1.0  
-**Last Updated:** 2026-04-08  
+**Version:** 1.2.0  
+**Last Updated:** 2026-05-31  
 **Repository Structure:** Monorepo with Server + CarPoolApp (Rider) + DriverApp + Shared Types
 
 ---
@@ -22,8 +22,9 @@
 10. [Database Schema](#database-schema)
 11. [API Reference](#api-reference)
 12. [Security Architecture](#security-architecture)
-13. [Deployment & Scaling](#deployment--scaling)
-14. [Financial Analysis](#financial-analysis)
+13. [Integration Status](#integration-status)
+14. [Deployment & Scaling](#deployment--scaling)
+15. [Financial Analysis](#financial-analysis)
 
 ---
 
@@ -39,26 +40,26 @@
 | **Cost Savings** | Riders save 25-40% compared to solo rides through intelligent pooling |
 | **Safety-First Design** | Female-only ride options, SOS alerts, emergency contacts, trip sharing |
 | **Social Features** | Priyo Sathi (trusted companions) - ride preferentially with friends |
-| **Real-time Everything** | Live tracking, instant notifications, real-time pool updates |
-| **Local Payment Integration** | Designed for bKash, Nagad, and local payment methods |
+| **Realtime Updates** | Supabase Realtime channels with polling fallback in clients |
+| **Payment Flexibility** | Wallet + cash flows live; card/mobile banking gateway placeholders |
 | **Offline Resilience** | Continues working during network interruptions |
 
 ### Key Metrics
 
 | Metric | Value |
 |--------|-------|
-| Database Tables | 44 |
-| API Endpoints | 153+ |
+| Database Tables | 40+ |
+| API Endpoints | 120+ |
 | Route Files | 22 |
 | Controllers | 23 |
 | Services | 37 |
 | Middleware | 8 |
 | CarPoolApp Screens | 34 |
-| CarPoolApp Components | 190+ |
+| CarPoolApp Components | 192 |
 | DriverApp Screens | 12 |
-| DriverApp Components | 75+ |
-| Shared Type Definitions | 81+ interfaces/types |
-| Unit Test Files | 18 |
+| DriverApp Components | 87 |
+| Shared Type Definitions | 80+ interfaces/types |
+| Unit Test Files | 15+ |
 
 ---
 
@@ -110,11 +111,11 @@ To revolutionize urban transportation in Bangladesh by making carpooling the def
               └────────────────┬───────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              EDGE LAYER                                      │
-│  ┌──────────────┐  ┌──────────────────┐  ┌──────────────────────────┐       │
-│  │  Cloudflare  │  │      Nginx       │  │     Rate Limiting        │       │
-│  │  (DNS/CDN)   │  │ (Load Balancer)  │  │  (per endpoint/user)     │       │
-│  └──────────────┘  └──────────────────┘  └──────────────────────────┘       │
+│                          EDGE LAYER (OPTIONAL)                               │
+│  ┌──────────────────┐  ┌──────────────────────────┐                          │
+│  │      Nginx       │  │     Rate Limiting        │                          │
+│  │ (Reverse Proxy)  │  │  (per endpoint/user)     │                          │
+│  └──────────────────┘  └──────────────────────────┘                          │
 └─────────────────────────────────────────────────────────────────────────────┘
                                │
                                ▼
@@ -144,8 +145,8 @@ To revolutionize urban transportation in Bangladesh by making carpooling the def
 │  ├───────────┤  │  │  │  Pools    │  │  │  ├───────────┤  │
 │  │   Auth    │  │  │  │  Sessions │  │  │  │   FCM     │  │
 │  ├───────────┤  │  │  └───────────┘  │  │  ├───────────┤  │
-│  │ Realtime  │  │  │                 │  │  │  bKash    │  │
-│  ├───────────┤  │  │  ┌───────────┐  │  │  │  Nagad    │  │
+│  │ Realtime  │  │  │                 │  │  │  Gateway  │  │
+│  ├───────────┤  │  │  ┌───────────┐  │  │  │  Placeholder│ │
 │  │    RLS    │  │  │  │  BullMQ   │  │  │  └───────────┘  │
 │  └───────────┘  │  │  │  (Jobs)   │  │  │                 │
 └─────────────────┘  │  └───────────┘  │  └─────────────────┘
@@ -158,13 +159,13 @@ To revolutionize urban transportation in Bangladesh by making carpooling the def
 1. Client Request (Mobile App)
          │
          ▼
-2. Nginx (SSL termination, rate limit check)
+2. Nginx (optional reverse proxy)
          │
          ▼
 3. Express Middleware Pipeline
    ├── Security Headers (Helmet)
    ├── Input Sanitization
-   ├── CORS Validation
+  ├── CORS Configuration
    ├── Authentication (JWT via Supabase)
    ├── Request Logging (Morgan + Winston)
    └── Rate Limiting
@@ -203,7 +204,7 @@ To revolutionize urban transportation in Bangladesh by making carpooling the def
 | **Geospatial** | H3-js 4.3 + PostGIS | Location indexing |
 | **Auth** | Supabase Auth | JWT authentication |
 | **Validation** | Zod v4 | Schema validation |
-| **Queue** | BullMQ 5.66 | Background jobs |
+| **Queue** | BullMQ 5.66 | Background jobs (defined, not initialized in app.ts) |
 | **Circuit Breaker** | Opossum 9.0 | Fault tolerance |
 | **Testing** | Vitest 4.0 | Unit & integration tests |
 | **Logging** | Winston 3.19 | Structured logging |
@@ -236,11 +237,11 @@ To revolutionize urban transportation in Bangladesh by making carpooling the def
 
 | Service | Provider | Purpose |
 |---------|----------|---------|
-| **Maps & Routing** | Google Maps / Mapbox | Route calculation, geocoding |
-| **Push Notifications** | Firebase Cloud Messaging | Real-time alerts |
-| **Payments** | bKash, Nagad, SSLCommerz | Payment processing |
+| **Maps & Routing** | Google Maps | Route calculation, traffic-aware ETA, deep links |
+| **Push Notifications** | Firebase Cloud Messaging | Push alerts (FCM key required) |
+| **Payments** | Wallet + gateway placeholders | Card/mobile banking integrations not wired |
 | **Database** | Supabase | PostgreSQL + Auth + Realtime |
-| **CDN/Security** | Cloudflare | DDoS protection, caching |
+| **Edge/CDN** | Optional | Reverse proxy/CDN if deployed (not required by code) |
 
 ---
 
@@ -252,9 +253,9 @@ Carpool-dev/
 │   ├── src/
 │   │   ├── app.ts                  # Express application entry
 │   │   ├── config/                 # Environment & service configs
+│   │   │   ├── constants.ts        # App constants
 │   │   │   ├── env.ts              # Centralized configuration
-│   │   │   ├── supabase.ts         # Supabase client
-│   │   │   └── redis.ts            # Redis client
+│   │   │   └── supabase.ts         # Supabase client
 │   │   ├── controllers/            # Request handlers (23 files)
 │   │   │   ├── auth.controller.ts
 │   │   │   ├── pool.controller.ts
@@ -325,7 +326,7 @@ Carpool-dev/
 │   │   │   ├── safety-center.tsx   # Safety features
 │   │   │   ├── friends.tsx         # Priyo Sathi
 │   │   │   └── ... (24 more screens)
-│   │   ├── components/             # Reusable components (190+ files)
+│   │   ├── components/             # Reusable components (192 files)
 │   │   │   ├── HomeMap.tsx         # Map components (native/web)
 │   │   │   ├── TripProgress.tsx    # Trip tracking
 │   │   │   ├── RideConfirmation.tsx
@@ -373,7 +374,7 @@ Carpool-dev/
 │       │   ├── safety.tsx          # Safety features
 │       │   └── help.tsx            # Help & support
 │       ├── src/
-│       │   ├── components/         # UI components (75+ files)
+│       │   ├── components/         # UI components (87 files)
 │       │   │   ├── driver/         # Driver-specific components
 │       │   │   ├── home/           # Home screen components
 │       │   │   ├── pool/           # Pool-related components
@@ -519,7 +520,7 @@ Social feature allowing preferential matching with friends.
 **Pool Discovery:**
 - Map view of nearby available pools
 - Push notifications for new pool requests
-- 15-second polling for real-time updates
+- Supabase Realtime with polling fallback (fast 3s / slow 30s)
 - Filter by vehicle type and preferences
 
 **Ride Management:**
@@ -543,7 +544,7 @@ Social feature allowing preferential matching with friends.
 ### 7. Wallet & Payments
 
 **Prepaid Wallet System:**
-- Add funds via bKash, Nagad, or card
+- Add funds via wallet top-up (card/mobile banking placeholders)
 - Automatic payment on ride completion
 - Transaction history
 
@@ -663,7 +664,7 @@ Social feature allowing preferential matching with friends.
 │ 2. POOL DISCOVERY                                               │
 │    • Map shows nearby available pools                           │
 │    • Push notifications for new requests                        │
-│    • Polling every 15 seconds for updates                       │
+│    • Supabase Realtime with polling fallback (3s/30s)           │
 │    • View pool details: passengers, earnings, distance          │
 └─────────────────────────┬───────────────────────────────────────┘
                           │
@@ -1093,11 +1094,25 @@ All tables have RLS enabled with policies ensuring:
 ### Multi-Layer Security
 
 ```
+
+---
+
+## Integration Status
+
+| Service | Status | Notes |
+|---------|--------|-------|
+| Google Maps Directions API | Live (key required) | Used for routing, traffic-aware ETA, and combined routes |
+| Google Maps Deep Links | Live | Navigation opens Google Maps app without API cost |
+| Supabase (DB/Auth/Realtime) | Live | Primary data store and client realtime channels |
+| Redis Cache | Optional | Enabled when `MVP_MODE`/`SKIP_REDIS` is false |
+| FCM Push Notifications | Conditional | Requires `FCM_SERVER_KEY`; otherwise stored in DB only |
+| Payment Gateways (Card/Mobile Banking) | Placeholder | Gateway flow not wired in server |
+| SMS/999 Emergency Delivery | Placeholder | Logged in DB; external delivery not integrated |
 ┌─────────────────────────────────────────────────────────────────┐
 │ LAYER 1: NETWORK                                                │
-│   • Cloudflare DDoS Protection                                  │
 │   • SSL/TLS Encryption (HTTPS only)                             │
 │   • Firewall Rules                                              │
+│   • Optional edge proxy/CDN                                     │
 ├─────────────────────────────────────────────────────────────────┤
 │ LAYER 2: APPLICATION                                            │
 │   • Rate Limiting (per IP, per user, per endpoint)              │
@@ -1293,21 +1308,21 @@ npm test          # Jest tests
 
 ## Conclusion
 
-RidePool is a **production-ready carpooling platform** with:
+RidePool is a **production-ready foundation** for a carpooling platform with:
 
 ✅ **Smart Matching**: H3 geospatial indexing for sub-millisecond pool matching  
 ✅ **Real-time Updates**: Supabase Realtime + intelligent polling fallback  
 ✅ **Cost Efficiency**: 25-40% savings through intelligent pooling  
 ✅ **Safety First**: Female-only rides, SOS, trip sharing, emergency contacts  
 ✅ **Social Features**: Priyo Sathi trusted companions, in-pool messaging  
-✅ **Local Payments**: Designed for bKash, Nagad, local payment methods  
-✅ **Scalable Architecture**: From $0 MVP to enterprise scale  
+✅ **Payments**: Wallet + cash flows live; gateway integrations are placeholders  
+✅ **Scalable Architecture**: MVP-ready with clear scaling path  
 ✅ **Cross-Platform**: Single codebase for iOS, Android, and Web  
 ✅ **Advanced Features**: Heatmaps, voice navigation, geofencing, fraud detection  
 ✅ **Internationalization**: Multi-language support (Bengali, English)  
 ✅ **Fault Tolerance**: Circuit breakers, graceful degradation, offline sync  
 
-The codebase is well-organized with clear separation of concerns, comprehensive error handling, and production-ready security measures.
+The codebase is well-organized with clear separation of concerns, consistent error handling, and security controls in place. External gateway integrations and a custom realtime server are still optional add-ons.
 
 ### Key Services Breakdown
 

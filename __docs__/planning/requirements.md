@@ -35,7 +35,9 @@ As a sedan can carry at most three passengers (excluding the driver), the app fi
 
   * Indicate the exact direction to walk and estimate walking time.
 
-* Users can search from their **current indoor location**, but may receive fewer or less optimal matches.
+  * Walking path to the main road will be shown in the map.
+
+ * Users can search from their **current indoor location**, but may receive fewer or less optimal matches.
 
   ### **2\. Pool Suggestions**
 

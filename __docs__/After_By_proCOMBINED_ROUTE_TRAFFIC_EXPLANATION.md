@@ -296,3 +296,8 @@ Implementation prompt:
    Deliverables:
    - Code changes
    - Short summary of why cache reuse prevents extra Google calls in normal same-pool flow.
+
+
+   Go through the file @__docs__/After_By_proCOMBINED_ROUTE_TRAFFIC_EXPLANATION.md and also go through the Implementation prompt part of the @__doc
+s__/After_By_proCOMBINED_ROUTE_TRAFFIC_EXPLANATION.md file and make sure that driver instead of using legacy route, rider and driver both use the same
+combined-route route. So that driver can get the pool's cached route data and approach based on that properly. 

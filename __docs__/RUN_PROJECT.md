@@ -522,7 +522,7 @@ npm run migrate
 4. Supabase dashboard for database issues
 
 **Documentation**:
-- Architecture: `__docs__/system/architecture.md`
+- Architecture: `__docs__/architecture.md`
 - Database: `__docs__/database/`
 - Security: `__docs__/security/`
 - Operations: `__docs__/operations/`
