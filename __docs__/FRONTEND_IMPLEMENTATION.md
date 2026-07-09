@@ -21,7 +21,6 @@ Client/CarPoolApp/
 │   ├── pool.service.ts        # Pool management services
 │   ├── payment.service.ts     # Payment & wallet services
 │   ├── messaging.service.ts   # Messaging services
-│   ├── safety.service.ts      # Safety features services
 │   └── driver.service.ts      # Driver-specific services
 ├── hooks/
 │   ├── useAuth.ts            # Authentication hook
@@ -58,7 +57,6 @@ All API endpoints wrapped in clean service functions:
 - ✅ Pool management (create, join, leave, search)
 - ✅ Payment & Wallet (methods, transactions, balance)
 - ✅ Messaging (send, conversations, mark read)
-- ✅ Safety (incidents, emergency contacts, trip sharing)
 - ✅ Driver features (register, earnings, trips)
 
 ### 3. Custom Hooks
@@ -250,7 +248,6 @@ All endpoints are defined in `config/api.config.ts`:
 - Payments: `/payments/*`
 - Wallet: `/wallet/*`
 - Messages: `/messages/*`
-- Safety: `/safety/*`
 - Retention: `/retention/*`
 
 ## State Management Flow

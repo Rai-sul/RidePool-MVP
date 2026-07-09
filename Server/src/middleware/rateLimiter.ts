@@ -101,18 +101,3 @@ export const paymentLimiter: RateLimitRequestHandler = rateLimit({
   },
   handler: createLimitHandler('Payment'),
 });
-
-export const sosLimiter: RateLimitRequestHandler = rateLimit({
-  windowMs: 60 * 1000,
-  limit: isProduction ? 5 : 50,
-  standardHeaders: 'draft-8',
-  legacyHeaders: false,
-  message: {
-    success: false,
-    error: {
-      code: 'SOS_RATE_LIMIT_EXCEEDED',
-      message: 'SOS request limit reached.',
-    },
-  },
-  handler: createLimitHandler('SOS'),
-});

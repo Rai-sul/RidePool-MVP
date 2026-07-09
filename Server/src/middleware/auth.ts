@@ -1,11 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { supabase } from '../config/supabase';
-import { SupportedLanguage } from '../services/i18n.service';
 
 export interface AuthRequest extends Request {
   user?: any;
-  language?: SupportedLanguage;
-  t?: (key: string, params?: Record<string, string | number>) => string;
 }
 
 export const authenticate = async (

@@ -7,7 +7,7 @@ import routes from './routes';
 import { healthRoutes } from './controllers/health.controller';
 import { errorHandler } from './middleware/errorHandler';
 import { configureSecurityHeaders } from './middleware/securityHeaders';
-import { apiLimiter, authLimiter, searchLimiter, paymentLimiter, sosLimiter } from './middleware/rateLimiter';
+import { apiLimiter, authLimiter, searchLimiter, paymentLimiter } from './middleware/rateLimiter';
 import { inputSanitizer, stripNullBytes } from './middleware/inputSanitizer';
 import { logger } from './utils/logger';
 import { unifiedCacheService } from './services/unifiedCache.service';
@@ -60,8 +60,6 @@ app.use('/api/pools/search', searchLimiter);
 
 app.use('/api/payments', paymentLimiter);
 app.use('/api/wallet', paymentLimiter);
-
-app.use('/api/safety/sos', sosLimiter);
 
 app.use('/api', routes);
 

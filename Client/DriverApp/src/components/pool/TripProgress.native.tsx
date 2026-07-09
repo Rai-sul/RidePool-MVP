@@ -3,10 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Lin
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapViewComponent, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { Phone, CheckCircle, X, Navigation, MessageCircle, Star, Clock, AlertCircle, RefreshCw, Users, User } from 'lucide-react-native';
-import { Button } from '../ui/button';
-import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
-import { useTheme } from '../../contexts/ThemeContext';
 import { usePoolRealtime } from '../../hooks/usePoolRealtime';
 import { driverService } from '../../services/driver.service';
 import { locationService } from '../../services/location.service';
@@ -21,7 +18,6 @@ interface TripProgressProps {
 }
 
 export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: TripProgressProps) {
-  const { colors } = useTheme();
   const mapRef = useRef<MapViewComponent>(null);
 
   // Callback for when pool is cancelled (all riders left, pool cancelled, etc.)
@@ -770,15 +766,6 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
             >
               <CheckCircle size={20} color="white" />
               <Text className="text-white font-semibold ml-2">Complete Pool</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* SOS Button */}
-        {!['COMPLETED', 'CANCELLED'].includes(poolStatus) && (
-          <View className="mx-6 mt-4">
-            <TouchableOpacity className="w-full py-4 rounded-xl border-2 border-red-500 bg-white flex-row items-center justify-center">
-              <Text className="text-red-500 font-semibold">🚨 Emergency SOS</Text>
             </TouchableOpacity>
           </View>
         )}

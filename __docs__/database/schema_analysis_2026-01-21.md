@@ -46,10 +46,7 @@ The following tables have RLS enabled but NO POLICIES defined:
 | `audit_log` | RLS NOT enabled, no policies (the duplicate table) |
 | `app_metadata` | No RLS at all |
 | `route_cache` | No RLS at all |
-| `demand_snapshot` | No RLS at all |
-| `demand_heatmap_cache` | No RLS at all |
 | `navigation_route_cache` | No RLS at all |
-| `historical_demand_patterns` | No RLS at all |
 
 **Impact:** Security vulnerability - users can access/modify data they shouldn't.
 
@@ -92,7 +89,6 @@ Several foreign key columns lack indexes, which will slow down JOINs and DELETE 
 |-------|--------|-------|
 | `wallet_transactions` | `wallet_id` | Has index ✓ |
 | `user_promo_usage` | `promo_code_id` | Missing index |
-| `ride_sharing` | `ride_id` | Missing index |
 | `conversation_participants` | `conversation_id` | Missing index (only has user_id) |
 
 ---
@@ -137,7 +133,6 @@ These indexes overlap. The second is more specific but may be redundant if the f
 | Column | Length | Recommendation |
 |--------|--------|----------------|
 | `users.phone` | VARCHAR(20) | OK |
-| `emergency_contacts.phone` | VARCHAR(20) | OK |
 | `users.referral_code` | VARCHAR(10) | Could be too short for future expansion |
 | `pools.status` | VARCHAR(20) | Consider ENUM type instead |
 
@@ -209,7 +204,6 @@ CREATE POLICY p_conv_participants ON public.conversation_participants
 ### Fix 3: Add Missing Indexes
 ```sql
 CREATE INDEX idx_user_promo_promo ON public.user_promo_usage(promo_code_id);
-CREATE INDEX idx_ride_sharing_ride ON public.ride_sharing(ride_id);
 CREATE INDEX idx_conv_participants_conv ON public.conversation_participants(conversation_id);
 ```
 

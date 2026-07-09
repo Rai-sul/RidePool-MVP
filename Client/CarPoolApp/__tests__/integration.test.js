@@ -8,11 +8,10 @@ describe('Frontend Implementation', () => {
       'pool.service',
       'payment.service',
       'messaging.service',
-      'safety.service',
       'driver.service',
     ];
     
-    expect(services.length).toBe(7);
+    expect(services.length).toBe(6);
   });
 
   test('hooks follow naming convention', () => {

@@ -35,7 +35,6 @@ function AppLayout() {
         <Stack.Screen name="register" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="settings" options={{ headerShown: false }} />
-        <Stack.Screen name="safety" options={{ headerShown: false }} />
         <Stack.Screen name="help" options={{ headerShown: false }} />
         <Stack.Screen name="contact-info" options={{ headerShown: false }} />
         <Stack.Screen name="trip-progress" options={{ headerShown: false }} />

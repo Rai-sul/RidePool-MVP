@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal } from 'react-native-web';
-import { User, MapPin, Settings, Shield, HelpCircle, ChevronRight, Heart, Star, Bell, Globe, LogOut } from './Icons';
+import { User, MapPin, Settings, HelpCircle, ChevronRight, Heart, Star, Bell, LogOut } from './Icons';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Separator } from './ui/separator';
 import type { UserProfile } from '../contexts/GlobalContext';
@@ -26,14 +26,12 @@ const menuSections = [
     items: [
       { icon: Settings, label: 'Settings', badge: null, route: 'settings' },
       { icon: Bell, label: 'Notifications', badge: null, route: 'notifications' },
-      { icon: Globe, label: 'Language', badge: 'English', route: 'language' },
       { icon: Heart, label: 'Gender Preference', badge: null, route: 'gender-preference' },
     ],
   },
   {
-    title: 'Safety & Support',
+    title: 'Support',
     items: [
-      { icon: Shield, label: 'Safety Center', badge: null, route: 'safety-center' },
       { icon: HelpCircle, label: 'Help & Support', badge: null, route: 'help-support' },
     ],
   },
@@ -142,16 +140,16 @@ export default function ProfileScreen({ userProfile }: ProfileScreenProps) { // 
           </View>
         ))}
 
-        {/* Special Safety Note for Female Users */}
+        {/* Gender preference note for female users */}
         {userProfile?.gender === 'female' && (
           <View className="bg-pink-50 border-2 border-pink-200 rounded-2xl p-4 flex flex-row items-start gap-3">
-            <Shield className="w-5 h-5 text-pink-600 flex-shrink-0 mt-0.5" />
+            <Heart className="w-5 h-5 text-pink-600 flex-shrink-0 mt-0.5" />
             <View className="flex-1">
               <Text className="text-sm">
                 <Text className="text-pink-900">Female-only pools enabled</Text>
               </Text>
               <Text className="text-xs text-pink-700 mt-1">
-                You can choose to ride only with female drivers and co-riders for added safety and comfort.
+                You can choose to ride only with female drivers and co-riders for comfort and preference.
               </Text>
             </View>
           </View>

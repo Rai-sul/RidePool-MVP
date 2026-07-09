@@ -33,15 +33,14 @@ All required environment variables are properly configured:
 | Rides & Pools | pools, rides, pool_members | ✅ |
 | Vehicles | vehicles, vehicle_locations | ✅ |
 | Payments | payments, promo_codes, user_promo_usage | ✅ |
-| Driver Management | driver_sessions, driver_earnings, driver_daily_stats, driver_shifts | ✅ |
+| Driver Management | driver_sessions, driver_earnings, driver_daily_stats | ✅ |
 | Notifications | notifications, device_tokens, notification_preferences | ✅ |
-| Safety | safety_incidents, emergency_contacts, emergency_notifications, emergency_service_logs | ✅ |
 | Messaging | conversations, conversation_participants, messages | ✅ |
 | Penalties | user_cancellations, cooldown_periods | ✅ |
-| Caching | route_cache, demand_snapshot, demand_heatmap_cache, navigation_route_cache, historical_demand_patterns | ✅ |
+| Caching | route_cache, navigation_route_cache | ✅ |
 | Offline | offline_actions, sync_logs | ✅ |
 | Admin | audit_logs, audit_log, geo_zones, fraud_reports | ✅ |
-| Other | saved_places, priyo_sathi, ratings, ride_sharing, promise_money_transactions, app_metadata | ✅ |
+| Other | saved_places, priyo_sathi, ratings, promise_money_transactions, app_metadata | ✅ |
 
 ### 4. RPC Functions ✅
 

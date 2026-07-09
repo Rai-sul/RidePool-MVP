@@ -24,7 +24,7 @@
 ## 1. Executive Summary
 
 ### Current State
-The backend now contains a full set of controllers and services for core ride flow, driver flow, pooling, safety, messaging, ratings, promotions, wallet, and analytics. Many features previously listed as missing are implemented.
+The backend contains controllers and services for core ride flow, driver flow, pooling, messaging, ratings, promotions, wallet, and analytics. Many features previously listed as missing are implemented.
 
 ### Risk Level: **MEDIUM**
 Main production blockers are not missing code, but incomplete real-time delivery, external integration dependencies (FCM/SMS/999), and uninitialized async queue processing.
@@ -32,7 +32,6 @@ Main production blockers are not missing code, but incomplete real-time delivery
 ### Top Findings (Updated)
 - Real-time updates are REST-based; no WebSocket layer for live chat, driver location push, or pool state streaming.
 - Notifications are implemented but require `FCM_SERVER_KEY`; without it, notifications are stored but not pushed.
-- Emergency/SOS flows log and notify contacts, but outbound SMS/999 integration is not wired.
 - BullMQ queue service exists but is not initialized or used by the app runtime.
 
 ---
@@ -47,7 +46,7 @@ Main production blockers are not missing code, but incomplete real-time delivery
 │                    (Port 3000)                               │
 ├─────────────────────────────────────────────────────────────┤
 │ Controllers: auth, user, driver, pool, ride, payment,       │
-│ messaging, safety, wallet, promo, ratings, analytics        │
+│ messaging, wallet, promo, ratings, analytics                │
 │ Services: poolMatching, smartRoute, lookupTime, fare,       │
 │ geofencing, incentive, penalty, notifications, audit        │
 │ Middleware: auth, rateLimiter, securityHeaders, sanitizer   │
@@ -63,7 +62,7 @@ Main production blockers are not missing code, but incomplete real-time delivery
 
 ### Components Present
 - Redis cache support (ioredis) with unified memory fallback.
-- Rate limiting middleware for auth, payments, search, SOS.
+- Rate limiting middleware for auth, payments, and search.
 - Audit logging service and middleware support.
 - Circuit breaker and graceful shutdown services.
 - BullMQ queue service (defined, not initialized by app).
@@ -78,9 +77,7 @@ Main production blockers are not missing code, but incomplete real-time delivery
 - Smart route optimization and cached route handling.
 - Gender preference enforcement for female users and pool matching constraints.
 
-### Safety and Compliance
-- SOS controller and emergency incident reporting.
-- Emergency contacts CRUD, safety incident logging, and notifications.
+### Compliance
 - Audit logging service for major events.
 
 ### Payments and Incentives
@@ -92,11 +89,10 @@ Main production blockers are not missing code, but incomplete real-time delivery
 - Messaging controller with conversations and push notifications.
 - Ratings controller and average rating updates.
 - Priyo Sathi flow implemented (invite, accept, ride invite).
-- Ride sharing/tracking controller with public share tokens.
 
 ### Supporting Features
 - Analytics service, geofencing, fraud detection.
-- Offline sync, voice navigation, heatmap, shift scheduling, i18n.
+- Offline sync and core utility services.
 
 ---
 
@@ -108,7 +104,6 @@ Main production blockers are not missing code, but incomplete real-time delivery
 
 ### 4.2 External Integrations (Partial)
 - Notifications require `FCM_SERVER_KEY`; otherwise stored in DB only.
-- Emergency service logs SMS/999 actions but does not send real SMS or direct 999 integration.
 
 ### 4.3 Async Queue (Defined, Not Wired)
 - BullMQ message queue exists but is not initialized in the app runtime.
@@ -122,7 +117,7 @@ Main production blockers are not missing code, but incomplete real-time delivery
 ## 5. Security Review
 
 ### Implemented Controls
-- Rate limiting for auth, payment, search, and SOS.
+- Rate limiting for auth, payment, and search.
 - Input sanitization and security headers.
 - Audit logging for critical actions.
 
@@ -154,7 +149,6 @@ Main production blockers are not missing code, but incomplete real-time delivery
 
 ### Risks
 - Notification delivery failures may go unnoticed without a job queue/monitor.
-- Emergency outbound messaging is not guaranteed without SMS provider integration.
 
 ---
 
@@ -162,8 +156,8 @@ Main production blockers are not missing code, but incomplete real-time delivery
 
 1. Add a WebSocket or SSE layer for live location, pool status, and chat.
 2. Wire BullMQ initialization and worker processes (or remove if not needed).
-3. Integrate real SMS/999 delivery provider and alerting for failures.
-4. Add end-to-end tests covering driver flow, pool lifecycle, and safety actions.
+3. Add notification delivery monitoring and alerting for failures.
+4. Add end-to-end tests covering driver flow and pool lifecycle.
 
 ---
 
@@ -172,7 +166,6 @@ Main production blockers are not missing code, but incomplete real-time delivery
 | Priority | Item | Rationale |
 |---------|------|-----------|
 | P0 | Real-time updates (WebSocket/SSE) | Core UX gap for live tracking and chat |
-| P0 | External emergency delivery (SMS/999) | Safety-critical functionality |
 | P1 | Queue initialization + workers | Reliability for notifications/analytics |
 | P1 | Client-server flow validation | Ensure API parity across apps |
 | P2 | Observability for notifications | Reduce silent failures |
@@ -264,7 +257,6 @@ shared/
     ├── driver.ts     # Driver, Vehicle, VehicleLocation
     ├── payment.ts    # Wallet, Payment, transactions
     ├── messaging.ts  # Conversation, Message types
-    ├── safety.ts     # Emergency, Safety incident types
     └── misc.ts       # Rating, PromoCode, SavedPlace
 ```
 
@@ -431,7 +423,6 @@ $$ LANGUAGE plpgsql;
   - `passwordResetLimiter`: 3 requests per hour
   - `searchLimiter`: 30 requests per minute
   - `paymentLimiter`: 10 requests per minute
-  - `sosLimiter`: 5 requests per minute
 - Applied limiters in `app.ts` to appropriate routes
 
 ```typescript
@@ -440,7 +431,6 @@ app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api/pools/search', searchLimiter);
 app.use('/api/payments', paymentLimiter);
-app.use('/api/safety/sos', sosLimiter);
 ```
 
 ### 6.3 CRITICAL: SQL Injection Risk in Pool Search ✅ MITIGATED
@@ -498,7 +488,7 @@ export const checkPoolAccess = async (req, res, next) => {
 - Created `middleware/auditMiddleware.ts` with:
   - `auditMiddleware`: Logs all actions to audit_logs table
   - `logSupabaseAdminUsage`: Logs admin client usage with warnings
-  - Pre-built audit middleware for common operations (login, payment, SOS, etc.)
+  - Pre-built audit middleware for common operations such as login and payment.
 - Updated `audit.service.ts` with comprehensive logging
 
 ### 6.8 MEDIUM: No Content Security Policy ✅ FIXED
@@ -1490,7 +1480,6 @@ ALTER TABLE users ADD COLUMN promise_money_deposited BOOLEAN DEFAULT FALSE;
 
 1. **Implement Missing Features**
    - Cooldown/Penalty system
-   - SOS/Emergency system
    - Priyo Sathi completion
    - Incentive system
 
@@ -1555,7 +1544,6 @@ ALTER TABLE users ADD COLUMN promise_money_deposited BOOLEAN DEFAULT FALSE;
 | Issue | Type | Effort | Impact |
 |-------|------|--------|--------|
 | Cooldown system | Feature | 8hr | Abuse possible |
-| SOS system | Feature | 16hr | Safety concern |
 | Incentive system | Feature | 8hr | No rewards |
 | Health checks | Operations | 4hr | Hard debugging |
 | CSRF protection | Security | 4hr | Attack vector |

@@ -54,7 +54,7 @@ RidePool is a **production-grade carpooling platform** built for **Bangladesh** 
 |-----------|-------------|
 | **Cost savings** | 25–40% savings vs solo rides via intelligent pooling |
 | **Fast matching** | Match riders within ~40 seconds using H3 geospatial indexing |
-| **Safety** | Female-only pools, SOS, emergency contacts, trip sharing |
+| **Preference matching** | Female-only pools via gender-restricted matching |
 | **Social pooling** | Priyo Sathi (trusted companions) for preferential matching |
 | **Platform sustainability** | ~20% platform commission; MVP deployable at $0/month infra |
 | **Cross-platform** | Single codebase: iOS, Android, Web via Expo (rider app only for web) |
@@ -63,18 +63,17 @@ RidePool is a **production-grade carpooling platform** built for **Bangladesh** 
 
 | Actor | App | Role |
 |-------|-----|------|
-| **Passenger (Rider)** | `Client/CarPoolApp` | Search/create/join pools, pay, chat, safety |
+| **Passenger (Rider)** | `Client/CarPoolApp` | Search/create/join pools, pay, chat, ratings |
 | **Driver** | `Client/DriverApp` | Go online, accept pools, navigate, pickup/dropoff, earnings |
 | **Platform admin** | Future / DB `is_admin` | Moderation, analytics (limited UI today) |
-| **Emergency services** | External | SOS intent to 999 (delivery **Partial**) |
 
 ## Key business problems being solved
 
 1. **High solo ride cost** in dense urban traffic — pooling splits fare fairly.
 2. **Inefficient empty seats** — sedans/CNGs carry multiple passengers on one optimized route.
-3. **Safety concerns for women** — gender-restricted matching (`FEMALE_ONLY` vs `ANY`).
+3. **Gender preference for riders** — gender-restricted matching (`FEMALE_ONLY` vs `ANY`).
 4. **Unreliable informal carpooling** — structured pools, lookup timers, atomic join/accept.
-5. **Trust between strangers** — ratings, Priyo Sathi, SOS, trip sharing.
+5. **Trust between strangers** — ratings and Priyo Sathi.
 
 ### Business model (Implemented assumptions)
 
@@ -183,7 +182,6 @@ sequenceDiagram
 | **Firebase Cloud Messaging** | **Implemented** | **Sole push provider.** Server sends via `FCM_SERVER_KEY`; clients register tokens via `expo-notifications` → `POST /users/device-token`. Requires Firebase project setup for production delivery. |
 | **Redis** | **Optional** | Route/pool cache (`MVP_MODE` uses memory) |
 | **Payment gateways** | **Partial** | Wallet + cash wired; card/mobile banking placeholder |
-| **SMS / 999** | **Planned** | SOS logs to DB; no guaranteed outbound delivery |
 | **BullMQ** | **Partial** | Package present; **not initialized** in `app.ts` |
 
 > **Out of scope (never use):** Mapbox, Knock.app, OneSignal, and any alternative maps or notification providers. Legacy references in older docs or `.env.example` files should be ignored or removed during cleanup.
@@ -628,21 +626,7 @@ charge = farePerPerson + 10 (platform surcharge)
 
 ---
 
-## 11. Safety (SOS, incidents, trip sharing) — **Partial**
-
-**Implemented:** SOS endpoint, incident logging, emergency contacts CRUD, shareable trip token (`/api/sharing/track/:token`).
-
-**Partial:** Actual SMS/999 delivery — logged only without external provider.
-
-**Partial (client):** CarPoolApp safety center has hardcoded emergency contacts; `safety.service.ts` exists but screen doesn't call it.
-
-**APIs:** `/api/safety/sos`, `/api/safety/incidents`, `/api/safety/share-trip`, `/api/emergency-contacts/*`
-
-**Note:** Duplicate emergency contacts API at `/api/safety/emergency-contacts` and `/api/emergency-contacts/*`.
-
----
-
-## 12. Priyo Sathi — **Implemented** (core); advanced auto-match **Partial**
+## 11. Priyo Sathi — **Implemented** (core); advanced auto-match **Partial**
 
 **Implemented:** Add/remove companions, requests, invites, nearby check, cancellation penalty via `deduct_promise_money` in some flows.
 
@@ -652,7 +636,7 @@ charge = farePerPerson + 10 (platform surcharge)
 
 ---
 
-## 13. Messaging — **Implemented**
+## 12. Messaging — **Implemented**
 
 **APIs:** `POST /api/messages/`, `GET /conversations`, realtime via `useChatRealtime.ts` (2s poll fallback).
 
@@ -660,13 +644,13 @@ charge = farePerPerson + 10 (platform surcharge)
 
 ---
 
-## 14. Ratings — **Implemented**
+## 13. Ratings — **Implemented**
 
 Post-trip `POST /api/ratings` updates `users.average_rating`.
 
 ---
 
-## 15. Navigation & combined route — **Implemented**
+## 14. Navigation & combined route — **Implemented**
 
 **APIs:**
 - `GET /api/pools/:id/combined-route` (traffic-aware, preferred)
@@ -680,7 +664,7 @@ Post-trip `POST /api/ratings` updates `users.average_rating`.
 
 ---
 
-## 16. Cooldown / cancellation penalties — **Implemented**
+## 15. Cooldown / cancellation penalties — **Implemented**
 
 **Rules:** 3 deliberate cancellations within 5 minutes → cooldown; cancellations within 30s not counted deliberate.
 
@@ -690,15 +674,15 @@ Post-trip `POST /api/ratings` updates `users.average_rating`.
 
 ---
 
-## 17. Analytics, heatmap, shifts, i18n, offline — **Implemented** (API level)
+## 16. Analytics and offline — **Implemented** (API level)
 
-Backend routes exist; admin dashboards and full client consumption may be **Partial**.
+Backend routes exist for analytics and offline sync; admin dashboards and full client consumption may be **Partial**.
 
 **Unwired services (exist but no route wiring):** `geofencing.service.ts`, `fraudDetection.service.ts`, `incentive.service.ts`, `tracing.service.ts`, `h3Sync.service.ts`, `routeCache.service.ts`, `h3Worker.service.ts`, `route.service.ts` (stubs).
 
 ---
 
-## 18. Gender-based matching — **Implemented**
+## 17. Gender-based matching — **Implemented**
 
 Females choose `FEMALE_ONLY` or `ANY`; males use regular matching. Enforced in `poolMatching.service.ts`.
 
@@ -762,8 +746,7 @@ Future enhancement per requirements.md.
 | `trips`, `rides-list`, `your-ratings` | History | **Implemented** |
 | `profile`, `personal-info`, `saved-places` | Account | **Mostly UI** |
 | `notifications` | In-app notifications | **Implemented** |
-| `gender-preference`, `language` | Preferences | **Partial** |
-| `safety-center` | SOS, emergency contacts | **UI only** (hardcoded) |
+| `gender-preference` | Preferences | **Partial** |
 | `help-support`, `promo-code` | Support/promos | **Partial** |
 | `create-ride` | Manual lat/lng ride | **Implemented** |
 | `(tabs)/explore` | Expo template | **Not product** |
@@ -780,7 +763,7 @@ Future enhancement per requirements.md.
 | `(tabs)/earnings` | Earnings, history | **Partial** (some stats hardcoded) |
 | `(tabs)/profile` | Driver profile | **Implemented** |
 | `trip-progress` | Active ride lifecycle | **Implemented** |
-| `settings`, `safety`, `help`, `contact-info` | Settings | **Partial** (contact-info TODO) |
+| `settings`, `help`, `contact-info` | Settings | **Partial** (contact-info TODO) |
 
 ## API client pattern (both apps)
 
@@ -924,20 +907,14 @@ flowchart TD
 | `/api/driver` | Driver operations |
 | `/api/payments` | Payment processing |
 | `/api/wallet` | Wallet operations |
-| `/api/safety` | SOS, incidents |
 | `/api/priyo-sathi` | Companions |
 | `/api/ratings` | Ratings |
-| `/api/sharing` | Trip sharing |
 | `/api/messages` | Chat |
 | `/api/promos` | Promo codes |
 | `/api/saved-places` | Saved locations |
-| `/api/emergency-contacts` | Emergency contacts (duplicate of safety) |
 | `/api/analytics` | Analytics |
-| `/api/heatmap` | Demand heatmaps |
-| `/api/shifts` | Driver shifts |
 | `/api/offline` | Offline sync |
 | `/api/navigation` | Navigation helpers |
-| `/api/i18n` | Translations |
 
 **Health (outside `/api`):** `/health`, `/health/live`, `/health/ready`, `/health/detailed`, `/health/cache`
 
@@ -982,7 +959,6 @@ flowchart TD
 | `authLimiter` | 15 min | 20 | Auth |
 | `searchLimiter` | 1 min | 30 | Pool search |
 | `paymentLimiter` | 1 min | 10 | Payments |
-| `sosLimiter` | 1 min | 5 | SOS |
 
 ---
 
@@ -1097,29 +1073,6 @@ flowchart TD
 | POST | `/process` |
 | GET | `/history` |
 
-### Safety — `/api/safety`
-
-| Method | Path |
-|--------|------|
-| POST | `/sos` |
-| POST | `/incidents` |
-| GET | `/incidents` |
-| POST | `/share-trip` |
-| GET | `/emergency-contacts` |
-| POST | `/emergency-contacts` |
-| DELETE | `/emergency-contacts/:contactId` |
-
-### Emergency contacts — `/api/emergency-contacts`
-
-| Method | Path |
-|--------|------|
-| GET | `/` |
-| POST | `/` |
-| PUT | `/:contactId` |
-| DELETE | `/:contactId` |
-| POST | `/:contactId/primary` |
-| GET | `/primary` |
-
 ### Priyo Sathi — `/api/priyo-sathi`
 
 | Method | Path |
@@ -1144,15 +1097,6 @@ flowchart TD
 | GET | `/user/:userId` |
 | GET | `/user/:userId/breakdown` |
 | GET | `/ride/:rideId` |
-
-### Sharing — `/api/sharing`
-
-| Method | Path | Auth |
-|--------|------|------|
-| POST | `/share` | Yes |
-| GET | `/active` | Yes |
-| DELETE | `/:shareId` | Yes |
-| GET | `/track/:token` | **No** (public) |
 
 ### Messages — `/api/messages`
 
@@ -1197,30 +1141,6 @@ flowchart TD
 | GET | `/users` |
 | GET | `/revenue` |
 
-### Heatmap — `/api/heatmap`
-
-| Method | Path |
-|--------|------|
-| GET | `/` |
-| GET | `/demand` |
-| GET | `/surge-zones` |
-| GET | `/recommendations` |
-| GET | `/peak-hours` |
-| GET | `/patterns` |
-
-### Shifts — `/api/shifts`
-
-| Method | Path |
-|--------|------|
-| GET | `/` |
-| POST | `/` |
-| PUT | `/:shiftId` |
-| DELETE | `/:shiftId` |
-| DELETE | `/day/:dayOfWeek` |
-| GET | `/stats` |
-| GET | `/reminders` |
-| GET | `/status` |
-
 ### Offline — `/api/offline`
 
 | Method | Path |
@@ -1236,25 +1156,7 @@ flowchart TD
 
 | Method | Path |
 |--------|------|
-| POST | `/route` |
-| POST | `/state` |
-| POST | `/voice-instruction` |
-| GET | `/waypoint-message` |
-| GET | `/recalculating` |
 | POST | `/deep-link` |
-
-### i18n — `/api/i18n`
-
-| Method | Path | Auth |
-|--------|------|------|
-| GET | `/translations` | Optional |
-| GET | `/languages` | No |
-| POST | `/translate` | Optional |
-| GET | `/format/currency` | No |
-| GET | `/format/distance` | No |
-| GET | `/format/duration` | No |
-| GET | `/user-language` | Yes |
-| PUT | `/user-language` | Yes |
 
 ---
 
@@ -1269,22 +1171,22 @@ flowchart TD
 ## Important models
 
 ### User domain
-`users`, `user_preferences`, `emergency_contacts`, `saved_places`, `priyo_sathi`, `device_tokens`, `notification_preferences`
+`users`, `user_preferences`, `saved_places`, `priyo_sathi`, `device_tokens`, `notification_preferences`
 
 ### Ride & pool domain
 `rides`, `pools`, `pool_members`, `pool_invites`
 
 ### Driver domain
-`vehicles`, `vehicle_locations`, `driver_sessions`, `driver_earnings`, `driver_daily_stats`, `driver_shifts`
+`vehicles`, `vehicle_locations`, `driver_sessions`, `driver_earnings`, `driver_daily_stats`
 
 ### Financial domain
 `wallets`, `wallet_transactions`, `payments`, `promo_codes`, `user_promo_usage`, `promise_money_transactions`
 
-### Messaging & safety
-`conversations`, `conversation_participants`, `messages`, `safety_incidents`, `emergency_notifications`, `emergency_service_logs`, `ride_sharing`, `notifications`
+### Messaging and notifications
+`conversations`, `conversation_participants`, `messages`, `notifications`
 
 ### System / cache / analytics
-`route_cache`, `demand_snapshot`, `demand_heatmap_cache`, `navigation_route_cache`, `historical_demand_patterns`, `offline_actions`, `sync_logs`, `geo_zones`, `fraud_reports`, `audit_logs`, `app_metadata`, `user_cancellations`, `cooldown_periods`
+`route_cache`, `navigation_route_cache`, `offline_actions`, `sync_logs`, `geo_zones`, `fraud_reports`, `audit_logs`, `app_metadata`, `user_cancellations`, `cooldown_periods`
 
 ## Critical RPC functions (use these for concurrency)
 
@@ -1401,7 +1303,6 @@ sequenceDiagram
 
 - `authorization.ts` middleware not wired to routes
 - CSRF: not implemented (mobile API less critical)
-- Real 999/SMS integration for SOS
 - Full RLS coverage on cache/metadata tables
 - FCM/SMS outbound delivery observability missing
 
@@ -1517,16 +1418,7 @@ npx expo start --clear
 | **DB** | `payments.gateway_reference`, status webhooks |
 | **Risks** | PCI compliance; reconciliation |
 
-## 4. SMS / 999 emergency delivery — **Planned**
-
-| Area | Guidance |
-|------|----------|
-| **Goal** | Reliable SOS delivery |
-| **Components** | Twilio/local SMS provider; 999 API if available |
-| **Integration** | Extend `emergency.service.ts` |
-| **Risks** | Legal compliance; false alarms |
-
-## 5. BullMQ workers — **Planned**
+## 4. BullMQ workers — **Planned**
 
 | Area | Guidance |
 |------|----------|
@@ -1677,14 +1569,12 @@ flowchart TD
 ## Known limitations
 
 - No in-app traffic layer (deep link only)
-- No guaranteed emergency SMS/999
 - Dynamic pooling and pool switching not shipped
 - BullMQ not running
 - Some RLS gaps on cache tables
 - Client-server parity not fully E2E tested (per audit)
 - `@ridepool/shared-types` not consumed by clients
 - Authorization middleware defined but not wired
-- CarPoolApp wallet/safety screens stubbed despite backend APIs existing
 
 ---
 
@@ -1732,7 +1622,6 @@ Full procedures: `__docs__/operations/disaster-recovery.md`
 - Driver online/offline, location updates, earnings
 - Priyo Sathi core APIs
 - Messaging, ratings, promos — **backend**
-- Safety endpoints, trip sharing, emergency contacts — **backend**
 - Smart combined route caching
 - Rate limiting, input sanitization, audit logging
 - Docker MVP and production compose files
@@ -1756,7 +1645,6 @@ Full procedures: `__docs__/operations/disaster-recovery.md`
 | Admin analytics UI | API only |
 | E2E client-server validation | Incomplete per audit |
 | CarPoolApp wallet UI | Stubbed (hardcoded data) |
-| CarPoolApp safety center UI | Stubbed (hardcoded contacts) |
 | DriverApp combined-route | Uses legacy `/route` endpoint |
 | DriverApp earnings display | Some hardcoded stats |
 | Authorization middleware | Defined, not wired to routes |
@@ -1769,7 +1657,6 @@ Full procedures: `__docs__/operations/disaster-recovery.md`
 - Pool switching (30s FCFS)
 - Purple zone / walk-to-pickup UX
 - Supply/demand cap and driver diversion
-- Real 999/SMS integration
 - Customer rating priority in competitive matching (verify `poolMatching.service.ts`)
 - Male-only option removed per MVP spec (only female-only + any for females)
 
@@ -1781,14 +1668,12 @@ Full procedures: `__docs__/operations/disaster-recovery.md`
 - Wire or remove BullMQ
 - Wire `authorization.ts` middleware to routes
 - Migrate DriverApp to `/combined-route`
-- Wire CarPoolApp wallet/safety screens to APIs
 - Remove or implement `/api/driver/priority-location`
 - Resolve duplicate H3 resolution config
 - Wire or remove orphan services (geofencing, fraud, incentive, etc.)
 - Expand integration/E2E tests
 - Align Zod versions (v4 server vs v3 DriverApp)
 - Adopt `@ridepool/shared-types` in clients
-- Consolidate duplicate emergency contacts APIs
 
 ## Known issues
 
@@ -1835,7 +1720,6 @@ Full procedures: `__docs__/operations/disaster-recovery.md`
 | Start ride | POST | `/api/driver/ride/start` |
 | Complete ride | POST | `/api/driver/ride/complete` |
 | Process payment | POST | `/api/payments/process` |
-| SOS | POST | `/api/safety/sos` |
 | Health check | GET | `/health/live` |
 
 ---

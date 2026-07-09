@@ -4,7 +4,7 @@ import { Card } from "../ui/card";
 import { Switch } from "../ui/switch";
 import { Button } from "../ui/button";
 import { Separator } from "../ui/separator";
-import { Bell, Volume2, MapPin, Navigation, Globe, Moon, Smartphone, ArrowLeft } from "lucide-react-native";
+import { Bell, Volume2, MapPin, Navigation, Moon, Smartphone, ArrowLeft } from "lucide-react-native";
 import { useState } from "react";
 import { useTheme } from "../../contexts/ThemeContext";
 
@@ -116,21 +116,6 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
           <Text className="font-semibold text-lg mb-4" style={{ color: colors.text }}>App Settings</Text>
           
           <View className="space-y-4">
-            <View className="flex-row items-center justify-between py-2">
-              <View className="flex-row items-center flex-1">
-                <Globe size={20} color={colors.icon} />
-                <View className="ml-3 flex-1">
-                  <Text className="font-medium" style={{ color: colors.text }}>Language</Text>
-                  <Text className="text-sm" style={{ color: colors.textSecondary }}>English (US)</Text>
-                </View>
-              </View>
-              <Button variant="ghost" size="sm">
-                <Text style={{ color: colors.primary }}>Change</Text>
-              </Button>
-            </View>
-
-            <Separator style={{ backgroundColor: colors.border }} />
-
             <View className="flex-row items-center justify-between py-2">
               <View className="flex-row items-center flex-1">
                 <Moon size={20} color={colors.icon} />

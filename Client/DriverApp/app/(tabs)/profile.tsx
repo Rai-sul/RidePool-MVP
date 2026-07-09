@@ -15,10 +15,6 @@ export default function Profile() {
     router.push('/contact-info');
   };
 
-  const handleNavigateToSafety = () => {
-    router.push('/safety');
-  };
-
   const handleNavigateToHelp = () => {
     router.push('/help');
   };
@@ -37,7 +33,6 @@ export default function Profile() {
     <ProfileScreen
       onNavigateToSettings={handleNavigateToSettings}
       onNavigateToContactInfo={handleNavigateToContactInfo}
-      onNavigateToSafety={handleNavigateToSafety}
       onNavigateToHelp={handleNavigateToHelp}
       onLogout={handleLogout}
     />

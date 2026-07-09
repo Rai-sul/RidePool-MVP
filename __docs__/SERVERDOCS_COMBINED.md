@@ -42,7 +42,6 @@ Key services in `Server/src/services/`:
 - `notification.service.ts`: FCM push (stores in DB when key is missing).
 - `penalty.service.ts`: Cancellation cooldown tracking.
 - `incentive.service.ts`: Driver bonus tracking.
-- `emergency.service.ts`: SOS/incident logging and contact notification (delivery placeholder).
 
 ---
 
@@ -78,10 +77,9 @@ Key services in `Server/src/services/`:
 
 ---
 
-## 7. Notifications and Safety
+## 7. Notifications
 
 - **Push notifications:** FCM if `FCM_SERVER_KEY` is configured; otherwise stored in DB.
-- **SOS/Incidents:** Stored in `safety_incidents` with optional emergency contact notifications.
 - **Emergency delivery:** External SMS/999 delivery is a placeholder (logged in DB).
 
 ---
@@ -124,5 +122,5 @@ Key services in `Server/src/services/`:
 ## 10. Status Notes (Current)
 
 - Payment gateway integration is a placeholder for card/mobile banking.
-- FCM and emergency delivery require external credentials to become fully live.
+- FCM requires external credentials to become fully live.
 - BullMQ is present but not initialized in `app.ts` (if needed, wire a worker process).

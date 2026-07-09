@@ -229,7 +229,7 @@ export function HelpSupportScreen({ onBack }: HelpSupportScreenProps) {
           <Text className="font-semibold mb-2">🕐 Support Operating Hours</Text>
           <Text className="text-sm text-gray-700">Monday - Friday: 9:00 AM - 9:00 PM</Text>
           <Text className="text-sm text-gray-700">Saturday - Sunday: 10:00 AM - 6:00 PM</Text>
-          <Text className="text-sm text-gray-700 mt-2">Emergency support available 24/7</Text>
+          <Text className="text-sm text-gray-700 mt-2">Support available 24/7</Text>
         </Card>
       </View>
       </ScrollView>

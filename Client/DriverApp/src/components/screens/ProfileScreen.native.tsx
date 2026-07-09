@@ -14,7 +14,6 @@ import {
   LogOut,
   Settings,
   ChevronRight,
-  Shield,
   Edit
 } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -23,7 +22,6 @@ import { useDriverStore } from "../../store/useDriverStore";
 interface ProfileScreenProps {
   onNavigateToSettings?: () => void;
   onNavigateToContactInfo?: () => void;
-  onNavigateToSafety?: () => void;
   onNavigateToHelp?: () => void;
   onLogout?: () => void;
 }
@@ -31,7 +29,6 @@ interface ProfileScreenProps {
 export function ProfileScreen({ 
   onNavigateToSettings,
   onNavigateToContactInfo,
-  onNavigateToSafety,
   onNavigateToHelp,
   onLogout 
 }: ProfileScreenProps) {
@@ -142,22 +139,6 @@ export function ProfileScreen({
                 <View className="flex-row items-center gap-3">
                   <Settings size={20} color={colors.icon} />
                   <Text className="font-medium" style={{ color: colors.text }}>Settings</Text>
-                </View>
-                <ChevronRight size={20} color={colors.textSecondary} />
-              </View>
-            </Button>
-
-            <Separator className="my-1" style={{ backgroundColor: colors.border }} />
-
-            <Button 
-              variant="ghost" 
-              className="w-full h-12 justify-start"
-              onPress={onNavigateToSafety}
-            >
-              <View className="flex-row items-center justify-between w-full px-2">
-                <View className="flex-row items-center gap-3">
-                  <Shield size={20} color={colors.icon} />
-                  <Text className="font-medium" style={{ color: colors.text }}>Safety & Security</Text>
                 </View>
                 <ChevronRight size={20} color={colors.textSecondary} />
               </View>

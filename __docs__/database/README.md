@@ -77,23 +77,6 @@ Active cooldown penalties.
 +-------------------+--------------+--------------------------------+
 ```
 
-### emergency_notifications
-Logs of emergency notifications sent.
-
-```
-+-------------------+--------------+--------------------------------+
-| Column            | Type         | Description                    |
-+-------------------+--------------+--------------------------------+
-| id                | UUID PK      | Notification ID                |
-| incident_id       | UUID FK      | Related safety incident        |
-| contact_id        | UUID FK      | Emergency contact notified     |
-| contact_phone     | VARCHAR(20)  | Phone number used              |
-| message           | TEXT         | Message sent                   |
-| sent_at           | TIMESTAMPTZ  | Send timestamp                 |
-| status            | VARCHAR(20)  | PENDING, SENT, DELIVERED, FAILED|
-+-------------------+--------------+--------------------------------+
-```
-
 ## Database Functions
 
 ### atomic_join_pool(p_pool_id, p_user_id, p_ride_id)

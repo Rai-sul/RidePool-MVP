@@ -12,7 +12,7 @@ const helpTopics = [
   { icon: FileText, title: 'Trip Issues', items: ['Cancel a trip', 'Report a problem', 'Lost items'] },
   { icon: FileText, title: 'Payment & Billing', items: ['Payment methods', 'Refunds', 'Promo codes'] },
   { icon: FileText, title: 'Account', items: ['Update profile', 'Verify account', 'Delete account'] },
-  { icon: FileText, title: 'Safety', items: ['Report safety issue', 'Emergency help', 'Privacy settings'] },
+  { icon: FileText, title: 'Privacy', items: ['Privacy settings', 'Account data', 'Notification controls'] },
 ];
 
 export default function HelpSupport({ onBack, onChatPress }: HelpSupportProps) {

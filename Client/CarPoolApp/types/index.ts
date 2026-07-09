@@ -5,8 +5,6 @@ export interface User {
   full_name?: string;
   date_of_birth?: string;
   profile_picture_url?: string;
-  emergency_contact_name?: string;
-  emergency_contact_phone?: string;
   average_rating?: number;
   total_rides?: number;
   account_status?: string;
@@ -251,24 +249,6 @@ export interface Conversation {
   participants: User[];
   last_message?: Message;
   unread_count: number;
-}
-
-export interface EmergencyContact {
-  id: string;
-  user_id: string;
-  name: string;
-  phone: string;
-  relationship?: string;
-}
-
-export interface SafetyIncident {
-  id: string;
-  user_id: string;
-  ride_id?: string;
-  incident_type: string;
-  description: string;
-  status: string;
-  created_at?: string;
 }
 
 export interface ApiResponse<T = any> {

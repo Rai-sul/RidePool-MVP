@@ -4,7 +4,7 @@ import { Badge } from "../ui/badge";
 import { Power, ArrowLeft } from "lucide-react-native";
 
 interface AppHeaderProps {
-  currentScreen: 'home' | 'earnings' | 'profile' | 'settings' | 'contactInfo' | 'safety' | 'help';
+  currentScreen: 'home' | 'earnings' | 'profile' | 'settings' | 'contactInfo' | 'help';
   isOnline: boolean;
   onToggleOnline: () => void;
   onBack?: () => void;

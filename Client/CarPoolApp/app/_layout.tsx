@@ -96,9 +96,7 @@ function AppLayout() {
                 <Stack.Screen name="your-ratings" options={{ headerShown: true, headerTitle: 'All Ratings' }} />
                 <Stack.Screen name="settings" options={{ headerShown: true, headerTitle: 'Settings' }} />
                 <Stack.Screen name="notifications" options={{ headerShown: true, headerTitle: 'Notifications' }} />
-                <Stack.Screen name="language" options={{ headerShown: true, headerTitle: 'Language' }} />
                 <Stack.Screen name="gender-preference" options={{ headerShown: true, headerTitle: 'Gender Preference' }} />
-                <Stack.Screen name="safety-center" options={{ headerShown: true, headerTitle: 'Safety Center' }} />
                 <Stack.Screen name="profile" options={{ headerShown: false }} />
                 <Stack.Screen name="ride-confirmation" options={{ headerShown: false }} />
                 <Stack.Screen name="searching" options={{ headerShown: false }} />

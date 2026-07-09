@@ -15,9 +15,7 @@ As a sedan can carry at most three passengers (excluding the driver), the app fi
 
 **Customer Rating:** Passengers who share rides will be able to rate one another based on behavior during the trip, and each individual’s rating will influence future ride searches. For example, when a customer requests a shared ride and three other passengers are eligible for the same trip, but only two spots are available (since one person is already in the queue and a maximum of two more can join), **the system will prioritize the two passengers with the highest ratings**. This entire selection process will take place internally within the system to ensure that riders with better ratings receive preference in competitive matching scenarios. 
 
-**SOS Button:** If any passenger feels **endangered** during the trip due to an incident, there will be an **SOS button** within the app. **Pressing this button will immediately send a distress request to 999**. Along with the alert, the system will transmit **key details such as the car’s information, the driver’s identity, and the other passengers’ details** to ensure quick and effective emergency response.
-
-**Gender-Based Matching:** Gender-based matching allows customers to select the gender of the co-passengers they prefer to ride with. There will be three options available to all users: **male-only, female-only, and any**. **Every passenger must choose one of these options, even if it is “any.”** This gender preference will directly influence how rides are matched, serving as both a safety measure and a feature that enhances passenger comfort.
+**Gender-Based Matching:** Gender-based matching allows customers to select the gender of the co-passengers they prefer to ride with. There will be three options available to all users: **male-only, female-only, and any**. **Every passenger must choose one of these options, even if it is “any.”** This gender preference will directly influence how rides are matched, serving as a preference and comfort feature.
 
 **Priyo Shathi (Favorites):** Priyo Shathi is a “favorites” feature that allows customers to add up to five other passengers to their favorites list. This feature influences ride matching by giving **favorites the highest priority** during searches. For example, if P1 adds P2 to their Priyo Shathi list, P2 will receive a notification whenever P1 searches for a ride, inviting them to join the queue. However, before sending the notification, the system will check **whether including P2 is feasible**; it will attempt to add them first, but if doing so would mean losing too many nearby passengers, **the notification will not be sent.** This decision will be handled algorithmically to balance efficiency and availability. The Priyo Shathi feature aims to speed up the ride-searching process by helping queues fill more quickly with preferred companions.
 
@@ -296,9 +294,7 @@ The app will run a query on the priyo sathi table so that if his/her friends or 
 
 **MVP ONLY FEATURES ( FIXED NO CHANGE)**
 
-**Gender-Based Matching:** Gender-based matching allows customers to select the gender of the co-passengers they prefer to ride with. There will be three options available to all users: **female-only(exclusive to females), and Any(all gender)**. **Every female passenger must choose one of these options, even if it is “any.”** This gender preference will directly influence how rides are matched, serving as both a safety measure and a feature that enhances passenger comfort. **(NO CHANGE)**
-
-**SOS Button:** If any passenger feels **endangered** during the trip due to an incident, there will be an **SOS button** within the app. **Pressing this button will immediately send a distress request to 999**. Along with the alert, the system will transmit **key details such as the car’s information, the driver’s identity, and the other passengers’ details** to ensure quick and effective emergency response. Need to contact Police Stations.  **(NO CHANGE)**
+**Gender-Based Matching:** Gender-based matching allows customers to select the gender of the co-passengers they prefer to ride with. There will be three options available to all users: **female-only(exclusive to females), and Any(all gender)**. **Every female passenger must choose one of these options, even if it is “any.”** This gender preference will directly influence how rides are matched, serving as a preference and comfort feature. **(NO CHANGE)**
 
 **Cooldown Period:** After 3 deliberate cancellations within 5 mins, 7 mins cooldown (penalty) will be issued. Cancellation counter refreshes daily. Penalty increases dynamically. Warning will NOT be issued if cancellation happens within 30 seconds. (**NO CHANGE)**
 
@@ -351,7 +347,6 @@ Passenger \--------------------------
  \- Cancel Ride (Cooldown)  
  \- Get Incentive  
  \- Pay Fare (+ Surcharge/Discount)  
- \- Press SOS (→ Police)
 
 Driver \-----------------------------  
  \- Accept Ride Request  
@@ -369,12 +364,6 @@ System \-----------------------------
  \- Handle Dynamic Pooling (votes, savings, fares)  
  \- Calculate Incentives  
  \- Apply Surcharge  
- \- Send SOS Data to Police
-
-Police / Emergency \-----------------  
- \- Receive SOS  
- \- Access Passenger \+ Car \+ Driver details
-
 # Functional \- Non functional
 
 **Functional:**  
@@ -395,13 +384,10 @@ Police / Emergency \-----------------
 4. Cooldown period  
    1. After 3 deliberate cancellations within 5 minutes, a cooldown penalty applies.  
    2. Cancellation within 30 seconds does not count as deliberate.  
-5. SOS  
-   1. In-trip SOS triggers an emergency alert to 999  
-   2. Automatically sends car, driver, and co-passenger details.  
-6. Matching Logic   
+5. Matching Logic
    1. Destination match  
    2. Same hexagon  
-7. Lookup time ( **time it takes to create a 2/4 pool \- 3 mins** )  
+6. Lookup time ( **time it takes to create a 2/4 pool \- 3 mins** )
    1. If the system fails to create a (2 or more) /4 pool within LT the pool is cancelled and user can research   
    2. If 2 or more passengers \+ driver → ride starts or auto-converts into an active pool.  
 8. Financial Service  
@@ -1191,4 +1177,3 @@ Here's the **complete and fixed API documentation** for all model view controlle
 This is your **complete, production-ready API documentation**\! 🚀 Each endpoint follows REST standards and includes proper request/response structures.
 
 # Tab 9
-

@@ -22,17 +22,16 @@
 12. [Pool Matching Algorithm (H3)](#12-pool-matching-algorithm-h3)
 13. [Payment & Wallet System](#13-payment--wallet-system)
 14. [Messaging System](#14-messaging-system)
-15. [Safety & Emergency Features](#15-safety--emergency-features)
-16. [Priyo Sathi (Travel with Friends)](#16-priyo-sathi-travel-with-friends)
-17. [Rating System](#17-rating-system)
-18. [Navigation & Routing](#18-navigation--routing)
-19. [API Reference](#19-api-reference)
-20. [Middleware Stack](#20-middleware-stack)
-21. [State Management](#21-state-management)
-22. [Error Handling Patterns](#22-error-handling-patterns)
-23. [Environment Configuration](#23-environment-configuration)
-24. [Build, Test & Deploy](#24-build-test--deploy)
-25. [Detailed File-to-File Data Flow Traces](#25-detailed-file-to-file-data-flow-traces)
+15. [Priyo Sathi (Travel with Friends)](#15-priyo-sathi-travel-with-friends)
+16. [Rating System](#16-rating-system)
+17. [Navigation & Routing](#17-navigation--routing)
+18. [API Reference](#18-api-reference)
+19. [Middleware Stack](#19-middleware-stack)
+20. [State Management](#20-state-management)
+21. [Error Handling Patterns](#21-error-handling-patterns)
+22. [Environment Configuration](#22-environment-configuration)
+23. [Build, Test & Deploy](#23-build-test--deploy)
+24. [Detailed File-to-File Data Flow Traces](#24-detailed-file-to-file-data-flow-traces)
 
 ---
 
@@ -56,7 +55,7 @@ RidePool is a carpooling platform built for Bangladesh (Dhaka). Passengers creat
 - Currency: **BDT (Bangladeshi Taka)**
 - Payment methods: Wallet, Cash, Card, Mobile Banking (wallet top-ups support bKash, Nagad, Rocket)
 - Routing provider: Google Maps Directions API + Google Maps app deep links (client maps via react-native-maps and Leaflet; Mapbox token optional for tiles)
-- Language: English (default), Bangla (i18n support)
+- Language: English
 
 ---
 
@@ -194,18 +193,13 @@ Server/
 │   │   ├── wallet.routes.ts      # /api/wallet/*
 │   │   ├── rating.routes.ts      # /api/ratings/*
 │   │   ├── messaging.routes.ts   # /api/messages/*
-│   │   ├── safety.routes.ts      # /api/safety/*
 │   │   ├── priyoSathi.routes.ts  # /api/priyo-sathi/*
 │   │   ├── analytics.routes.ts   # /api/analytics/*
-│   │   ├── heatmap.routes.ts     # /api/heatmap/*
-│   │   ├── shift.routes.ts       # /api/shifts/*
 │   │   ├── navigation.routes.ts  # /api/navigation/*
 │   │   ├── offline.routes.ts     # /api/offline/*
-│   │   ├── i18n.routes.ts        # /api/i18n/*
 │   │   ├── savedPlaces.routes.ts # /api/saved-places/*
-│   │   ├── emergencyContacts.routes.ts  # /api/emergency-contacts/*
 │   │   ├── promo.routes.ts       # /api/promos/*
-│   │   └── rideSharing.routes.ts # /api/sharing/*
+│   │   └── ...
 │   ├── controllers/              # 23 controller files
 │   ├── services/                 # 41 service files
 │   ├── middleware/
@@ -331,7 +325,6 @@ shared/
 │   ├── driver.ts         # Vehicle, Driver, DriverStats, GoOnlineRequest
 │   ├── payment.ts        # Wallet, Payment, WalletTransaction
 │   ├── messaging.ts      # Message, Conversation, SendMessageRequest
-│   ├── safety.ts         # SafetyIncident, EmergencyContact
 │   └── misc.ts           # Rating, PriyoSathi, SavedPlace, PromoCode
 └── dist/                 # Compiled output
 ```
@@ -367,16 +360,13 @@ shared/
 | `wallets` | User wallet balance |
 | `wallet_transactions` | Credit/debit/refund history |
 
-### Social & Safety Tables
+### Social Tables
 
 | Table | Purpose |
 |-------|---------|
 | `messages` | Chat messages between users |
 | `conversations` | Chat conversation threads |
 | `ratings` | Post-trip ratings and reviews |
-| `emergency_contacts` | User emergency contacts |
-| `safety_incidents` | SOS reports |
-| `ride_sharing` | Live trip sharing links |
 | `priyo_sathis` | Friend/companion relationships |
 | `saved_places` | User's saved locations (home, work) |
 | `notifications` | Push notification records |
@@ -694,7 +684,7 @@ Earnings Dashboard
 
 Two mechanisms work together:
 1. **Supabase Realtime (client)**: WebSocket-based `postgres_changes` for chat/pool updates
-2. **Polling Fallback**: Always-on polling safety net for realtime disconnects
+2. **Polling Fallback**: Always-on backup path for realtime disconnects
 
 ### Passenger Hook (`usePoolRealtime.ts` — CarPoolApp)
 
@@ -941,34 +931,6 @@ Badge shown on co-rider's chat icon in TripProgress.
 
 ---
 
-## 15. Safety & Emergency Features
-
-### SOS System
-
-| Endpoint | Description |
-|----------|-------------|
-| `POST /api/safety/sos` | Trigger emergency SOS alert |
-| `POST /api/safety/incidents` | Report safety incident |
-| `GET /api/safety/incidents` | Get active incidents |
-| `POST /api/safety/share-trip` | Share live trip with contacts |
-
-### Emergency Contacts
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/emergency-contacts` | List emergency contacts |
-| `POST /api/emergency-contacts` | Add emergency contact |
-| `PUT /api/emergency-contacts/:id` | Update emergency contact |
-| `DELETE /api/emergency-contacts/:id` | Remove contact |
-| `POST /api/emergency-contacts/:id/primary` | Set as primary |
-| `GET /api/safety/emergency-contacts` | Safety namespace aliases |
-
-### Trip Sharing
-
-- Generate unique token-based URL
-- Anyone with the link can track the trip in real-time (no auth needed)
-- `GET /api/sharing/track/:token` — public endpoint
-
 ### Gender Preference
 
 - Users can set ride preference: `ANY` or `FEMALE_ONLY`
@@ -977,7 +939,7 @@ Badge shown on co-rider's chat icon in TripProgress.
 
 ---
 
-## 16. Priyo Sathi (Travel with Friends)
+## 15. Priyo Sathi (Travel with Friends)
 
 ### Concept
 
@@ -1005,7 +967,7 @@ Badge shown on co-rider's chat icon in TripProgress.
 
 ---
 
-## 17. Rating System
+## 16. Rating System
 
 ### Post-Trip Rating
 
@@ -1039,7 +1001,7 @@ User's `average_rating` in the `users` table is automatically updated after each
 
 ---
 
-## 18. Navigation & Routing
+## 17. Navigation & Routing
 
 ### Route Providers
 
@@ -1074,7 +1036,7 @@ https://www.google.com/maps/dir/?api=1&origin=LAT,LNG&destination=LAT,LNG&waypoi
 
 ---
 
-## 19. API Reference
+## 18. API Reference
 
 ### Base URL
 
@@ -1232,36 +1194,19 @@ Error response:
 | POST | `/messages/:messageId/read` | Yes | Mark a message as read |
 | POST | `/:messageId/read` | Yes | Mark a message as read (alias) |
 
-#### Safety (`/api/safety`)
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/sos` | Yes | Trigger SOS alert |
-| POST | `/incidents` | Yes | Report incident |
-| GET | `/incidents` | Yes | Get active incidents |
-| POST | `/share-trip` | Yes | Share trip link |
-| GET | `/emergency-contacts` | Yes | Get emergency contacts |
-| POST | `/emergency-contacts` | Yes | Add emergency contact |
-| DELETE | `/emergency-contacts/:contactId` | Yes | Remove emergency contact |
-
 #### Additional Endpoints
 
 - **Priyo Sathi** (`/api/priyo-sathi`) — `GET /`, `POST /`, `GET /requests`, `POST /requests/:requestId/respond`, `POST /:companionId/invite`, `GET /invite/:rideId`, `POST /invite/:rideId/accept`, `DELETE /:companionId`, `POST /:companionId/block`, `GET /nearby`
 - **Promos** (`/api/promos`) — `POST /validate`, `GET /active`, `GET /history`, `POST /`, `DELETE /:promoId`
 - **Saved Places** (`/api/saved-places`) — `GET /`, `POST /`, `GET /:placeId`, `PUT /:placeId`, `DELETE /:placeId`
-- **Emergency Contacts** (`/api/emergency-contacts`) — `GET /`, `POST /`, `PUT /:contactId`, `DELETE /:contactId`, `POST /:contactId/primary`, `GET /primary`
-- **Ride Sharing** (`/api/sharing`) — `POST /share`, `GET /active`, `DELETE /:shareId`, `GET /track/:token`
 - **Analytics** (`/api/analytics`) — `GET /dashboard`, `GET /rides`, `GET /drivers`, `GET /users`, `GET /revenue`
-- **Heatmap** (`/api/heatmap`) — `GET /`, `GET /demand`, `GET /surge-zones`, `GET /recommendations`, `GET /peak-hours`, `GET /patterns`
-- **Shifts** (`/api/shifts`) — `GET /`, `POST /`, `PUT /:shiftId`, `DELETE /:shiftId`, `DELETE /day/:dayOfWeek`, `GET /stats`, `GET /reminders`, `GET /status`
-- **Navigation** (`/api/navigation`) — `POST /route`, `POST /state`, `POST /voice-instruction`, `GET /waypoint-message`, `GET /recalculating`, `POST /deep-link`
+- **Navigation** (`/api/navigation`) — `POST /deep-link`
 - **Offline** (`/api/offline`) — `GET /package`, `POST /sync`, `POST /resolve-conflicts`, `GET /pending`, `GET /status`, `DELETE /clear`
-- **i18n** (`/api/i18n`) — `GET /translations`, `GET /languages`, `POST /translate`, `GET /format/currency`, `GET /format/distance`, `GET /format/duration`, `GET /user-language`, `PUT /user-language`
 - **Health** (`/health`) — Server health checks
 
 ---
 
-## 20. Middleware Stack
+## 19. Middleware Stack
 
 ### Request Processing Order (from `app.ts`)
 
@@ -1294,7 +1239,6 @@ optionalAuth(req, res, next)
 | `authLimiter` | 15 min | 20 | Auth endpoints |
 | `searchLimiter` | 1 min | 30 | Pool search |
 | `paymentLimiter` | 1 min | 10 | Payment processing |
-| `sosLimiter` | 1 min | 5 | SOS triggers |
 | `passwordResetLimiter` | 15 min | 5 | Password reset |
 
 ### Validation Middleware
@@ -1318,7 +1262,7 @@ Validates request data against Zod schemas. Returns 400 with detailed error mess
 
 ---
 
-## 21. State Management
+## 20. State Management
 
 ### CarPoolApp
 
@@ -1368,7 +1312,7 @@ Validates request data against Zod schemas. Returns 400 with detailed error mess
 
 ---
 
-## 22. Error Handling Patterns
+## 21. Error Handling Patterns
 
 ### Server Error Handler
 
@@ -1412,7 +1356,7 @@ patches/
 
 ---
 
-## 23. Environment Configuration
+## 22. Environment Configuration
 
 ### Server (`Server/.env`)
 
@@ -1466,7 +1410,7 @@ When `MVP_MODE=true` (development):
 
 ---
 
-## 24. Build, Test & Deploy
+## 23. Build, Test & Deploy
 
 ### Server
 
@@ -1599,7 +1543,7 @@ Defined in `.github/workflows/ci.yml`:
 
 ---
 
-## 25. Detailed File-to-File Data Flow Traces
+## 24. Detailed File-to-File Data Flow Traces
 
 This section provides **exhaustive step-by-step traces** showing exactly how data moves from file to file, function to function, for every major scenario in both the passenger (CarPoolApp) and driver (DriverApp) applications.
 

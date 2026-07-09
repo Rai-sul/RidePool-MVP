@@ -38,7 +38,7 @@
 |---------|-------------|
 | **Smart Pool Matching** | Uses H3 hexagonal geospatial indexing for sub-millisecond matching of riders heading similar directions |
 | **Cost Savings** | Riders save 25-40% compared to solo rides through intelligent pooling |
-| **Safety-First Design** | Female-only ride options, SOS alerts, emergency contacts, trip sharing |
+| **Preference-Based Matching** | Female-only ride options and rider preference controls |
 | **Social Features** | Priyo Sathi (trusted companions) - ride preferentially with friends |
 | **Realtime Updates** | Supabase Realtime channels with polling fallback in clients |
 | **Payment Flexibility** | Wallet + cash flows live; card/mobile banking gateway placeholders |
@@ -75,10 +75,8 @@ To revolutionize urban transportation in Bangladesh by making carpooling the def
    - Provide transparent, predictable pricing
    - Enable wallet-based payments for convenience
 
-2. **Safe & Reliable Service**
-   - Female-only ride options for women's safety
-   - Real-time trip sharing with emergency contacts
-   - SOS button with instant alerts
+2. **Reliable Service**
+   - Female-only ride options
    - Driver & passenger verification systems
 
 3. **Efficient Matching**
@@ -256,28 +254,20 @@ Carpool-dev/
 │   │   │   ├── constants.ts        # App constants
 │   │   │   ├── env.ts              # Centralized configuration
 │   │   │   └── supabase.ts         # Supabase client
-│   │   ├── controllers/            # Request handlers (23 files)
+│   │   ├── controllers/            # Request handlers
 │   │   │   ├── auth.controller.ts
 │   │   │   ├── pool.controller.ts
 │   │   │   ├── driver.controller.ts
 │   │   │   ├── analytics.controller.ts
-│   │   │   ├── heatmap.controller.ts
-│   │   │   ├── i18n.controller.ts
 │   │   │   ├── navigation.controller.ts
-│   │   │   ├── shift.controller.ts
-│   │   │   └── ... (15 more)
-│   │   ├── services/               # Business logic (37 files)
+│   │   │   └── ...
+│   │   ├── services/               # Business logic
 │   │   │   ├── poolMatching.service.ts
 │   │   │   ├── fare.service.ts
 │   │   │   ├── googleMaps.service.ts
 │   │   │   ├── smartRoute.service.ts
 │   │   │   ├── routeOverlap.service.ts
-│   │   │   ├── heatmap.service.ts
-│   │   │   ├── geofencing.service.ts
-│   │   │   ├── fraudDetection.service.ts
-│   │   │   ├── voiceNavigation.service.ts
-│   │   │   ├── circuitBreaker.service.ts
-│   │   │   └── ... (27 more)
+│   │   │   └── ...
 │   │   ├── middleware/             # Request pipeline (8 files)
 │   │   │   ├── auth.ts             # JWT authentication
 │   │   │   ├── validation.ts       # Input validation
@@ -287,16 +277,13 @@ Carpool-dev/
 │   │   │   ├── securityHeaders.ts  # Helmet security headers
 │   │   │   ├── authorization.ts    # Role-based access
 │   │   │   └── auditMiddleware.ts  # Audit logging
-│   │   ├── routes/                 # API routes (22 files)
+│   │   ├── routes/                 # API routes
 │   │   │   ├── auth.routes.ts
 │   │   │   ├── pool.routes.ts
 │   │   │   ├── driver.routes.ts
 │   │   │   ├── analytics.routes.ts
-│   │   │   ├── heatmap.routes.ts
 │   │   │   ├── navigation.routes.ts
-│   │   │   ├── shift.routes.ts
-│   │   │   ├── i18n.routes.ts
-│   │   │   └── ... (14 more)
+│   │   │   └── ...
 │   │   ├── types/                  # TypeScript types
 │   │   └── utils/                  # Utilities (H3, logging)
 │   ├── supabase/migrations/        # Database migrations (5 files)
@@ -312,7 +299,7 @@ Carpool-dev/
 │
 ├── Client/
 │   ├── CarPoolApp/                 # Rider Mobile App
-│   │   ├── app/                    # Expo Router screens (34 files)
+│   │   ├── app/                    # Expo Router screens
 │   │   │   ├── (tabs)/             # Tab navigation
 │   │   │   │   ├── index.tsx       # Home tab
 │   │   │   │   └── explore.tsx     # Explore tab
@@ -323,15 +310,13 @@ Carpool-dev/
 │   │   │   ├── searching.tsx       # Pool search
 │   │   │   ├── trip-progress.tsx   # Active trip
 │   │   │   ├── wallet.tsx          # Payment wallet
-│   │   │   ├── safety-center.tsx   # Safety features
 │   │   │   ├── friends.tsx         # Priyo Sathi
-│   │   │   └── ... (24 more screens)
-│   │   ├── components/             # Reusable components (192 files)
+│   │   │   └── ...
+│   │   ├── components/             # Reusable components
 │   │   │   ├── HomeMap.tsx         # Map components (native/web)
 │   │   │   ├── TripProgress.tsx    # Trip tracking
 │   │   │   ├── RideConfirmation.tsx
 │   │   │   ├── WalletScreen.tsx
-│   │   │   ├── SafetyCenter.tsx
 │   │   │   ├── ui/                 # Base UI components
 │   │   │   └── figma/              # Figma-derived components
 │   │   ├── contexts/               # React contexts (3 files)
@@ -345,13 +330,12 @@ Carpool-dev/
 │   │   │   ├── useLocation.ts      # GPS tracking
 │   │   │   ├── usePayments.ts      # Payment operations
 │   │   │   └── ... (6 more)
-│   │   ├── services/               # API services (9 files)
+│   │   ├── services/               # API services
 │   │   │   ├── auth.service.ts
 │   │   │   ├── pool.service.ts
 │   │   │   ├── ride.service.ts
 │   │   │   ├── driver.service.ts
 │   │   │   ├── payment.service.ts
-│   │   │   ├── safety.service.ts
 │   │   │   ├── messaging.service.ts
 │   │   │   ├── priyoSathi.service.ts
 │   │   │   └── googleMapsService.ts
@@ -360,7 +344,7 @@ Carpool-dev/
 │   │   └── package.json
 │   │
 │   └── DriverApp/                  # Driver Mobile App
-│       ├── app/                    # Expo Router screens (12 files)
+│       ├── app/                    # Expo Router screens
 │       │   ├── (tabs)/             # Tab navigation
 │       │   │   ├── _layout.tsx     # Tab layout
 │       │   │   ├── home.tsx        # Pool discovery
@@ -371,7 +355,6 @@ Carpool-dev/
 │       │   ├── register.tsx        # Driver registration
 │       │   ├── trip-progress.tsx   # Active trip management
 │       │   ├── settings.tsx        # App settings
-│       │   ├── safety.tsx          # Safety features
 │       │   └── help.tsx            # Help & support
 │       ├── src/
 │       │   ├── components/         # UI components (87 files)
@@ -405,7 +388,6 @@ Carpool-dev/
 │   │   ├── driver.ts               # Driver & Vehicle types
 │   │   ├── payment.ts              # Payment & Wallet types
 │   │   ├── messaging.ts            # Chat types
-│   │   ├── safety.ts               # Safety types
 │   │   ├── api.ts                  # API types
 │   │   └── misc.ts                 # Ratings, Promo, etc.
 │   └── package.json
@@ -486,24 +468,11 @@ Base Fare (CAR: ৳50, CNG: ৳30)
 - Pool ride (2 passengers): ৳65 each
 - **Savings: ৳90 per person (58%)**
 
-### 4. Safety Features
+### 4. Ride Preferences
 
 **Female-Only Rides:**
 - Women can request rides with only female co-passengers
 - Enforced at matching level - no mixed pools
-
-**Emergency SOS:**
-- One-tap emergency alert
-- Automatically shares location with emergency contacts
-- Notifies backend for incident tracking
-
-**Trip Sharing:**
-- Share live trip link with friends/family
-- Real-time location visible without app installation
-
-**Emergency Contacts:**
-- Store up to 5 trusted contacts
-- Auto-notified on SOS or trip share
 
 ### 5. Priyo Sathi (Trusted Companions)
 
@@ -536,11 +505,6 @@ Social feature allowing preferential matching with friends.
 - Performance bonuses for completed rides
 - Real-time earnings updates
 
-**Shift Management:**
-- Track online/offline hours
-- Shift-based earnings reporting
-- Availability scheduling
-
 ### 7. Wallet & Payments
 
 **Prepaid Wallet System:**
@@ -555,22 +519,6 @@ Social feature allowing preferential matching with friends.
 4. Receipt notification sent
 
 ### 8. Advanced Features
-
-**Analytics & Heatmaps:**
-- Demand heatmap visualization
-- Pool density analytics
-- Driver availability tracking
-- Peak hour insights
-
-**Internationalization (i18n):**
-- Multi-language support
-- Localized content delivery
-- Bengali and English support
-
-**Voice Navigation:**
-- Turn-by-turn voice instructions
-- Traffic-aware routing updates
-- Multi-language voice support
 
 **Geofencing:**
 - Service area boundaries
@@ -635,7 +583,6 @@ Social feature allowing preferential matching with friends.
 │    • Live driver location on map                                │
 │    • Optimized route with all pickup/dropoff points             │
 │    • Chat with driver & co-riders                               │
-│    • SOS button for emergencies                                 │
 │    • Driver marks your pickup/dropoff                           │
 └─────────────────────────┬───────────────────────────────────────┘
                           │
@@ -852,7 +799,6 @@ Daily Bonus: +৳100 per 3 completed rides
 |-------|---------|
 | `users` | User accounts, profiles, preferences |
 | `user_preferences` | Ride preferences (music, AC, pets) |
-| `emergency_contacts` | Up to 5 emergency contacts |
 | `saved_places` | Home, work, favorite locations |
 | `priyo_sathi` | Trusted companion relationships |
 | `device_tokens` | Push notification tokens |
@@ -890,13 +836,6 @@ Daily Bonus: +৳100 per 3 completed rides
 | `messages` | Individual messages |
 | `conversation_participants` | Thread membership |
 
-#### Safety Domain
-| Table | Purpose |
-|-------|---------|
-| `safety_incidents` | Reported incidents |
-| `ride_sharing` | Trip sharing records |
-| `sos_requests` | Emergency SOS records |
-
 #### System Domain
 | Table | Purpose |
 |-------|---------|
@@ -904,7 +843,6 @@ Daily Bonus: +৳100 per 3 completed rides
 | `audit_logs` | Admin action logs |
 | `app_metadata` | App configuration |
 | `route_cache` | Cached route data |
-| `demand_heatmap_cache` | Demand analytics |
 
 ### Key Indexes
 
@@ -942,20 +880,14 @@ All tables have RLS enabled with policies ensuring:
 | `driver.routes.ts` | `/driver` | Driver operations & earnings |
 | `payment.routes.ts` | `/payments` | Payment processing |
 | `wallet.routes.ts` | `/wallet` | Wallet operations |
-| `safety.routes.ts` | `/safety` | SOS & incident reporting |
 | `priyoSathi.routes.ts` | `/priyo-sathi` | Trusted companions |
 | `rating.routes.ts` | `/ratings` | User & driver ratings |
-| `rideSharing.routes.ts` | `/sharing` | Trip sharing links |
 | `messaging.routes.ts` | `/messages` | In-app messaging |
 | `promo.routes.ts` | `/promos` | Promo code management |
 | `savedPlaces.routes.ts` | `/saved-places` | Saved locations |
-| `emergencyContacts.routes.ts` | `/emergency-contacts` | Emergency contacts |
 | `analytics.routes.ts` | `/analytics` | Usage analytics |
-| `heatmap.routes.ts` | `/heatmap` | Demand heatmaps |
-| `shift.routes.ts` | `/shifts` | Driver shift management |
 | `offline.routes.ts` | `/offline` | Offline sync |
-| `navigation.routes.ts` | `/navigation` | Navigation & voice |
-| `i18n.routes.ts` | `/i18n` | Internationalization |
+| `navigation.routes.ts` | `/navigation` | Google Maps deep-link navigation |
 
 ### Authentication
 
@@ -1037,14 +969,6 @@ All tables have RLS enabled with policies ensuring:
 | `/promo/validate` | POST | Validate promo code |
 | `/promo/apply` | POST | Apply promo code |
 
-### Safety
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/safety/sos` | POST | Trigger SOS |
-| `/safety/incident` | POST | Report incident |
-| `/safety/share-trip` | POST | Share trip link |
-
 ### Messaging
 
 | Endpoint | Method | Description |
@@ -1053,32 +977,18 @@ All tables have RLS enabled with policies ensuring:
 | `/messages/conversations/:id` | GET | Conversation messages |
 | `/messages/send` | POST | Send message |
 
-### Analytics & Heatmaps
+### Analytics
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/analytics/usage` | GET | Usage statistics |
 | `/analytics/pools` | GET | Pool analytics |
-| `/heatmap/demand` | GET | Demand heatmap data |
-| `/heatmap/drivers` | GET | Driver availability map |
 
-### Shifts & Navigation
+### Navigation
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/shifts/current` | GET | Current shift info |
-| `/shifts/start` | POST | Start shift |
-| `/shifts/end` | POST | End shift |
-| `/shifts/history` | GET | Shift history |
-| `/navigation/voice` | GET | Voice navigation data |
-| `/navigation/route` | POST | Get navigation route |
-
-### Internationalization
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/i18n/translations` | GET | Get translations |
-| `/i18n/languages` | GET | Available languages |
+| `/navigation/deep-link` | POST | Generate Google Maps navigation deep link |
 
 ### Offline Sync
 
@@ -1143,7 +1053,6 @@ All tables have RLS enabled with policies ensuring:
 | Auth (login/register) | 5 attempts | 15 minutes |
 | Search (pool matching) | 10 requests | 1 minute |
 | Payment | 5 requests | 1 minute |
-| SOS | Unlimited | - |
 
 ### Authentication Flow
 
@@ -1313,13 +1222,12 @@ RidePool is a **production-ready foundation** for a carpooling platform with:
 ✅ **Smart Matching**: H3 geospatial indexing for sub-millisecond pool matching  
 ✅ **Real-time Updates**: Supabase Realtime + intelligent polling fallback  
 ✅ **Cost Efficiency**: 25-40% savings through intelligent pooling  
-✅ **Safety First**: Female-only rides, SOS, trip sharing, emergency contacts  
+✅ **Ride Preferences**: Female-only rides and preference-aware matching
 ✅ **Social Features**: Priyo Sathi trusted companions, in-pool messaging  
 ✅ **Payments**: Wallet + cash flows live; gateway integrations are placeholders  
 ✅ **Scalable Architecture**: MVP-ready with clear scaling path  
 ✅ **Cross-Platform**: Single codebase for iOS, Android, and Web  
-✅ **Advanced Features**: Heatmaps, voice navigation, geofencing, fraud detection  
-✅ **Internationalization**: Multi-language support (Bengali, English)  
+✅ **Advanced Routing**: Traffic-aware routes and Google Maps deep links
 ✅ **Fault Tolerance**: Circuit breakers, graceful degradation, offline sync  
 
 The codebase is well-organized with clear separation of concerns, consistent error handling, and security controls in place. External gateway integrations and a custom realtime server are still optional add-ons.
@@ -1331,10 +1239,9 @@ The codebase is well-organized with clear separation of concerns, consistent err
 | **Core Business** | 10 | poolMatching, fare, route, rideEstimation |
 | **Infrastructure** | 8 | cache, memoryCache, unifiedCache, circuitBreaker |
 | **External APIs** | 3 | googleMaps, notification, promo |
-| **Analytics** | 4 | analytics, heatmap, lookupTime, tracing |
-| **Safety** | 4 | emergency, fraudDetection, geofencing, penalty |
-| **Driver** | 4 | shift, voiceNavigation, smartRoute, routeOverlap |
-| **Misc** | 4 | i18n, offline, wallet, priyoSathi |
+| **Analytics** | 2 | analytics, lookupTime |
+| **Driver** | 2 | smartRoute, routeOverlap |
+| **Misc** | 3 | offline, wallet, priyoSathi |
 
 ---
 

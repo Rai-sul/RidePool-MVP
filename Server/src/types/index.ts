@@ -108,20 +108,6 @@ export interface SavedPlace {
 }
 
 // ============================================
-// EMERGENCY CONTACTS
-// ============================================
-
-export interface EmergencyContact {
-  id: string;
-  user_id: string;
-  name: string;
-  phone: string;
-  relationship: string | null;
-  is_primary: boolean;
-  created_at: string;
-}
-
-// ============================================
 // VEHICLES
 // ============================================
 
@@ -322,40 +308,6 @@ export interface Rating {
   rating: number;  // 1-5
   comment: string | null;
   tags: string[] | null;
-  created_at: string;
-}
-
-// ============================================
-// SAFETY & SHARING
-// ============================================
-
-export type SafetyIncidentType =
-  | 'HARASSMENT'
-  | 'ACCIDENT'
-  | 'VEHICLE_ISSUE'
-  | 'DRIVER_BEHAVIOR'
-  | 'PASSENGER_BEHAVIOR'
-  | 'OTHER';
-
-export interface RideSharing {
-  id: string;
-  ride_id: string;
-  shared_with_name: string | null;
-  shared_with_phone: string | null;
-  tracking_url: string | null;
-  expires_at: string | null;
-  created_at: string;
-}
-
-export interface SafetyIncident {
-  id: string;
-  ride_id: string | null;
-  reported_by: string;
-  incident_type: SafetyIncidentType;
-  description: string | null;
-  location_lat: number | null;
-  location_lng: number | null;
-  status: 'REPORTED' | 'UNDER_REVIEW' | 'RESOLVED' | 'DISMISSED';
   created_at: string;
 }
 

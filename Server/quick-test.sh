@@ -34,7 +34,6 @@ FILES=(
   "src/services/notification.service.ts"
   "src/services/poolMatching.service.ts"
   "src/services/poolSearchResponse.service.ts"
-  "src/services/route.service.ts"
   "src/types/index.ts"
   "src/utils/h3.utils.ts"
   "src/utils/helper.ts"

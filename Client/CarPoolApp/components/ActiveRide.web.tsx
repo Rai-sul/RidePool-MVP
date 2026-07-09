@@ -179,7 +179,7 @@ export default function ActiveRide({ pool, destination, pickupLocation, userId, 
           <View className="flex flex-row gap-3 pt-2">
             <Button variant="outline" className="flex-1 h-12 gap-2 active:scale-95 transition-transform">
               <Shield className="w-5 h-5" />
-              Safety Shield
+              Trip Status
             </Button>
             <Button variant="outline" size="icon" className="h-12 w-12 active:scale-95 transition-transform">
               <Phone className="w-5 h-5" />

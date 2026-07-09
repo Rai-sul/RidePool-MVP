@@ -11,7 +11,6 @@ const OfflineActionSchema = z.object({
     'RATE_RIDE',
     'SEND_MESSAGE',
     'UPDATE_PROFILE',
-    'TRIGGER_SOS',
     'MARK_PICKUP',
     'MARK_DROPOFF',
   ]),

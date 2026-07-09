@@ -118,7 +118,6 @@ check_file "src/services/googleMaps.service.ts"
 check_file "src/services/notification.service.ts"
 check_file "src/services/poolMatching.service.ts"
 check_file "src/services/poolSearchResponse.service.ts"
-check_file "src/services/route.service.ts"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

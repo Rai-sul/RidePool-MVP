@@ -409,7 +409,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
               </View>
               {activeRideType === 'female-only' && (
                 <Text className="text-sm text-pink-600 bg-pink-50 border border-pink-200 rounded-lg p-3">
-                  Showing pools with female drivers and riders only for your safety and comfort.
+                  Showing pools with female drivers and riders only for your preference and comfort.
                 </Text>
               )}
             </View>

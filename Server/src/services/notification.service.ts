@@ -421,15 +421,6 @@ export class NotificationService {
     });
   }
 
-  async sendSOSNotification(userId: string, rideId: string, location: { lat: number; lng: number }): Promise<void> {
-    await this.sendPushNotification(userId, {
-      title: 'SOS Alert',
-      message: 'Emergency alert has been triggered for your ride.',
-      type: 'SYSTEM',
-      metadata: { ride_id: rideId, location, is_sos: true },
-    });
-  }
-
   async markAsRead(notificationId: string, userId: string): Promise<boolean> {
     const { error } = await supabaseAdmin
       .from('notifications')

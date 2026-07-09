@@ -137,16 +137,6 @@ export const auditPayment = auditMiddleware({
   }),
 });
 
-export const auditSOS = auditMiddleware({
-  action: 'SOS_TRIGGERED',
-  resourceType: 'safety',
-  getResourceId: (req) => req.body?.ride_id || null,
-  getDetails: (req) => ({
-    location: req.body?.location,
-    emergency_type: req.body?.emergency_type,
-  }),
-});
-
 export const auditLogin = auditMiddleware({
   action: 'USER_LOGIN',
   resourceType: 'auth',

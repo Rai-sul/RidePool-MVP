@@ -21,8 +21,6 @@ interface CacheAdapter {
   userProfileKey: (userId: string) => string;
   driverLocationKey: (driverId: string) => string;
   poolDetailsKey: (poolId: string) => string;
-  surgeZoneKey: () => string;
-  heatmapKey: () => string;
   getStats: () => { hits: number; misses: number; isConnected: boolean };
   resetStats: () => void;
   isReady: () => boolean;
@@ -77,14 +75,6 @@ export const unifiedCacheService: CacheAdapter = {
 
   poolDetailsKey: (poolId: string) => {
     return getProvider().poolDetailsKey(poolId);
-  },
-
-  surgeZoneKey: () => {
-    return getProvider().surgeZoneKey();
-  },
-
-  heatmapKey: () => {
-    return getProvider().heatmapKey();
   },
 
   getStats: () => {

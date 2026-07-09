@@ -20,7 +20,6 @@ export type OfflineActionType =
   | 'RATE_RIDE'
   | 'SEND_MESSAGE'
   | 'UPDATE_PROFILE'
-  | 'TRIGGER_SOS'
   | 'MARK_PICKUP'
   | 'MARK_DROPOFF';
 
@@ -41,7 +40,6 @@ export interface OfflineData {
   activeRide: any;
   activePool: any;
   savedPlaces: any[];
-  emergencyContacts: any[];
   recentMessages: any[];
   lastSyncedAt: string;
   version: number;
@@ -59,13 +57,12 @@ const SYNC_BATCH_SIZE = 20;
 export class OfflineService {
   async getOfflineDataPackage(userId: string): Promise<OfflineData> {
     try {
-      const [userProfile, activeRide, activePool, savedPlaces, emergencyContacts, recentMessages] = 
+      const [userProfile, activeRide, activePool, savedPlaces, recentMessages] =
         await Promise.all([
           this.getUserProfile(userId),
           this.getActiveRide(userId),
           this.getActivePool(userId),
           this.getSavedPlaces(userId),
-          this.getEmergencyContacts(userId),
           this.getRecentMessages(userId),
         ]);
 
@@ -74,7 +71,6 @@ export class OfflineService {
         activeRide,
         activePool,
         savedPlaces,
-        emergencyContacts,
         recentMessages,
         lastSyncedAt: new Date().toISOString(),
         version: Date.now(),
@@ -329,9 +325,6 @@ export class OfflineService {
       case 'UPDATE_PROFILE':
         await this.executeUpdateProfile(userId, action.payload);
         break;
-      case 'TRIGGER_SOS':
-        await this.executeTriggerSOS(userId, action.payload);
-        break;
       case 'MARK_PICKUP':
         await this.executeMarkPickup(userId, action.payload);
         break;
@@ -415,22 +408,6 @@ export class OfflineService {
         .update(updateData)
         .eq('id', userId);
     }
-  }
-
-  private async executeTriggerSOS(userId: string, payload: Record<string, any>): Promise<void> {
-    const { ride_id, lat, lng, description } = payload;
-    
-    await supabaseAdmin
-      .from('safety_incidents')
-      .insert({
-        reported_by: userId,
-        ride_id,
-        incident_type: 'OTHER',
-        description: description || 'SOS triggered offline',
-        location_lat: lat,
-        location_lng: lng,
-        status: 'REPORTED',
-      });
   }
 
   private async executeMarkPickup(userId: string, payload: Record<string, any>): Promise<void> {
@@ -579,14 +556,6 @@ export class OfflineService {
   private async getSavedPlaces(userId: string): Promise<any[]> {
     const { data } = await supabaseAdmin
       .from('saved_places')
-      .select('*')
-      .eq('user_id', userId);
-    return data || [];
-  }
-
-  private async getEmergencyContacts(userId: string): Promise<any[]> {
-    const { data } = await supabaseAdmin
-      .from('emergency_contacts')
       .select('*')
       .eq('user_id', userId);
     return data || [];

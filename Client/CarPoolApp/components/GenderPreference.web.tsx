@@ -26,16 +26,16 @@ export default function GenderPreference({ userProfile, onBack }: GenderPreferen
 
       {/* Content */}
       <View className="p-6 space-y-4">
-        {/* Safety Info */}
+        {/* Preference Info */}
         {isFemale && (
           <View className="bg-pink-50 border-2 border-pink-200 rounded-2xl p-4 flex flex-row items-start gap-3">
             <Shield className="w-5 h-5 text-pink-600 flex-shrink-0 mt-0.5" />
             <View className="flex-1">
               <Text className="text-sm">
-                <Text className="text-pink-900">Your Safety Matters</Text>
+                <Text className="text-pink-900">Your Preference Matters</Text>
               </Text>
               <Text className="text-xs text-pink-700 mt-1">
-                As a female rider, you have the option to ride exclusively with female drivers and co-riders for enhanced safety and comfort.
+                As a female rider, you have the option to ride exclusively with female drivers and co-riders for added comfort.
               </Text>
             </View>
           </View>
@@ -98,7 +98,7 @@ export default function GenderPreference({ userProfile, onBack }: GenderPreferen
               </View>
               <View>
                 <Text>Verified Riders Only</Text>
-                <Text className="text-sm text-gray-500">Higher safety standard</Text>
+                <Text className="text-sm text-gray-500">Female-only matching</Text>
               </View>
             </View>
             <Switch defaultChecked />
@@ -107,7 +107,7 @@ export default function GenderPreference({ userProfile, onBack }: GenderPreferen
 
         <View className="bg-gray-100 rounded-xl p-4">
           <Text className="text-sm text-gray-600">
-            Note: Enabling gender-specific preferences may increase wait times but provides enhanced safety and comfort.
+            Note: Enabling gender-specific preferences may increase wait times but provides added comfort.
           </Text>
         </View>
       </View>

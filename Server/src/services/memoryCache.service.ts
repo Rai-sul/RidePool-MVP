@@ -164,14 +164,6 @@ class MemoryCacheService {
     return `pool:details:${poolId}`;
   }
 
-  surgeZoneKey(): string {
-    return 'surge:zones';
-  }
-
-  heatmapKey(): string {
-    return 'heatmap:demand';
-  }
-
   getStats(): CacheStats & { isConnected: boolean } {
     return {
       ...this.stats,

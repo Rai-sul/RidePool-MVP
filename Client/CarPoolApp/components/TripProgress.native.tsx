@@ -1235,18 +1235,6 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
           </View>
         )}
 
-        {/* SOS Button */}
-        {tripStatus !== 'completed' && (
-          <View className="mx-6 mt-4">
-            <Button
-              variant="outline"
-              className="w-full border-2 border-red-500"
-            >
-              <Text className="text-red-500 font-semibold">🚨 Emergency SOS</Text>
-            </Button>
-          </View>
-        )}
-
         {/* Complete Trip Button */}
         {tripStatus === 'completed' && (
           <View className="mx-6 mt-4">

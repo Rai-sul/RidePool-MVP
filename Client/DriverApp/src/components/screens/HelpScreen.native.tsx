@@ -97,7 +97,7 @@ export function HelpScreen({ onBack }: HelpScreenProps) {
           <View>
             <Text className="text-lg font-semibold mb-3 px-2" style={{ color: colors.text }}>Popular Articles</Text>
             <Card className="p-3" style={{ backgroundColor: colors.card, borderColor: colors.border }}>
-              {["How to maximize your earnings", "Best practices for 5-star ratings", "Understanding passenger safety features", "Managing your driver schedule"].map((article, index) => (
+              {["How to maximize your earnings", "Best practices for 5-star ratings", "Using Google Maps navigation", "Managing wallet payouts"].map((article, index) => (
                 <View key={article}>
                   <Pressable onPress={() => console.log(`Article: ${article}`)} className="flex-row items-center justify-between py-3 px-2">
                     <View className="flex-row items-center gap-3 flex-1">

@@ -84,12 +84,6 @@ export const API_ENDPOINTS = {
     GET_MESSAGES: (conversationId: string) => `/messages/${conversationId}`,
     MARK_READ: (messageId: string) => `/messages/${messageId}/read`,
   },
-  SAFETY: {
-    REPORT_INCIDENT: '/safety/incidents',
-    EMERGENCY_CONTACTS: '/safety/emergency-contacts',
-    SHARE_TRIP: '/safety/share-trip',
-    SOS: '/safety/sos',
-  },
   PRIYO_SATHI: {
     LIST: '/priyo-sathi',
     ADD: '/priyo-sathi',
