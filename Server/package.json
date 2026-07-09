@@ -43,12 +43,12 @@
     "@types/express": "^5.0.5",
     "@types/express-validator": "^2.20.33",
     "@types/morgan": "^1.9.10",
-    "@types/node": "^24.10.1",
+    "@types/node": "^26.1.1",
     "@types/opossum": "^8.1.9",
-    "nodemon": "^3.1.11",
-    "supabase": "^2.58.5",
+    "nodemon": "^3.1.14",
+    "supabase": "^2.109.1",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.17"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   }
 }
