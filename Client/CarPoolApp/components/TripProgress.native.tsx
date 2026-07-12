@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback } from './ui/avatar';
 import { Progress } from './ui/progress';
 import GoogleMapView from './GoogleMapView';
 import type { UserProfile, Location, Destination, Pool } from '../contexts/GlobalContext';
+import { useDriverLocationRealtime } from '../hooks/useDriverLocationRealtime';
 import { usePoolRealtime } from '../hooks/usePoolRealtime';
 import { poolService, CombinedRouteResponse, CombinedRouteWaypoint, NavigationLinkResponse, SearchTiming } from '../services/pool.service';
 
@@ -96,6 +97,19 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
     refresh: refreshPool,
     clearUnreadMessages,
   } = usePoolRealtime(selectedPool?.id || null, userProfile?.id || null, selectedPool as any);
+
+  const driverLocationRealtimeEnabled = !!selectedPool?.id && ['WAITING_FOR_DRIVER', 'READY_TO_START', 'STARTED'].includes(poolStatus);
+  const { driverLocation: liveDriverLocation } = useDriverLocationRealtime(
+    selectedPool?.id || null,
+    driverLocationRealtimeEnabled
+  );
+
+  useEffect(() => {
+    setDriverPosition(liveDriverLocation
+      ? { latitude: liveDriverLocation.latitude, longitude: liveDriverLocation.longitude }
+      : null
+    );
+  }, [liveDriverLocation]);
 
   // Use the current member's ride info (server source of truth) for per-user trip details
   const currentMemberRide = useMemo(() => {
@@ -278,6 +292,33 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
   const dropoffCoords = destination?.latitude && destination?.longitude
     ? { latitude: destination.latitude, longitude: destination.longitude }
     : { latitude: 23.82, longitude: 90.43 };
+
+  const mapMarkers = useMemo(() => {
+    const routeMarkers = combinedRoute?.waypoints
+      ?.filter(wp => !(driverPosition && wp.type === 'driver'))
+      .map((wp, idx) => ({
+        id: wp.id,
+        latitude: wp.location.latitude,
+        longitude: wp.location.longitude,
+        title: wp.type === 'driver' ? 'Driver' : `${wp.type === 'pickup' ? 'Pick up' : 'Drop off'} ${idx + 1}`,
+        icon: wp.type === 'driver' ? 'driver' as const : wp.type === 'pickup' ? 'pickup' as const : 'dropoff' as const,
+      })) || [];
+
+    if (!driverPosition) {
+      return routeMarkers;
+    }
+
+    return [
+      {
+        id: 'live-driver-location',
+        latitude: driverPosition.latitude,
+        longitude: driverPosition.longitude,
+        title: 'Driver',
+        icon: 'driver' as const,
+      },
+      ...routeMarkers,
+    ];
+  }, [combinedRoute, driverPosition]);
 
   // Driver info - use real pool data if available
   const driver = {
@@ -572,20 +613,14 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
         {/* Google Map - Shows combined route when available, otherwise individual route */}
         <View style={{ height: 300, position: 'relative' }}>
           <GoogleMapView
-            center={combinedRoute?.waypoints?.[0]?.location || pickupCoords}
+            center={driverPosition || combinedRoute?.waypoints?.[0]?.location || pickupCoords}
             zoom={combinedRoute ? 12 : 14}
             pickupLocation={!combinedRoute ? pickupCoords : undefined}
             dropoffLocation={!combinedRoute ? dropoffCoords : undefined}
             showDirections={!combinedRoute}
             routePolyline={combinedRoute?.route?.polyline}
             routeCoordinates={combinedRoute?.route?.coordinates}
-            markers={combinedRoute ? combinedRoute.waypoints.map((wp, idx) => ({
-              id: wp.id,
-              latitude: wp.location.latitude,
-              longitude: wp.location.longitude,
-              title: wp.type === 'driver' ? 'Driver' : `${wp.type === 'pickup' ? 'Pick up' : 'Drop off'} ${idx + 1}`,
-              icon: wp.type === 'driver' ? 'driver' : wp.type === 'pickup' ? 'pickup' : 'dropoff',
-            })) : []}
+            markers={mapMarkers}
           />
 
           {/* Status Badge */}
