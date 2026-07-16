@@ -1,6 +1,6 @@
 import { apiClient } from '../utils/apiClient';
 import { API_ENDPOINTS } from '../config/api.config';
-import type { ApiResponse, Location, Pool } from '../types';
+import type { ApiResponse, CombinedRouteResponse, Location, NavigationLinkResponse, Pool } from '../types';
 
 export interface DriverEarnings {
   total: number;
@@ -13,6 +13,15 @@ export interface DriverStats {
   rating: number;
   acceptanceRate: number;
   onlineHours: number;
+}
+
+export interface DriverAcceptPoolResponse {
+  pool_id: string;
+  status: string;
+  passengers: unknown[];
+  destination: unknown;
+  nearest_pickup: unknown;
+  navigation_url: string | null;
 }
 
 export const driverService = {
@@ -50,15 +59,8 @@ export const driverService = {
     return apiClient.get<ApiResponse<{ pools: Pool[]; total_available: number }>>(API_ENDPOINTS.DRIVER.AVAILABLE_POOLS);
   },
 
-  async acceptPool(poolId: string): Promise<ApiResponse<{
-    pool_id: string;
-    status: string;
-    passengers: any[];
-    destination: any;
-    nearest_pickup: any;
-    navigation_url: string | null;
-  }>> {
-    return apiClient.post<ApiResponse<any>>(API_ENDPOINTS.DRIVER.ACCEPT_POOL(poolId));
+  async acceptPool(poolId: string): Promise<ApiResponse<DriverAcceptPoolResponse>> {
+    return apiClient.post<ApiResponse<DriverAcceptPoolResponse>>(API_ENDPOINTS.DRIVER.ACCEPT_POOL(poolId));
   },
 
   async rejectPool(poolId: string): Promise<ApiResponse> {
@@ -113,11 +115,11 @@ export const driverService = {
     return apiClient.post<ApiResponse>(API_ENDPOINTS.DRIVER.REGISTER_VEHICLE, data);
   },
 
-  async getPoolRoute(poolId: string): Promise<ApiResponse> {
-    return apiClient.get<ApiResponse>(API_ENDPOINTS.POOL.ROUTE(poolId));
+  async getPoolRoute(poolId: string): Promise<ApiResponse<CombinedRouteResponse>> {
+    return apiClient.get<ApiResponse<CombinedRouteResponse>>(API_ENDPOINTS.POOL.COMBINED_ROUTE(poolId));
   },
 
-  async getNavigationLink(poolId: string): Promise<ApiResponse> {
-    return apiClient.get<ApiResponse>(API_ENDPOINTS.POOL.NAVIGATION_LINK(poolId));
+  async getNavigationLink(poolId: string): Promise<ApiResponse<NavigationLinkResponse>> {
+    return apiClient.get<ApiResponse<NavigationLinkResponse>>(API_ENDPOINTS.POOL.NAVIGATION_LINK(poolId));
   },
 };

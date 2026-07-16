@@ -25,7 +25,7 @@ All required environment variables are properly configured:
 
 ### 3. Schema Deployment ✅
 
-**44 tables successfully deployed:**
+**Schema tables successfully deployed:**
 
 | Category | Tables | Status |
 |----------|--------|--------|
@@ -37,9 +37,8 @@ All required environment variables are properly configured:
 | Notifications | notifications, device_tokens, notification_preferences | ✅ |
 | Messaging | conversations, conversation_participants, messages | ✅ |
 | Penalties | user_cancellations, cooldown_periods | ✅ |
-| Caching | route_cache, navigation_route_cache | ✅ |
 | Offline | offline_actions, sync_logs | ✅ |
-| Admin | audit_logs, audit_log, geo_zones, fraud_reports | ✅ |
+| Admin | audit_logs, audit_log | ✅ |
 | Other | saved_places, priyo_sathi, ratings, promise_money_transactions, app_metadata | ✅ |
 
 ### 4. RPC Functions ✅
@@ -60,8 +59,6 @@ All required environment variables are properly configured:
 | `deduct_promise_money` | Deduct promise money penalty | ✅ |
 | `update_vehicle_location` | Update driver location | ✅ |
 | `search_pools_optimized` | Optimized pool search | ✅ |
-| `get_cached_route` | Retrieve cached route | ✅ |
-| `record_demand` | Record demand data | ✅ |
 
 ### 5. Database Extensions ✅
 

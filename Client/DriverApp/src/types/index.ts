@@ -96,6 +96,70 @@ export type DriverProfile = z.infer<typeof DriverProfileSchema>;
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
 export type RegisterRequest = z.infer<typeof RegisterRequestSchema>;
 
+export interface CombinedRouteWaypoint {
+  id: string;
+  type: 'pickup' | 'dropoff' | 'driver';
+  userId: string;
+  location: { latitude: number; longitude: number };
+  name?: string;
+  address?: string;
+  order: number;
+  estimatedArrivalMinutes: number;
+}
+
+export interface CombinedRouteLeg {
+  fromId: string;
+  toId: string;
+  distanceKm: number;
+  durationMinutes: number;
+  instruction: string;
+}
+
+export interface CombinedRouteResponse {
+  poolId: string;
+  poolStatus: string;
+  route: {
+    polyline: string;
+    coordinates: { lat: number; lng: number }[];
+    totalDistanceKm: number;
+    totalDurationMinutes: number;
+    durationInTraffic: number;
+    trafficLevel: 'low' | 'moderate' | 'high';
+    routeSummary: string;
+  };
+  waypoints: CombinedRouteWaypoint[];
+  legs: CombinedRouteLeg[];
+  optimization: {
+    score: number;
+    savingsPercent: number;
+  };
+  meta: {
+    fromCache: boolean;
+    calculatedAt: string;
+    memberCount: number;
+    hasDriverLocation: boolean;
+  };
+}
+
+export interface NavigationLinkResponse {
+  poolId: string;
+  navigationUrl: string;
+  platformLinks?: {
+    universal?: string;
+    android?: string;
+    ios?: string;
+  };
+  meta?: {
+    waypointCount?: number;
+    totalStops?: number;
+    isDriver?: boolean;
+    isMember?: boolean;
+    freeNavigation?: boolean;
+    usesOptimizedRoute?: boolean;
+    costSavings?: string;
+  };
+}
+
 export interface AuthSession {
   access_token: string;
   refresh_token: string;

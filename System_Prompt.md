@@ -232,7 +232,7 @@ sequenceDiagram
 
 - **PostgreSQL 15** via **Supabase**
 - **PostGIS** for geospatial columns
-- **RLS** on 35 of 44 tables (some cache/metadata tables missing policies)
+- **RLS** on most application tables; some cache/metadata tables are intentionally broader or missing policies
 - **Atomic RPCs:** `atomic_join_pool`, `atomic_accept_pool`, `atomic_wallet_debit`, `atomic_process_payment`, etc.
 
 ## Infrastructure
@@ -332,7 +332,7 @@ Carpool-dev/
 | `Client/CarPoolApp/contexts/GlobalContext.tsx` | Active trip persistence |
 | `Client/CarPoolApp/hooks/usePoolRealtime.ts` | Pool realtime + polling |
 | `Client/DriverApp/src/store/useDriverStore.ts` | Driver online + active pool (persisted) |
-| `Client/DriverApp/src/services/driver.service.ts` | Driver API calls (uses legacy `/route`) |
+| `Client/DriverApp/src/services/driver.service.ts` | Driver API calls (uses `/combined-route` for trip routing) |
 
 ---
 
@@ -577,7 +577,7 @@ For each feature: status is marked **Implemented**, **Partial**, or **Planned**.
 
 **Client:** `TripProgress.native.tsx` in both apps; `usePoolRealtime` for live updates.
 
-**Known gap:** DriverApp calls `GET /pools/:id/route` (legacy); CarPoolApp uses `GET /pools/:id/combined-route` (traffic-aware). Rider and driver may see different ETAs.
+**Route parity:** DriverApp and CarPoolApp both call `GET /pools/:id/combined-route` for traffic-aware smart route data. The legacy `GET /pools/:id/route` endpoint remains on the server for compatibility.
 
 ---
 
@@ -678,7 +678,7 @@ Post-trip `POST /api/ratings` updates `users.average_rating`.
 
 Backend routes exist for analytics and offline sync; admin dashboards and full client consumption may be **Partial**.
 
-**Unwired services (exist but no route wiring):** `geofencing.service.ts`, `fraudDetection.service.ts`, `incentive.service.ts`, `tracing.service.ts`, `h3Sync.service.ts`, `routeCache.service.ts`, `h3Worker.service.ts`, `route.service.ts` (stubs).
+**Unwired services (exist but no route wiring):** `geofencing.service.ts`, `incentive.service.ts`, `tracing.service.ts`, `h3Sync.service.ts`, `routeCache.service.ts`, `h3Worker.service.ts`, `route.service.ts` (stubs).
 
 ---
 
@@ -932,7 +932,7 @@ flowchart TD
 | Resource ownership | `checkResourceOwnership` in `authorization.ts` | **Defined, not wired on routes** |
 | Pool access | `checkPoolAccess` — member or driver | **Defined, not wired on routes** |
 | Driver access | `checkDriverAccess` — `is_driver` + verified | **Defined, not wired on routes** |
-| RLS | Supabase policies as second line of defense | **Partial** (35/44 tables) |
+| RLS | Supabase policies as second line of defense | **Partial** |
 | Service role | `supabaseAdmin` for RPCs bypassing user context | **Implemented** |
 
 > Controllers perform ad-hoc ownership checks. The `authorization.ts` middleware exists but is **not attached to route files** — a security improvement opportunity.
@@ -1164,9 +1164,9 @@ flowchart TD
 
 ## Scale
 
-- **44 tables**, **93 indexes**, **47 RLS policies**, **14+ RPC functions**
+- **PostgreSQL schema**, indexes, RLS policies, and 14+ RPC functions
 - **Migrations:** `Server/supabase/migrations/`
-- **Verification (2026-01-21):** 44 tables deployed, 14 RPCs, PostGIS enabled, 8/8 connection tests passing
+- **Verification (2026-01-21):** schema deployed, 14 RPCs, PostGIS enabled, 8/8 connection tests passing
 
 ## Important models
 
@@ -1186,7 +1186,7 @@ flowchart TD
 `conversations`, `conversation_participants`, `messages`, `notifications`
 
 ### System / cache / analytics
-`route_cache`, `navigation_route_cache`, `offline_actions`, `sync_logs`, `geo_zones`, `fraud_reports`, `audit_logs`, `app_metadata`, `user_cancellations`, `cooldown_periods`
+`offline_actions`, `sync_logs`, `audit_logs`, `app_metadata`, `user_cancellations`, `cooldown_periods`
 
 ## Critical RPC functions (use these for concurrency)
 
@@ -1201,7 +1201,6 @@ flowchart TD
 | `deposit_promise_money` / `deduct_promise_money` | Promise money |
 | `update_vehicle_location` | GPS with timestamp conflict resolution |
 | `search_pools_optimized` | Optimized H3 search |
-| `get_cached_route` / `record_demand` | Cache and analytics |
 
 ## Relationships (summary)
 
@@ -1239,7 +1238,7 @@ flowchart TD
 ## Known schema issues (technical debt)
 
 - Duplicate audit tables: `audit_log` vs `audit_logs` (**documented**, consolidate recommended)
-- Some tables missing RLS policies (`route_cache`, `app_metadata`, `user_promo_usage`, `conversation_participants`)
+- Some tables missing RLS policies (`app_metadata`, `user_promo_usage`, `conversation_participants`)
 - Potential RLS recursion on cross-pool user visibility policies
 - H3 resolution inconsistency across `constants.ts`, `h3.utils.ts`, `env.ts`
 - Status enum mismatch in older docs (`ACTIVE/FULL` vs current `WAITING_FOR_RIDERS`)
@@ -1433,11 +1432,11 @@ npx expo start --clear
 |------|----------|
 | **Goal** | Suggest better pickup points |
 | **Components** | Wire `geofencing.service.ts`; map overlays |
-| **Data** | `geo_zones` polygons |
+| **Data** | Define a new geofence data model if this feature is revived |
 
-## 8. DriverApp combined-route migration — **Recommended**
+## 8. DriverApp combined-route migration — **Implemented**
 
-Switch `driver.service.ts` from `POOL.ROUTE` to `POOL.COMBINED_ROUTE` for traffic-aware ETAs consistent with rider app.
+DriverApp `driver.service.ts` uses `POOL.COMBINED_ROUTE` for traffic-aware ETAs consistent with rider app.
 
 ## 9. Wire authorization middleware — **Recommended**
 
@@ -1513,7 +1512,7 @@ Replace duplicated client types with imports from `shared/` package; add npm wor
 7. **Installing only root package.json** — clients won't have dependencies
 8. **Expo Go limitations** — native maps may not work; use dev builds for maps
 9. **localhost on physical device** — use machine LAN IP in `EXPO_PUBLIC_API_URL`
-10. **DriverApp legacy `/route`** — use `/combined-route` for consistency
+10. **DriverApp route parity** — keep trip routing on `/combined-route` for consistency
 11. **Creating `/api/driver/priority-location`** without checking profile endpoint alternative
 
 ## Important module dependencies
@@ -1645,7 +1644,7 @@ Full procedures: `__docs__/operations/disaster-recovery.md`
 | Admin analytics UI | API only |
 | E2E client-server validation | Incomplete per audit |
 | CarPoolApp wallet UI | Stubbed (hardcoded data) |
-| DriverApp combined-route | Uses legacy `/route` endpoint |
+| DriverApp combined-route | Implemented; uses `/combined-route` endpoint |
 | DriverApp earnings display | Some hardcoded stats |
 | Authorization middleware | Defined, not wired to routes |
 | Off-route recalculation | Endpoint returns `needsRecalculation: false` |
@@ -1667,10 +1666,9 @@ Full procedures: `__docs__/operations/disaster-recovery.md`
 - Add CHECK constraints on `pools.status`, `rides.status`
 - Wire or remove BullMQ
 - Wire `authorization.ts` middleware to routes
-- Migrate DriverApp to `/combined-route`
 - Remove or implement `/api/driver/priority-location`
 - Resolve duplicate H3 resolution config
-- Wire or remove orphan services (geofencing, fraud, incentive, etc.)
+- Wire or remove orphan services (geofencing, incentive, etc.)
 - Expand integration/E2E tests
 - Align Zod versions (v4 server vs v3 DriverApp)
 - Adopt `@ridepool/shared-types` in clients
@@ -1695,7 +1693,7 @@ Full procedures: `__docs__/operations/disaster-recovery.md`
 | App can't reach API | localhost on physical device | Use machine LAN IP in `EXPO_PUBLIC_API_URL` |
 | Pool not updating live | Realtime disconnected | Polling fallback kicks in at 3s; check Supabase Realtime status |
 | No push notifications | Missing Firebase setup or `FCM_SERVER_KEY` | Configure Firebase project; set server env var; clients register tokens via `expo-notifications` |
-| Driver sees different ETA than rider | DriverApp uses `/route` not `/combined-route` | Migrate driver.service.ts |
+| Driver sees different ETA than rider | DriverApp route fetching regressed or bypassed combined-route cache | Keep DriverApp on `/combined-route` and do not add cache-busting params |
 | Expo Go map shows static image | Native maps unavailable in Expo Go | Use dev build (`expo-dev-client`) |
 | Server won't start | Missing Supabase env vars | Copy `.env.example`, fill `SUPABASE_*` keys |
 | TypeScript test errors | Missing Vitest globals | Use `tsconfig.test.json` — see `__docs__/troubleshooting/typescript-test-config-fix.md` |

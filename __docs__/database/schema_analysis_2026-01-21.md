@@ -10,7 +10,7 @@
 
 | Category | Count |
 |----------|-------|
-| Tables | 44 |
+| Tables | 43 |
 | Indexes | 93 |
 | RLS Policies | 47 |
 | Functions | 22 |
@@ -45,8 +45,6 @@ The following tables have RLS enabled but NO POLICIES defined:
 | `conversation_participants` | RLS NOT enabled, no policies |
 | `audit_log` | RLS NOT enabled, no policies (the duplicate table) |
 | `app_metadata` | No RLS at all |
-| `route_cache` | No RLS at all |
-| `navigation_route_cache` | No RLS at all |
 
 **Impact:** Security vulnerability - users can access/modify data they shouldn't.
 
@@ -104,7 +102,6 @@ Some tables have CHECK constraints for status, others don't:
 | `rides` | NO | Uses application-level validation |
 | `payments` | NO | Uses application-level validation |
 | `driver_sessions` | YES | `('ONLINE', 'BUSY', 'OFFLINE')` |
-| `fraud_reports` | YES | `('PENDING', 'REVIEWED', 'RESOLVED', 'DISMISSED')` |
 
 **Recommendation:** Add CHECK constraints for `pools.status`, `rides.status`, `payments.status`.
 

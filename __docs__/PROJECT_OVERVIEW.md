@@ -842,7 +842,6 @@ Daily Bonus: +৳100 per 3 completed rides
 | `notifications` | In-app notifications |
 | `audit_logs` | Admin action logs |
 | `app_metadata` | App configuration |
-| `route_cache` | Cached route data |
 
 ### Key Indexes
 

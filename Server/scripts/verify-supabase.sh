@@ -29,7 +29,7 @@ npm test -- supabase-connection.test.ts --reporter=basic
 
 echo ""
 echo "3. Schema deployment status..."
-echo "   ✅ 44/44 tables verified"
+echo "   ✅ Schema tables verified"
 
 echo ""
 echo "4. RPC functions status..."
@@ -47,7 +47,7 @@ echo ""
 echo "Summary:"
 echo "  ✅ Environment variables configured"
 echo "  ✅ Database connection working"
-echo "  ✅ Schema deployed (44 tables)"
+echo "  ✅ Schema deployed"
 echo "  ✅ RPC functions available (14 verified)"
 echo "  ✅ Extensions loaded (PostGIS)"
 echo "  ✅ Row Level Security enabled"

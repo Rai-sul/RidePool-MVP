@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Linking, Platform, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapViewComponent, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import MapViewComponent, { Marker, Polyline, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { Phone, CheckCircle, X, Navigation, MessageCircle, Star, Clock, AlertCircle, RefreshCw, Users, User } from 'lucide-react-native';
 import { Badge } from '../ui/badge';
 import { usePoolRealtime } from '../../hooks/usePoolRealtime';
 import { driverService } from '../../services/driver.service';
 import { locationService } from '../../services/location.service';
 import { PassengerBillingDialog } from './PassengerBillingDialog.native';
-import type { Pool } from '../../types';
+import type { CombinedRouteResponse, CombinedRouteWaypoint, Pool } from '../../types';
 
 interface TripProgressProps {
   poolId: string;
@@ -16,6 +16,15 @@ interface TripProgressProps {
   onComplete: () => void;
   onCancel: () => void;
 }
+
+const getRouteDurationMinutes = (route?: CombinedRouteResponse['route']): number | undefined => {
+  if (!route) return undefined;
+  return route.durationInTraffic > 0 ? route.durationInTraffic : route.totalDurationMinutes;
+};
+
+const getErrorMessage = (error: unknown, fallback: string): string => {
+  return error instanceof Error && error.message ? error.message : fallback;
+};
 
 export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: TripProgressProps) {
   const mapRef = useRef<MapViewComponent>(null);
@@ -64,9 +73,18 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
   const [loadingNavLink, setLoadingNavLink] = useState(false);
 
   // Combined route state
-  const [combinedRoute, setCombinedRoute] = useState<any>(null);
+  const [combinedRoute, setCombinedRoute] = useState<CombinedRouteResponse | null>(null);
   const [loadingCombinedRoute, setLoadingCombinedRoute] = useState(false);
   const prevPoolStatusRef = useRef<string | null>(null);
+
+  const routeDurationMinutes = getRouteDurationMinutes(combinedRoute?.route);
+  const routePolylineCoordinates = useMemo(
+    () => combinedRoute?.route.coordinates.map((coordinate) => ({
+      latitude: coordinate.lat,
+      longitude: coordinate.lng,
+    })) || [],
+    [combinedRoute]
+  );
 
   // Watch driver's location via GPS
   useEffect(() => {
@@ -126,8 +144,8 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
         if (!isMounted) return;
 
         if (response.success && response.data) {
-          const data = response.data as any;
-          const hasValid = data.waypoints?.length >= 2 && data.route?.coordinates?.length > 0;
+          const data = response.data;
+          const hasValid = data.waypoints.length >= 2 && data.route.coordinates.length > 0;
           if (hasValid || retryCount >= 2) {
             setCombinedRoute(data);
             prevPoolStatusRef.current = poolStatus;
@@ -156,8 +174,7 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
     try {
       const response = await driverService.getNavigationLink(poolId);
       if (response.success && response.data) {
-        const navData = response.data as any;
-        const hasMultipleStops = (navData.meta?.waypointCount ?? 0) > 0;
+        const navData = response.data;
 
         // For multi-stop routes, prefer platform links (which now use universal URL
         // format for waypoint support) then fall back to navigationUrl
@@ -261,9 +278,9 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
                   : response.error?.message || 'Failed to cancel';
                 throw new Error(errorMsg);
               }
-            } catch (error: any) {
+            } catch (error) {
               console.error('[TripProgress] Failed to unassign from pool:', error);
-              Alert.alert('Error', error.message || 'Failed to cancel ride. Please try again.');
+              Alert.alert('Error', getErrorMessage(error, 'Failed to cancel ride. Please try again.'));
             } finally {
               setIsCancellingRide(false);
             }
@@ -322,7 +339,7 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
                 pinColor="#3b82f6"
               />
             )}
-            {passengers.map((p, idx) => (
+            {passengers.map((p) => (
               <React.Fragment key={p.user_id}>
                 {p.pickup && (
                   <Marker
@@ -340,6 +357,13 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
                 )}
               </React.Fragment>
             ))}
+            {routePolylineCoordinates.length > 1 && (
+              <Polyline
+                coordinates={routePolylineCoordinates}
+                strokeColor="#2563eb"
+                strokeWidth={4}
+              />
+            )}
           </MapViewComponent>
 
           {/* Status Badge */}
@@ -358,7 +382,7 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
           </View>
 
           {/* ETA Badge */}
-          {combinedRoute?.route?.durationInTraffic && (
+          {routeDurationMinutes && (
             <View
               style={{
                 position: 'absolute',
@@ -376,7 +400,7 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
               }}
             >
               <Clock size={16} color="#4b5563" />
-              <Text style={{ fontWeight: '600' }}>{combinedRoute.route.durationInTraffic} mins</Text>
+              <Text style={{ fontWeight: '600' }}>{routeDurationMinutes} mins</Text>
             </View>
           )}
 
@@ -398,7 +422,7 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
             >
               <Navigation size={14} color="#10b981" />
               <Text style={{ color: 'white', fontSize: 12 }}>
-                {combinedRoute.route?.totalDistanceKm}km • {combinedRoute.route?.totalDurationMinutes}min
+                {combinedRoute.route.totalDistanceKm}km • {routeDurationMinutes || combinedRoute.route.totalDurationMinutes}min
               </Text>
             </View>
           )}
@@ -658,7 +682,7 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
             </View>
 
             <View className="gap-3">
-              {combinedRoute.waypoints.map((waypoint: any, idx: number) => {
+              {combinedRoute.waypoints.map((waypoint: CombinedRouteWaypoint, idx: number) => {
                 const waypointColor = waypoint.type === 'driver' ? '#3B82F6' : waypoint.type === 'pickup' ? '#22C55E' : '#EF4444';
                 const waypointLabel = waypoint.type === 'driver' ? 'Driver' : waypoint.type === 'pickup' ? 'Pick up' : 'Drop off';
 
@@ -700,7 +724,7 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
                 </View>
                 <View className="flex-row justify-between mt-1">
                   <Text className="text-gray-600">Total Duration</Text>
-                  <Text className="font-medium">{combinedRoute.route?.durationInTraffic || combinedRoute.route?.totalDurationMinutes} mins</Text>
+                  <Text className="font-medium">{routeDurationMinutes || combinedRoute.route.totalDurationMinutes} mins</Text>
                 </View>
                 {combinedRoute.optimization?.savingsPercent > 0 && (
                   <View className="flex-row justify-between mt-1">
@@ -727,8 +751,8 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
             <View className="flex-row justify-between">
               <Text className="text-gray-600">Estimated Time</Text>
               <Text className="font-medium">
-                {combinedRoute?.route?.durationInTraffic
-                  ? `${combinedRoute.route.durationInTraffic} mins`
+                {routeDurationMinutes
+                  ? `${routeDurationMinutes} mins`
                   : pool?.estimated_arrival_minutes
                     ? `${pool.estimated_arrival_minutes} mins`
                     : 'Calculating...'}
