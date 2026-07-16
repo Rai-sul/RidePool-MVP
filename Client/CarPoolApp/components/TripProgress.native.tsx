@@ -610,14 +610,14 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 100 }}>
-        {/* Google Map - Shows combined route when available, otherwise individual route */}
+        {/* Trip progress routes are server-owned; never calculate a fallback route on the client. */}
         <View style={{ height: 300, position: 'relative' }}>
           <GoogleMapView
             center={driverPosition || combinedRoute?.waypoints?.[0]?.location || pickupCoords}
             zoom={combinedRoute ? 12 : 14}
             pickupLocation={!combinedRoute ? pickupCoords : undefined}
             dropoffLocation={!combinedRoute ? dropoffCoords : undefined}
-            showDirections={!combinedRoute}
+            showDirections={false}
             routePolyline={combinedRoute?.route?.polyline}
             routeCoordinates={combinedRoute?.route?.coordinates}
             markers={mapMarkers}

@@ -212,6 +212,8 @@ export default function GoogleMapView({
         dropoffLocation={dropoffLocation}
         showDirections={showDirections}
         style={style}
+        routePolyline={routePolyline}
+        routeCoordinates={routeCoordinates}
       >
         {children}
       </StaticMapView>
