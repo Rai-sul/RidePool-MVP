@@ -74,6 +74,7 @@ export default function GoogleMapView({
   );
   const [loading, setLoading] = useState(!center);
   const [routeCoords, setRouteCoords] = useState<Array<{ latitude: number; longitude: number }>>([]);
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
     if (center) {
@@ -109,24 +110,24 @@ export default function GoogleMapView({
   useEffect(() => {
     if (isExpoGo || !NativeMapView) return;
 
-    // If pre-calculated polyline is provided AND not empty, decode and use it
-    if (routePolyline && routePolyline.length > 0) {
-      const points = decodePolyline(routePolyline);
-      if (points.length > 0) {
+    // Prefer server-decoded road coordinates. This avoids hiding a valid route
+    // when a malformed or unsupported encoded polyline reaches the client.
+    if (routeCoordinates && routeCoordinates.length > 1) {
+      const points = routeCoordinates
+        .map(coord => ({ latitude: coord.lat, longitude: coord.lng }))
+        .filter(isValidCoordinate);
+      if (points.length > 1) {
         setRouteCoords(points);
         return;
       }
     }
 
-    // If pre-calculated coordinates are provided, use them directly
-    // This handles both the "fallback route" (straight lines) and real coordinates
-    if (routeCoordinates && routeCoordinates.length > 0) {
-      const points = routeCoordinates.map(coord => ({
-        latitude: coord.lat,
-        longitude: coord.lng,
-      }));
-      setRouteCoords(points);
-      return;
+    if (routePolyline && routePolyline.length > 0) {
+      const points = decodePolyline(routePolyline).filter(isValidCoordinate);
+      if (points.length > 1) {
+        setRouteCoords(points);
+        return;
+      }
     }
 
     // Fallback: fetch route from Google Maps if showDirections is enabled
@@ -167,6 +168,7 @@ export default function GoogleMapView({
   useEffect(() => {
     if (isExpoGo || !NativeMapView) return;
     if (!mapRef.current) return;
+    if (!mapReady) return;
 
     // Collect all coordinates to fit
     const allCoords: Array<{ latitude: number; longitude: number }> = [];
@@ -200,7 +202,7 @@ export default function GoogleMapView({
         longitudeDelta: 0.02,
       }, 500);
     }
-  }, [pickupLocation, dropoffLocation, routeCoords, markers]);
+  }, [mapReady, pickupLocation, dropoffLocation, routeCoords, markers]);
 
   if (isExpoGo || !NativeMapView) {
     return (
@@ -238,6 +240,8 @@ export default function GoogleMapView({
         ref={mapRef}
         style={styles.map}
         provider={PROVIDER_GOOGLE}
+        onMapReady={() => setMapReady(true)}
+        onLayout={() => setMapReady(true)}
         initialRegion={{
           latitude: location.latitude,
           longitude: location.longitude,
@@ -327,6 +331,13 @@ function decodePolyline(encoded: string): Array<{ latitude: number; longitude: n
   }
 
   return points;
+}
+
+function isValidCoordinate(coordinate: { latitude: number; longitude: number }): boolean {
+  return Number.isFinite(coordinate.latitude)
+    && Number.isFinite(coordinate.longitude)
+    && Math.abs(coordinate.latitude) <= 90
+    && Math.abs(coordinate.longitude) <= 180;
 }
 
 const styles = StyleSheet.create({

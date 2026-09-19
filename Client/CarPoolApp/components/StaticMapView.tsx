@@ -150,6 +150,17 @@ export default function StaticMapView({
     // Use encoded polyline path if available for accurate road route
     if (routePath) {
       params.append('path', `color:0x4285F4FF|weight:5|enc:${routePath}`);
+    } else if (routeCoordinates && routeCoordinates.length > 1) {
+      // Coordinates supplied here are decoded road geometry from the backend,
+      // not stop coordinates. Sample them to stay below Static Maps URL limits.
+      const step = Math.max(1, Math.ceil(routeCoordinates.length / 80));
+      const sampled = routeCoordinates.filter((_, index) => index % step === 0);
+      const last = routeCoordinates[routeCoordinates.length - 1];
+      if (sampled[sampled.length - 1] !== last) sampled.push(last);
+      params.append(
+        'path',
+        `color:0x4285F4FF|weight:5|${sampled.map(point => `${point.lat},${point.lng}`).join('|')}`
+      );
     } else if (showDirections && pickupLocation && dropoffLocation && !routeCoordinates) {
       // Fallback to straight line only if no combined route
       params.append('path', `color:0x4285F4FF|weight:5|${pickupLocation.latitude},${pickupLocation.longitude}|${dropoffLocation.latitude},${dropoffLocation.longitude}`);

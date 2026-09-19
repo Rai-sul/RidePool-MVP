@@ -115,8 +115,20 @@ export const driverService = {
     return apiClient.post<ApiResponse>(API_ENDPOINTS.DRIVER.REGISTER_VEHICLE, data);
   },
 
-  async getPoolRoute(poolId: string): Promise<ApiResponse<CombinedRouteResponse>> {
-    return apiClient.get<ApiResponse<CombinedRouteResponse>>(API_ENDPOINTS.POOL.COMBINED_ROUTE(poolId));
+  async getPoolRoute(
+    poolId: string,
+    driverLocation?: { lat: number; lng: number }
+  ): Promise<ApiResponse<CombinedRouteResponse>> {
+    const params = driverLocation
+      ? {
+          driver_lat: driverLocation.lat.toString(),
+          driver_lng: driverLocation.lng.toString(),
+        }
+      : undefined;
+    return apiClient.get<ApiResponse<CombinedRouteResponse>>(
+      API_ENDPOINTS.POOL.COMBINED_ROUTE(poolId),
+      params
+    );
   },
 
   async getNavigationLink(poolId: string): Promise<ApiResponse<NavigationLinkResponse>> {

@@ -76,6 +76,7 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
   const prevPoolStatusRef = useRef<string | null>(null);
   // Track the last fetched status to know when to refetch
   const lastFetchedStatusRef = useRef<string | null>(null);
+  const lastFetchedRoutePhaseRef = useRef<'preview' | 'final' | null>(null);
   // Track pool update time to detect membership changes
   const lastPoolUpdateRef = useRef<string | null>(null);
   // Track route fetch trigger (incremented to force refetch)
@@ -168,6 +169,7 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
       // Pool was updated (member joined/left), clear and refetch route
       setCombinedRoute(null);
       lastFetchedStatusRef.current = null;
+      lastFetchedRoutePhaseRef.current = null;
       setRouteFetchTrigger(prev => prev + 1);
     }
     lastPoolUpdateRef.current = poolUpdatedAt || null;
@@ -183,8 +185,11 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
       return;
     }
 
-    // Only fetch if we haven't already fetched for this status OR route is missing
-    if (lastFetchedStatusRef.current === poolStatus && combinedRoute) {
+    const requestedRoutePhase = driverPosition ? 'final' : 'preview';
+    if (
+      lastFetchedStatusRef.current === poolStatus
+      && lastFetchedRoutePhaseRef.current === requestedRoutePhase
+    ) {
       return;
     }
 
@@ -210,11 +215,17 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
 
         if (routeResponse.success && routeResponse.data) {
           const waypointCount = routeResponse.data.waypoints?.length || 0;
-          const hasValidRoute = waypointCount >= 2 && routeResponse.data.route?.coordinates?.length > 0;
+          const hasRoadGeometry = Boolean(routeResponse.data.route?.polyline)
+            || (routeResponse.data.route?.coordinates?.length || 0) > 1;
+          const hasValidRoute = waypointCount >= 2
+            && (hasRoadGeometry || routeResponse.data.meta.pendingDriver);
           
           if (hasValidRoute) {
             setCombinedRoute(routeResponse.data);
             lastFetchedStatusRef.current = poolStatus;
+            lastFetchedRoutePhaseRef.current = routeResponse.data.meta.pendingDriver
+              ? 'preview'
+              : 'final';
             console.log('[TripProgress] Combined route loaded:', {
               waypoints: waypointCount,
               coordinates: routeResponse.data.route?.coordinates?.length,
@@ -229,6 +240,9 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
             // Use whatever we got after max retries
             setCombinedRoute(routeResponse.data);
             lastFetchedStatusRef.current = poolStatus;
+            lastFetchedRoutePhaseRef.current = routeResponse.data.meta.pendingDriver
+              ? 'preview'
+              : 'final';
             console.warn('[TripProgress] Max retries, using incomplete route');
           }
         } else if (retryCount < MAX_RETRIES) {
@@ -275,7 +289,7 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
       setLoadingCombinedRoute(false);
       setLoadingNavLink(false);
     };
-  }, [selectedPool?.id, poolStatus, routeFetchTrigger]);
+  }, [driverPosition, selectedPool?.id, poolStatus, routeFetchTrigger]);
 
   const isFemale = userProfile?.gender === 'female';
   const accentColor = isFemale ? 'pink' : 'blue';
@@ -1103,7 +1117,7 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
             <Text className="font-semibold">
               {combinedRoute ? 'Smart Route' : 'Route'}
             </Text>
-            {combinedRoute && (
+            {combinedRoute?.route.trafficAware && (
               <View className="flex-row items-center gap-2">
                 <View className={`px-2 py-1 rounded ${combinedRoute.route.trafficLevel === 'low' ? 'bg-green-100' : combinedRoute.route.trafficLevel === 'moderate' ? 'bg-yellow-100' : 'bg-red-100'}`}>
                   <Text className={`text-xs font-medium ${combinedRoute.route.trafficLevel === 'low' ? 'text-green-700' : combinedRoute.route.trafficLevel === 'moderate' ? 'text-yellow-700' : 'text-red-700'}`}>
@@ -1113,6 +1127,38 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
               </View>
             )}
           </View>
+
+          {combinedRoute?.meta.pendingDriver && (
+            <View className="mb-3 rounded-lg bg-blue-50 px-3 py-2">
+              <Text className="text-xs text-blue-700">
+                Passenger stops are traffic-optimized. The driver leg will be added and re-optimized after assignment.
+              </Text>
+            </View>
+          )}
+          {combinedRoute?.route.trafficAware && combinedRoute.route.trafficCapturedAt && (
+            <View className="mb-3 rounded-lg bg-gray-50 px-3 py-2">
+              <Text className="text-xs text-gray-600">
+                One-shot traffic snapshot from {new Date(combinedRoute.route.trafficCapturedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+            </View>
+          )}
+          {combinedRoute?.meta.degraded && (
+            <View className="mb-3 rounded-lg bg-amber-50 px-3 py-2">
+              <Text className="text-xs text-amber-700">
+                {combinedRoute.route.polyline || combinedRoute.route.coordinates.length > 1
+                  ? 'Road route shown, but live traffic optimization is unavailable.'
+                  : 'Road route is temporarily unavailable. Stops are shown without a fabricated route line.'}
+              </Text>
+            </View>
+          )}
+          {combinedRoute && !combinedRoute.optimization.constraintsSatisfied && (
+            <View className="mb-3 rounded-lg bg-red-50 px-3 py-2">
+              <Text className="text-xs font-medium text-red-700">Passenger detour limit exceeded</Text>
+              <Text className="text-xs text-red-600">
+                The fastest all-stop route exceeds the configured limit for {combinedRoute.optimization.detourViolations.length} passenger(s).
+              </Text>
+            </View>
+          )}
 
           {/* Combined Route Waypoints */}
           {combinedRoute ? (

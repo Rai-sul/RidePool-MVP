@@ -1,13 +1,14 @@
-import { Location, VehicleType } from '../types';
-import { googleMapsService, GoogleMapsRoute } from './googleMaps.service';
+import crypto from 'crypto';
+import { Location } from '../types';
+import {
+  googleMapsService,
+  GoogleMapsRoute,
+  TrafficMatrixCell,
+  TrafficRouteMatrix,
+} from './googleMaps.service';
 import { unifiedCacheService } from './unifiedCache.service';
 import { calculateDistance, estimateTravelTime } from '../utils/helper';
 import { logger } from '../utils/logger';
-import * as h3 from 'h3-js';
-
-// ============================================
-// SMART ROUTE TYPES
-// ============================================
 
 export interface PoolMemberRoute {
   userId: string;
@@ -28,39 +29,59 @@ export interface RouteWaypoint {
   distanceFromPreviousKm: number;
 }
 
+export interface DetourViolation {
+  userId: string;
+  directDurationMinutes: number;
+  combinedDurationMinutes: number;
+  extraMinutes: number;
+  extraPercent: number;
+  exceededByMinutes: number;
+  exceededByPercent: number;
+}
+
+export type SmartRouteProvider =
+  | 'google_routes'
+  | 'google_routes_matrix'
+  | 'google_routes_matrix_directions'
+  | 'google_directions_preview'
+  | 'google_directions_fallback'
+  | 'geometric_preview'
+  | 'geometric_fallback';
+
 export interface CombinedSmartRoute {
-  // Route geometry for map display
   polyline: string;
   coordinates: Array<{ lat: number; lng: number }>;
-  
-  // Route metrics
   totalDistanceKm: number;
   totalDurationMinutes: number;
+  baseDurationMinutes: number;
   durationInTraffic: number;
   trafficLevel: 'low' | 'moderate' | 'high';
-  
-  // Ordered waypoints (pickup and dropoff sequence)
+  trafficAware: boolean;
+  trafficCapturedAt?: string;
   waypoints: RouteWaypoint[];
-  
-  // Route legs between waypoints
   legs: Array<{
     from: RouteWaypoint;
     to: RouteWaypoint;
     distanceKm: number;
     durationMinutes: number;
+    baseDurationMinutes?: number;
     polyline: string;
     instruction: string;
   }>;
-  
-  // Optimization info
-  optimizationScore: number; // 0-100 score indicating route efficiency
-  savingsVsIndividual: number; // Percentage savings vs individual routes
+  optimizationScore: number;
+  savingsVsIndividual: number;
+  optimizationObjective: 'traffic_time';
+  constraintsSatisfied: boolean;
+  detourViolations: DetourViolation[];
   routeSummary: string;
-  
-  // Cache info
+  routingProvider: SmartRouteProvider;
+  routeVersion: string;
+  degraded: boolean;
+  pendingDriver: boolean;
   fromCache: boolean;
   cacheKey?: string;
   calculatedAt: string;
+  topologyFingerprint?: string;
 }
 
 export interface SmartRouteOptions {
@@ -70,327 +91,260 @@ export interface SmartRouteOptions {
   avoidHighways?: boolean;
   trafficModel?: 'best_guess' | 'pessimistic' | 'optimistic';
   useCoarseDriverLocation?: boolean;
-  // Note: forceOffline removed - we use "One-Shot" strategy instead
-  // The route is calculated ONCE and cached for the entire trip
 }
 
-// ============================================
-// SMART ROUTE SERVICE
-// ============================================
+interface OptimizationCandidate {
+  order: number[];
+  durationSeconds: number;
+  baseDurationSeconds: number;
+  distanceMeters: number;
+  constraintsSatisfied: boolean;
+  detourViolations: DetourViolation[];
+  maxViolationRatio: number;
+}
 
-// "ONE-SHOT OPTIMIZATION" STRATEGY:
-// - Call Google Maps API ONCE when pool is finalized (high quality route)
-// - Cache that result for the ENTIRE trip duration (no more API calls)
-// - Serve cached route to all users until trip ends
-// - Cost: ~$0.01 per trip (1 API call) instead of $1+ per trip
+const ONE_SHOT_ROUTE_CACHE_TTL = 7200;
+const MAX_POOL_MEMBERS = 4;
+const MAX_EXTRA_DETOUR_SECONDS = 7 * 60;
+const MAX_EXTRA_DETOUR_PERCENT = 25;
+const ROUTE_VERSION = 'traffic-matrix-v5';
 
-const ONE_SHOT_ROUTE_CACHE_TTL = 7200; // 2 hours - covers entire trip duration
-const MAX_WAYPOINTS_PER_REQUEST = 23; // Google Maps limit is 25 waypoints
+export class RouteCapacityError extends Error {
+  readonly code = 'ROUTE_CAPACITY_EXCEEDED';
+  readonly maxMembers = MAX_POOL_MEMBERS;
+
+  constructor(memberCount: number) {
+    super(`Combined routing supports at most ${MAX_POOL_MEMBERS} active members; received ${memberCount}`);
+    this.name = 'RouteCapacityError';
+  }
+}
 
 export class SmartRouteService {
   private requestCount = 0;
   private cacheHits = 0;
-  
-  // Track which pools have already been optimized (to enforce "one-shot" rule)
-  private optimizedPools: Set<string> = new Set();
+  private readonly inFlight = new Map<string, Promise<CombinedSmartRoute | null>>();
 
-  /**
-   * Calculate a combined smart route for all pool members
-   * 
-   * "ONE-SHOT OPTIMIZATION" STRATEGY:
-   * 1. First call: Fetch from Google Maps API with optimize:true (Best Quality)
-   * 2. Cache the result for 2 hours (covers entire trip)
-   * 3. All subsequent calls: Return cached route (FREE)
-   * 
-   * Cost: $0.01 per trip (1 API call)
-   */
   async calculateCombinedRoute(
     members: PoolMemberRoute[],
     options: SmartRouteOptions = { optimizeFor: 'balanced' },
-    poolId?: string // Optional: Pass pool ID for better cache management
+    poolId?: string
   ): Promise<CombinedSmartRoute | null> {
     if (members.length === 0) {
       logger.warn('[SmartRoute] No members provided for route calculation');
       return null;
     }
+    if (members.length > MAX_POOL_MEMBERS) {
+      throw new RouteCapacityError(members.length);
+    }
 
     this.requestCount++;
-
-    // Generate cache key based on pool ID (if provided) or member locations
-    // Using pool ID creates a stable cache key for the entire trip
-    const cacheKey = poolId 
-      ? `smart-route:pool:${poolId}`
-      : this.generateCacheKey(members, options);
-    
-    // Check cache first - this is the KEY to "One-Shot" efficiency
+    const topologyFingerprint = this.createTopologyFingerprint(members);
+    const cacheKey = this.createCacheKey(members, options.driverLocation, poolId);
     const cached = await unifiedCacheService.get<CombinedSmartRoute>(cacheKey);
-    if (cached) {
+    const shouldRefreshDegradedRoute = Boolean(
+      cached?.degraded
+      && googleMapsService.shouldRefreshDegradedRoute(cached.calculatedAt)
+    );
+    if (
+      cached
+      && cached.topologyFingerprint === topologyFingerprint
+      && !shouldRefreshDegradedRoute
+    ) {
       this.cacheHits++;
-      logger.debug(`[SmartRoute] Cache HIT for route (poolId: ${poolId || 'N/A'}) - NO API COST`);
-      
-      // Adjust ETA based on elapsed time since calculation
-      const elapsedMinutes = (Date.now() - new Date(cached.calculatedAt).getTime()) / 60000;
-      if (elapsedMinutes > 1) {
-        return {
-          ...cached,
-          durationInTraffic: Math.max(1, Math.round(cached.durationInTraffic - elapsedMinutes)),
-          totalDurationMinutes: Math.max(1, Math.round(cached.totalDurationMinutes - elapsedMinutes)),
-          fromCache: true,
-          cacheKey,
-        };
-      }
-      
       return { ...cached, fromCache: true, cacheKey };
     }
-
-    // CACHE MISS: This is the "One-Shot" - call Google Maps API ONCE
-    logger.info(`[SmartRoute] Cache MISS - Calling Google Maps API (ONE-SHOT for poolId: ${poolId || 'N/A'})`);
-
-    try {
-      // Build ordered waypoints using intelligent ordering algorithm
-      const orderedWaypoints = this.orderWaypointsOptimally(members, options.driverLocation);
-
-      if (orderedWaypoints.length === 0) {
-        logger.warn('[SmartRoute] Could not order waypoints');
-        return null;
-      }
-
-      // Calculate route using Google Maps (THE ONE-SHOT API CALL)
-      logger.info(`[SmartRoute] Attempting Google Maps API call for ${orderedWaypoints.length} waypoints...`);
-      const route = await this.fetchOptimizedRoute(orderedWaypoints, options);
-      
-      if (!route) {
-        logger.warn('[SmartRoute] Google Maps API returned no route - using fallback (this is normal if API key not configured)');
-        const fallbackRoute = this.calculateFallbackRoute(orderedWaypoints, options);
-        // Still cache the fallback so we don't keep retrying
-        await unifiedCacheService.set(cacheKey, fallbackRoute, ONE_SHOT_ROUTE_CACHE_TTL);
-        return { ...fallbackRoute, fromCache: false, cacheKey, calculatedAt: new Date().toISOString() };
-      }
-
-      // Cache the result for the ENTIRE TRIP (2 hours)
-      // This is the key: after this, ALL subsequent requests are FREE
-      await unifiedCacheService.set(cacheKey, route, ONE_SHOT_ROUTE_CACHE_TTL);
-      
-      // Mark this pool as optimized
-      if (poolId) {
-        this.optimizedPools.add(poolId);
-      }
-      
-      logger.info(`[SmartRoute] ✅ ONE-SHOT complete! Cached route for ${members.length} members (TTL: ${ONE_SHOT_ROUTE_CACHE_TTL}s = 2 hours)`);
-
-      return { ...route, fromCache: false, cacheKey, calculatedAt: new Date().toISOString() };
-    } catch (error) {
-      logger.error('[SmartRoute] Error calculating combined route:', error);
-      const fallbackRoute = this.calculateFallbackRoute(
-        this.orderWaypointsOptimally(members, options.driverLocation),
-        options
-      );
-      // Cache fallback to prevent repeated failures
-      await unifiedCacheService.set(cacheKey, fallbackRoute, ONE_SHOT_ROUTE_CACHE_TTL);
-      return { ...fallbackRoute, fromCache: false, cacheKey, calculatedAt: new Date().toISOString() };
+    if (shouldRefreshDegradedRoute) {
+      logger.info(`[SmartRoute] Retrying traffic matrix for degraded snapshot ${cacheKey}`);
     }
+
+    const pending = this.inFlight.get(cacheKey);
+    if (pending) {
+      this.cacheHits++;
+      const route = await pending;
+      return route ? { ...route, fromCache: true, cacheKey } : null;
+    }
+
+    const calculation = this.calculateUncached(members, options, topologyFingerprint)
+      .then(async (route) => {
+        // A final route without road geometry is deliberately not cached. This
+        // lets the next request recover when Google has a transient failure,
+        // while never exposing stop-to-stop straight lines as a real route.
+        if (route && (route.polyline.length > 0 || route.coordinates.length > 1)) {
+          await unifiedCacheService.set(cacheKey, route, ONE_SHOT_ROUTE_CACHE_TTL);
+          return { ...route, cacheKey };
+        }
+        return route ? { ...route, cacheKey } : null;
+      })
+      .finally(() => this.inFlight.delete(cacheKey));
+
+    this.inFlight.set(cacheKey, calculation);
+    return calculation;
   }
 
-  /**
-   * Clear cached route for a pool when trip ends
-   * This frees up memory and ensures fresh calculation for next trip
-   */
   async clearPoolRoute(poolId: string): Promise<void> {
-    const cacheKey = `smart-route:pool:${poolId}`;
-    await unifiedCacheService.delete(cacheKey);
-    this.optimizedPools.delete(poolId);
-    logger.info(`[SmartRoute] Cleared cached route for pool ${poolId}`);
+    await Promise.all([
+      unifiedCacheService.deletePattern(`smart-route:v5:pool:${poolId}:*`),
+      unifiedCacheService.deletePattern(`smart-route:v4:pool:${poolId}:*`),
+      unifiedCacheService.deletePattern(`smart-route:v3:pool:${poolId}:*`),
+      unifiedCacheService.deletePattern(`smart-route:v2:pool:${poolId}:*`),
+      unifiedCacheService.delete(`smart-route:pool:${poolId}`),
+    ]);
+    logger.info(`[SmartRoute] Cleared route snapshots for pool ${poolId}`);
   }
 
-  /**
-   * Check if driver is off-route and recalculate if needed
-   * Called on every driver location update to keep passengers' view in sync
-   * 
-   * COST OPTIMIZATION: Only recalculates if driver is more than threshold distance off-route
-   * This prevents unnecessary API calls while ensuring route stays accurate
-   */
+  /** One-shot policy: location updates never create another billable route. */
   async checkAndRecalculateIfOffRoute(
-    poolId: string,
-    driverLocation: Location,
-    thresholdKm: number = 0.3 // 300 meters default
+    _poolId: string,
+    _driverLocation: Location,
+    _thresholdKm = 0.3
   ): Promise<{ recalculated: boolean; newRoute?: CombinedSmartRoute }> {
-    const cacheKey = `smart-route:pool:${poolId}`;
-    
-    // Get current cached route
-    const cachedRoute = await unifiedCacheService.get<CombinedSmartRoute>(cacheKey);
-    
-    if (!cachedRoute || !cachedRoute.coordinates || cachedRoute.coordinates.length === 0) {
-      logger.debug(`[SmartRoute] No cached route for pool ${poolId}, skipping off-route check`);
-      return { recalculated: false };
-    }
-
-    // Calculate distance from driver to the nearest point on the route
-    const distanceToRoute = this.calculateDistanceToRoute(driverLocation, cachedRoute.coordinates);
-
-    if (distanceToRoute <= thresholdKm) {
-      // Driver is on route, no recalculation needed
-      return { recalculated: false };
-    }
-
-    logger.info(`[SmartRoute] 🔄 Driver is ${(distanceToRoute * 1000).toFixed(0)}m off route (threshold: ${thresholdKm * 1000}m), recalculating...`);
-
-    // Filter out completed waypoints (those the driver has already passed)
-    // A waypoint is considered completed if driver is closer to the next waypoint
-    const remainingWaypoints = this.filterRemainingWaypoints(cachedRoute.waypoints, driverLocation);
-
-    if (remainingWaypoints.length === 0) {
-      logger.warn(`[SmartRoute] No remaining waypoints for pool ${poolId}`);
-      return { recalculated: false };
-    }
-
-    // Add driver's current location as the starting point
-    const updatedWaypoints: RouteWaypoint[] = [
-      {
-        id: 'driver-current',
-        type: 'driver',
-        userId: 'driver',
-        location: driverLocation,
-        order: 0,
-        estimatedArrivalMinutes: 0,
-        distanceFromPreviousKm: 0,
-      },
-      ...remainingWaypoints.map((wp, idx) => ({ ...wp, order: idx + 1 })),
-    ];
-
-    // Fetch new optimized route from Google Maps (this is a necessary API call)
-    const newRoute = await this.fetchOptimizedRoute(updatedWaypoints, { optimizeFor: 'time' });
-
-    if (!newRoute) {
-      logger.warn(`[SmartRoute] Failed to recalculate route for pool ${poolId}, keeping old route`);
-      return { recalculated: false };
-    }
-
-    // Update the cache with the new route
-    await unifiedCacheService.set(cacheKey, newRoute, ONE_SHOT_ROUTE_CACHE_TTL);
-    
-    logger.info(`[SmartRoute] ✅ Route recalculated for pool ${poolId}: ${newRoute.totalDistanceKm}km, ${newRoute.waypoints.length} waypoints`);
-
-    return { recalculated: true, newRoute };
+    return { recalculated: false };
   }
 
-  /**
-   * Filter waypoints to only include those the driver hasn't passed yet
-   */
-  private filterRemainingWaypoints(waypoints: RouteWaypoint[], driverLocation: Location): RouteWaypoint[] {
-    // Remove driver waypoint if present
-    const nonDriverWaypoints = waypoints.filter(wp => wp.type !== 'driver');
-    
-    if (nonDriverWaypoints.length === 0) return [];
-
-    // Find the nearest waypoint to the driver
-    let minDistance = Infinity;
-    let nearestIndex = 0;
-
-    nonDriverWaypoints.forEach((wp, idx) => {
-      const distance = calculateDistance(
-        driverLocation.latitude,
-        driverLocation.longitude,
-        wp.location.latitude,
-        wp.location.longitude
-      );
-      if (distance < minDistance) {
-        minDistance = distance;
-        nearestIndex = idx;
-      }
-    });
-
-    // Return the nearest waypoint and all subsequent waypoints
-    // This assumes waypoints are in order of visit
-    return nonDriverWaypoints.slice(nearestIndex);
-  }
-
-  /**
-   * Update route with driver's real-time location
-   * Only recalculates if driver is significantly off-route
-   */
+  /** One-shot policy: expose that the immutable route should be retained. */
   async updateRouteWithDriverLocation(
-    existingRoute: CombinedSmartRoute,
-    driverLocation: Location,
-    threshold: number = 0.5 // km
+    _existingRoute: CombinedSmartRoute,
+    _driverLocation: Location,
+    _threshold = 0.5
   ): Promise<{ needsRecalculation: boolean; updatedRoute?: CombinedSmartRoute }> {
-    // Find distance from driver to nearest waypoint on route
-    const distanceToRoute = this.calculateDistanceToRoute(driverLocation, existingRoute.coordinates);
-
-    if (distanceToRoute <= threshold) {
-      // Driver is on route, no recalculation needed
-      return { needsRecalculation: false };
-    }
-
-    logger.info(`[SmartRoute] Driver is ${distanceToRoute.toFixed(2)}km off route, recalculating...`);
-
-    // Recalculate route from driver's current position
-    const remainingWaypoints = existingRoute.waypoints.filter(wp => wp.type !== 'driver');
-    
-    // Add driver as first waypoint
-    const updatedWaypoints: RouteWaypoint[] = [
-      {
-        id: 'driver-current',
-        type: 'driver',
-        userId: 'driver',
-        location: driverLocation,
-        order: 0,
-        estimatedArrivalMinutes: 0,
-        distanceFromPreviousKm: 0,
-      },
-      ...remainingWaypoints.map((wp, idx) => ({ ...wp, order: idx + 1 })),
-    ];
-
-    const updatedRoute = await this.fetchOptimizedRoute(updatedWaypoints, { optimizeFor: 'time' });
-
-    return {
-      needsRecalculation: true,
-      updatedRoute: updatedRoute || undefined,
-    };
+    return { needsRecalculation: false };
   }
 
-  /**
-   * Order waypoints optimally using nearest neighbor with pickup-before-dropoff constraint
-   * This minimizes total travel distance while ensuring each passenger is picked up before dropped off
-   */
-  private orderWaypointsOptimally(
+  private async calculateUncached(
     members: PoolMemberRoute[],
-    driverLocation?: Location
-  ): RouteWaypoint[] {
+    options: SmartRouteOptions,
+    topologyFingerprint: string
+  ): Promise<CombinedSmartRoute | null> {
+    const calculatedAt = new Date();
+    const waypoints = this.createWaypoints(members, options.driverLocation);
+
+    if (!options.driverLocation) {
+      if (!googleMapsService.isAvailable()) {
+        return this.buildPreDriverFallback(waypoints, calculatedAt, topologyFingerprint);
+      }
+
+      const matrix = await googleMapsService.computeTrafficRouteMatrix(
+        waypoints.map((waypoint) => waypoint.location),
+        calculatedAt
+      );
+      if (!matrix) {
+        logger.warn('[SmartRoute] Pre-driver traffic matrix unavailable; using road preview fallback');
+        return this.buildPreDriverFallback(waypoints, calculatedAt, topologyFingerprint);
+      }
+
+      // Without a driver, both the first pickup and final drop-off are free
+      // optimizer decisions. Pickup-before-drop-off and detour caps still apply.
+      const candidate = this.selectOptimalOrder(waypoints, matrix, undefined, true);
+      if (!candidate) {
+        logger.warn('[SmartRoute] Pre-driver traffic matrix has no connected all-stop route');
+        return this.buildPreDriverFallback(waypoints, calculatedAt, topologyFingerprint);
+      }
+
+      const orderedWaypoints = candidate.order.map((index) => waypoints[index]);
+      const trafficRoute = await googleMapsService.computeFixedOrderTrafficRoute(
+        orderedWaypoints.map((waypoint) => waypoint.location),
+        calculatedAt
+      );
+
+      if (trafficRoute) {
+        const route = this.buildGoogleRoute(
+          waypoints,
+          matrix,
+          candidate,
+          trafficRoute,
+          calculatedAt,
+          topologyFingerprint
+        );
+        return {
+          ...route,
+          pendingDriver: true,
+          routeSummary: 'Traffic-optimized passenger route — driver leg pending',
+        };
+      }
+
+      const directionsRoute = await this.fetchFixedOrderRoadRoute(orderedWaypoints);
+      return this.buildMatrixBackedRoute(
+        waypoints,
+        matrix,
+        candidate,
+        calculatedAt,
+        {
+          provider: directionsRoute
+            ? 'google_routes_matrix_directions'
+            : 'google_routes_matrix',
+          trafficAware: true,
+          degraded: !directionsRoute,
+          pendingDriver: true,
+          summary: directionsRoute
+            ? 'Traffic-optimized passenger route — driver leg pending'
+            : 'Traffic-optimized stops — road geometry unavailable',
+          geometry: directionsRoute,
+        },
+        topologyFingerprint
+      );
+    }
+
+    if (!googleMapsService.isAvailable()) {
+      return this.buildGeometricFallback(waypoints, calculatedAt, topologyFingerprint);
+    }
+
+    const locations = waypoints.map((waypoint) => waypoint.location);
+    const matrix = await googleMapsService.computeTrafficRouteMatrix(locations, calculatedAt);
+    if (!matrix) {
+      logger.warn('[SmartRoute] Google Routes matrix unavailable; using non-traffic fallback');
+      return this.buildGeometricFallback(waypoints, calculatedAt, topologyFingerprint);
+    }
+
+    const candidate = this.selectOptimalOrder(waypoints, matrix, 0, true);
+    if (!candidate) {
+      logger.warn('[SmartRoute] No connected route covers every required stop');
+      return this.buildGeometricFallback(waypoints, calculatedAt, topologyFingerprint);
+    }
+
+    const orderedWaypoints = candidate.order.map((index) => waypoints[index]);
+    const finalRoute = await googleMapsService.computeFixedOrderTrafficRoute(
+      orderedWaypoints.map((waypoint) => waypoint.location),
+      calculatedAt
+    );
+
+    if (!finalRoute) {
+      logger.warn('[SmartRoute] Routes geometry unavailable; trying fixed-order Directions geometry');
+      const directionsRoute = await this.fetchFixedOrderRoadRoute(orderedWaypoints);
+      return this.buildMatrixBackedRoute(
+        waypoints,
+        matrix,
+        candidate,
+        calculatedAt,
+        {
+          provider: directionsRoute
+            ? 'google_routes_matrix_directions'
+            : 'google_routes_matrix',
+          trafficAware: true,
+          degraded: !directionsRoute,
+          pendingDriver: false,
+          summary: directionsRoute
+            ? 'Traffic-optimized route'
+            : 'Traffic-optimized stops — road geometry unavailable',
+          geometry: directionsRoute,
+        },
+        topologyFingerprint
+      );
+    }
+
+    return this.buildGoogleRoute(
+      waypoints,
+      matrix,
+      candidate,
+      finalRoute,
+      calculatedAt,
+      topologyFingerprint
+    );
+  }
+
+  private createWaypoints(members: PoolMemberRoute[], driverLocation?: Location): RouteWaypoint[] {
     const waypoints: RouteWaypoint[] = [];
-    const pickups: Map<string, RouteWaypoint> = new Map();
-    const dropoffs: Map<string, RouteWaypoint> = new Map();
-
-    // Create waypoints for all members
-    members.forEach((member) => {
-      const pickupWp: RouteWaypoint = {
-        id: `pickup-${member.userId}`,
-        type: 'pickup',
-        userId: member.userId,
-        location: member.pickup,
-        address: member.pickupAddress,
-        order: 0,
-        estimatedArrivalMinutes: 0,
-        distanceFromPreviousKm: 0,
-      };
-      pickups.set(member.userId, pickupWp);
-
-      const dropoffWp: RouteWaypoint = {
-        id: `dropoff-${member.userId}`,
-        type: 'dropoff',
-        userId: member.userId,
-        location: member.dropoff,
-        address: member.dropoffAddress,
-        order: 0,
-        estimatedArrivalMinutes: 0,
-        distanceFromPreviousKm: 0,
-      };
-      dropoffs.set(member.userId, dropoffWp);
-    });
-
-    // Start from driver location or first pickup
-    let currentLocation: Location;
     if (driverLocation) {
-      const driverWp: RouteWaypoint = {
+      waypoints.push({
         id: 'driver-start',
         type: 'driver',
         userId: 'driver',
@@ -398,394 +352,523 @@ export class SmartRouteService {
         order: 0,
         estimatedArrivalMinutes: 0,
         distanceFromPreviousKm: 0,
-      };
-      waypoints.push(driverWp);
-      currentLocation = driverLocation;
-    } else {
-      // Find closest pickup to center of all pickups
-      const centerLat = members.reduce((sum, m) => sum + m.pickup.latitude, 0) / members.length;
-      const centerLng = members.reduce((sum, m) => sum + m.pickup.longitude, 0) / members.length;
-      
-      let closestPickup: RouteWaypoint | null = null;
-      let closestDistance = Infinity;
-
-      pickups.forEach((pickup) => {
-        const dist = calculateDistance(centerLat, centerLng, pickup.location.latitude, pickup.location.longitude);
-        if (dist < closestDistance) {
-          closestDistance = dist;
-          closestPickup = pickup;
-        }
       });
-
-      if (closestPickup !== null) {
-        const firstPickup = closestPickup as RouteWaypoint;
-        currentLocation = firstPickup.location;
-        waypoints.push(firstPickup);
-        pickups.delete(firstPickup.userId);
-      } else {
-        return [];
-      }
     }
 
-    const pickedUp = new Set<string>();
-    waypoints.filter(wp => wp.type === 'pickup').forEach(wp => pickedUp.add(wp.userId));
-
-    // Greedy nearest neighbor with constraints
-    while (pickups.size > 0 || dropoffs.size > 0) {
-      let bestWaypoint: RouteWaypoint | null = null;
-      let bestDistance = Infinity;
-
-      // Consider remaining pickups
-      pickups.forEach((pickup) => {
-        const dist = calculateDistance(
-          currentLocation.latitude,
-          currentLocation.longitude,
-          pickup.location.latitude,
-          pickup.location.longitude
-        );
-        if (dist < bestDistance) {
-          bestDistance = dist;
-          bestWaypoint = pickup;
-        }
+    [...members]
+      .sort((left, right) => left.userId.localeCompare(right.userId))
+      .forEach((member) => {
+        waypoints.push({
+          id: `pickup-${member.userId}`,
+          type: 'pickup',
+          userId: member.userId,
+          location: member.pickup,
+          address: member.pickupAddress,
+          order: 0,
+          estimatedArrivalMinutes: 0,
+          distanceFromPreviousKm: 0,
+        });
+        waypoints.push({
+          id: `dropoff-${member.userId}`,
+          type: 'dropoff',
+          userId: member.userId,
+          location: member.dropoff,
+          address: member.dropoffAddress,
+          order: 0,
+          estimatedArrivalMinutes: 0,
+          distanceFromPreviousKm: 0,
+        });
       });
-
-      // Consider dropoffs only for picked-up passengers
-      dropoffs.forEach((dropoff, userId) => {
-        if (pickedUp.has(userId)) {
-          const dist = calculateDistance(
-            currentLocation.latitude,
-            currentLocation.longitude,
-            dropoff.location.latitude,
-            dropoff.location.longitude
-          );
-          if (dist < bestDistance) {
-            bestDistance = dist;
-            bestWaypoint = dropoff;
-          }
-        }
-      });
-
-      if (!bestWaypoint) break;
-
-      const selectedWaypoint = bestWaypoint as RouteWaypoint;
-      selectedWaypoint.order = waypoints.length;
-      selectedWaypoint.distanceFromPreviousKm = bestDistance;
-      waypoints.push(selectedWaypoint);
-      currentLocation = selectedWaypoint.location;
-
-      if (selectedWaypoint.type === 'pickup') {
-        pickedUp.add(selectedWaypoint.userId);
-        pickups.delete(selectedWaypoint.userId);
-      } else {
-        dropoffs.delete(selectedWaypoint.userId);
-      }
-    }
-
-    // Log the final waypoint order for debugging
-    logger.info(`[SmartRoute] Optimal waypoint order (${waypoints.length} stops):`);
-    waypoints.forEach((wp, idx) => {
-      logger.info(`  ${idx + 1}. ${wp.type.toUpperCase()} - User: ${wp.userId.substring(0, 8)}... - ${wp.address || `${wp.location.latitude.toFixed(4)},${wp.location.longitude.toFixed(4)}`}`);
-    });
 
     return waypoints;
   }
 
-  /**
-   * Fetch optimized route from Google Maps Directions API
-   */
-  private async fetchOptimizedRoute(
+  private selectOptimalOrder(
     waypoints: RouteWaypoint[],
-    options: SmartRouteOptions
-  ): Promise<CombinedSmartRoute | null> {
-    if (!googleMapsService.isAvailable()) {
-      logger.warn('[SmartRoute] Google Maps API not available');
-      return null;
-    }
-
-    if (waypoints.length < 2) {
-      logger.warn('[SmartRoute] Need at least 2 waypoints for route');
-      return null;
-    }
-
-    // Limit waypoints to Google Maps maximum
-    const limitedWaypoints = waypoints.slice(0, MAX_WAYPOINTS_PER_REQUEST);
-
-    const origin = limitedWaypoints[0].location;
-    const destination = limitedWaypoints[limitedWaypoints.length - 1].location;
-    const intermediateWaypoints = limitedWaypoints.slice(1, -1).map(wp => wp.location);
-
-    try {
-      // Use optimized waypoints request
-      const result = await googleMapsService.getBestRouteWithTraffic(
-        origin,
-        destination,
-        intermediateWaypoints.length > 0 ? intermediateWaypoints : undefined
-      );
-
-      if (!result) {
-        return null;
-      }
-
-      const { bestRoute } = result;
-
-      // Build legs from route data
-      const legs = this.buildRouteLegs(limitedWaypoints, bestRoute);
-
-      // Calculate ETA for each waypoint
-      let cumulativeMinutes = 0;
-      limitedWaypoints.forEach((wp, idx) => {
-        if (idx > 0 && legs[idx - 1]) {
-          cumulativeMinutes += legs[idx - 1].durationMinutes;
-        }
-        wp.estimatedArrivalMinutes = Math.round(cumulativeMinutes);
-      });
-
-      // Calculate optimization metrics
-      const individualRouteDistance = this.calculateIndividualRoutesTotal(
-        waypoints.filter(wp => wp.type !== 'driver')
-      );
-      const savingsPercent = individualRouteDistance > 0
-        ? Math.round(((individualRouteDistance - bestRoute.distance) / individualRouteDistance) * 100)
-        : 0;
-
-      return {
-        polyline: bestRoute.geometry.encoded,
-        coordinates: bestRoute.geometry.coordinates,
-        totalDistanceKm: Math.round(bestRoute.distance * 10) / 10,
-        totalDurationMinutes: bestRoute.duration,
-        durationInTraffic: bestRoute.durationInTraffic,
-        trafficLevel: bestRoute.trafficLevel,
-        waypoints: limitedWaypoints,
-        legs,
-        optimizationScore: Math.min(100, 50 + savingsPercent),
-        savingsVsIndividual: Math.max(0, savingsPercent),
-        routeSummary: bestRoute.summary || 'Optimized pool route',
-        fromCache: false,
-        calculatedAt: new Date().toISOString(),
-      };
-    } catch (error) {
-      logger.error('[SmartRoute] Error fetching route from Google Maps:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Build route legs from waypoints and Google Maps route data
-   */
-  private buildRouteLegs(
-    waypoints: RouteWaypoint[],
-    route: GoogleMapsRoute
-  ): CombinedSmartRoute['legs'] {
-    const legs: CombinedSmartRoute['legs'] = [];
-
-    for (let i = 0; i < waypoints.length - 1; i++) {
-      const from = waypoints[i];
-      const to = waypoints[i + 1];
-
-      // Use route steps if available, otherwise estimate
-      const step = route.steps?.[i];
-      
-      legs.push({
-        from,
-        to,
-        distanceKm: step?.distance || calculateDistance(
-          from.location.latitude,
-          from.location.longitude,
-          to.location.latitude,
-          to.location.longitude
-        ),
-        durationMinutes: step?.duration || 5, // Default 5 min per leg
-        polyline: step?.polyline || '',
-        instruction: this.generateLegInstruction(from, to),
-      });
-    }
-
-    return legs;
-  }
-
-  /**
-   * Generate human-readable instruction for a route leg
-   */
-  private generateLegInstruction(from: RouteWaypoint, to: RouteWaypoint): string {
-    const fromDesc = from.type === 'driver' ? 'current location' : 
-      `${from.type === 'pickup' ? 'pickup' : 'dropoff'} for passenger`;
-    const toDesc = to.type === 'pickup' ? 'Pick up passenger' : 'Drop off passenger';
-    
-    return `${toDesc} at ${to.address || 'waypoint'}`;
-  }
-
-  /**
-   * Calculate fallback route when Google Maps is unavailable
-   * Generates interpolated coordinates for smoother visual display
-   */
-  private calculateFallbackRoute(
-    waypoints: RouteWaypoint[],
-    options: SmartRouteOptions
-  ): CombinedSmartRoute {
-    let totalDistance = 0;
-    const legs: CombinedSmartRoute['legs'] = [];
-    
-    // Generate interpolated coordinates for smoother line rendering
-    // Instead of just connecting waypoints with straight lines,
-    // we add intermediate points for a slightly curved appearance
-    const interpolatedCoordinates: Array<{ lat: number; lng: number }> = [];
-
-    for (let i = 0; i < waypoints.length - 1; i++) {
-      const from = waypoints[i];
-      const to = waypoints[i + 1];
-      const distance = calculateDistance(
-        from.location.latitude,
-        from.location.longitude,
-        to.location.latitude,
-        to.location.longitude
-      );
-      totalDistance += distance;
-
-      // Add the start point
-      interpolatedCoordinates.push({
-        lat: from.location.latitude,
-        lng: from.location.longitude,
-      });
-
-      // Add intermediate points for longer segments (more than 1km)
-      // This creates a smoother visual path
-      if (distance > 1) {
-        const numPoints = Math.min(5, Math.ceil(distance / 0.5)); // One point per 500m, max 5
-        for (let j = 1; j < numPoints; j++) {
-          const t = j / numPoints;
-          interpolatedCoordinates.push({
-            lat: from.location.latitude + t * (to.location.latitude - from.location.latitude),
-            lng: from.location.longitude + t * (to.location.longitude - from.location.longitude),
-          });
-        }
-      }
-
-      legs.push({
-        from,
-        to,
-        distanceKm: distance,
-        durationMinutes: estimateTravelTime(distance),
-        polyline: '',
-        instruction: this.generateLegInstruction(from, to),
-      });
-    }
-
-    // Add the final waypoint
-    if (waypoints.length > 0) {
-      const lastWp = waypoints[waypoints.length - 1];
-      interpolatedCoordinates.push({
-        lat: lastWp.location.latitude,
-        lng: lastWp.location.longitude,
-      });
-    }
-
-    // Calculate ETA for each waypoint
-    let cumulativeMinutes = 0;
-    waypoints.forEach((wp, idx) => {
-      if (idx > 0 && legs[idx - 1]) {
-        cumulativeMinutes += legs[idx - 1].durationMinutes;
-      }
-      wp.estimatedArrivalMinutes = Math.round(cumulativeMinutes);
+    matrix: TrafficRouteMatrix,
+    fixedOriginIndex?: number,
+    enforceDetourCaps = true
+  ): OptimizationCandidate | null {
+    const pickupIndex = new Map<string, number>();
+    waypoints.forEach((waypoint, index) => {
+      if (waypoint.type === 'pickup') pickupIndex.set(waypoint.userId, index);
     });
 
-    const totalDuration = estimateTravelTime(totalDistance);
+    const visited = Array<boolean>(waypoints.length).fill(false);
+    const initialOrder: number[] = [];
+    if (fixedOriginIndex !== undefined) {
+      visited[fixedOriginIndex] = true;
+      initialOrder.push(fixedOriginIndex);
+    }
 
-    logger.info(`[SmartRoute] Fallback route generated: ${waypoints.length} waypoints, ${interpolatedCoordinates.length} coordinates, ${totalDistance.toFixed(1)}km`);
+    let best: OptimizationCandidate | null = null;
+    const visit = (
+      order: number[],
+      durationSeconds: number,
+      baseDurationSeconds: number,
+      distanceMeters: number
+    ) => {
+      if (order.length === waypoints.length) {
+        const candidate = this.evaluateCandidate(
+          order,
+          waypoints,
+          matrix,
+          durationSeconds,
+          baseDurationSeconds,
+          distanceMeters,
+          enforceDetourCaps
+        );
+        if (candidate && this.isBetterCandidate(candidate, best)) best = candidate;
+        return;
+      }
+
+      if (best?.constraintsSatisfied && durationSeconds > best.durationSeconds) return;
+
+      for (let index = 0; index < waypoints.length; index++) {
+        if (visited[index] || waypoints[index].type === 'driver') continue;
+        const waypoint = waypoints[index];
+        if (waypoint.type === 'dropoff') {
+          const requiredPickup = pickupIndex.get(waypoint.userId);
+          if (requiredPickup === undefined || !visited[requiredPickup]) continue;
+        }
+
+        let nextDuration = durationSeconds;
+        let nextBaseDuration = baseDurationSeconds;
+        let nextDistance = distanceMeters;
+        if (order.length > 0) {
+          const edge = matrix[order[order.length - 1]]?.[index];
+          if (!edge) continue;
+          nextDuration += edge.durationSeconds;
+          nextBaseDuration += edge.staticDurationSeconds;
+          nextDistance += edge.distanceMeters;
+        }
+
+        visited[index] = true;
+        order.push(index);
+        visit(order, nextDuration, nextBaseDuration, nextDistance);
+        order.pop();
+        visited[index] = false;
+      }
+    };
+
+    visit(initialOrder, 0, 0, 0);
+    return best;
+  }
+
+  private evaluateCandidate(
+    order: number[],
+    waypoints: RouteWaypoint[],
+    matrix: TrafficRouteMatrix,
+    durationSeconds: number,
+    baseDurationSeconds: number,
+    distanceMeters: number,
+    enforceDetourCaps: boolean
+  ): OptimizationCandidate | null {
+    const violations: DetourViolation[] = [];
+    let maxViolationRatio = 0;
+
+    for (const pickup of waypoints.filter((waypoint) => waypoint.type === 'pickup')) {
+      const pickupPosition = order.findIndex((index) => waypoints[index].id === pickup.id);
+      const dropoffPosition = order.findIndex(
+        (index) => waypoints[index].type === 'dropoff' && waypoints[index].userId === pickup.userId
+      );
+      if (pickupPosition < 0 || dropoffPosition <= pickupPosition) return null;
+
+      const pickupIndex = order[pickupPosition];
+      const dropoffIndex = order[dropoffPosition];
+      const direct = matrix[pickupIndex]?.[dropoffIndex];
+      if (!direct) return null;
+
+      let combinedSeconds = 0;
+      for (let position = pickupPosition; position < dropoffPosition; position++) {
+        const edge = matrix[order[position]]?.[order[position + 1]];
+        if (!edge) return null;
+        combinedSeconds += edge.durationSeconds;
+      }
+
+      const extraSeconds = Math.max(0, combinedSeconds - direct.durationSeconds);
+      const extraPercent = direct.durationSeconds > 0
+        ? (extraSeconds / direct.durationSeconds) * 100
+        : 0;
+      const minuteRatio = extraSeconds / MAX_EXTRA_DETOUR_SECONDS;
+      const percentRatio = extraPercent / MAX_EXTRA_DETOUR_PERCENT;
+      maxViolationRatio = Math.max(maxViolationRatio, minuteRatio, percentRatio);
+
+      if (
+        enforceDetourCaps &&
+        (extraSeconds > MAX_EXTRA_DETOUR_SECONDS || extraPercent > MAX_EXTRA_DETOUR_PERCENT)
+      ) {
+        violations.push({
+          userId: pickup.userId,
+          directDurationMinutes: this.roundMinutes(direct.durationSeconds),
+          combinedDurationMinutes: this.roundMinutes(combinedSeconds),
+          extraMinutes: this.roundMinutes(extraSeconds),
+          extraPercent: Math.round(extraPercent * 10) / 10,
+          exceededByMinutes: this.roundMinutes(Math.max(0, extraSeconds - MAX_EXTRA_DETOUR_SECONDS)),
+          exceededByPercent: Math.round(Math.max(0, extraPercent - MAX_EXTRA_DETOUR_PERCENT) * 10) / 10,
+        });
+      }
+    }
 
     return {
-      polyline: '', // No encoded polyline for fallback
-      coordinates: interpolatedCoordinates,
-      totalDistanceKm: Math.round(totalDistance * 10) / 10,
-      totalDurationMinutes: totalDuration,
-      durationInTraffic: totalDuration,
-      trafficLevel: 'moderate',
-      waypoints,
-      legs,
-      optimizationScore: 50, // Base score for fallback
-      savingsVsIndividual: 0,
-      routeSummary: 'Estimated route (offline)',
-      fromCache: false,
-      calculatedAt: new Date().toISOString(),
+      order: [...order],
+      durationSeconds,
+      baseDurationSeconds,
+      distanceMeters,
+      constraintsSatisfied: !enforceDetourCaps || violations.length === 0,
+      detourViolations: violations,
+      maxViolationRatio,
     };
   }
 
-  /**
-   * Calculate total distance if each rider took individual routes
-   */
-  private calculateIndividualRoutesTotal(waypoints: RouteWaypoint[]): number {
-    let total = 0;
-    const userPickups: Map<string, RouteWaypoint> = new Map();
-    const userDropoffs: Map<string, RouteWaypoint> = new Map();
-
-    waypoints.forEach(wp => {
-      if (wp.type === 'pickup') {
-        userPickups.set(wp.userId, wp);
-      } else if (wp.type === 'dropoff') {
-        userDropoffs.set(wp.userId, wp);
-      }
-    });
-
-    userPickups.forEach((pickup, userId) => {
-      const dropoff = userDropoffs.get(userId);
-      if (dropoff) {
-        total += calculateDistance(
-          pickup.location.latitude,
-          pickup.location.longitude,
-          dropoff.location.latitude,
-          dropoff.location.longitude
-        );
-      }
-    });
-
-    return total;
-  }
-
-  /**
-   * Calculate distance from a point to the nearest point on the route
-   */
-  private calculateDistanceToRoute(
-    point: Location,
-    routeCoordinates: Array<{ lat: number; lng: number }>
-  ): number {
-    let minDistance = Infinity;
-
-    for (const coord of routeCoordinates) {
-      const dist = calculateDistance(
-        point.latitude,
-        point.longitude,
-        coord.lat,
-        coord.lng
-      );
-      if (dist < minDistance) {
-        minDistance = dist;
-      }
+  private isBetterCandidate(
+    candidate: OptimizationCandidate,
+    current: OptimizationCandidate | null
+  ): boolean {
+    if (!current) return true;
+    if (candidate.constraintsSatisfied !== current.constraintsSatisfied) {
+      return candidate.constraintsSatisfied;
     }
-
-    return minDistance;
+    if (!candidate.constraintsSatisfied && candidate.maxViolationRatio !== current.maxViolationRatio) {
+      return candidate.maxViolationRatio < current.maxViolationRatio;
+    }
+    if (candidate.durationSeconds !== current.durationSeconds) {
+      return candidate.durationSeconds < current.durationSeconds;
+    }
+    if (candidate.distanceMeters !== current.distanceMeters) {
+      return candidate.distanceMeters < current.distanceMeters;
+    }
+    return candidate.order.join(',') < current.order.join(',');
   }
 
-  /**
-   * Generate cache key for route based on member locations
-   */
-  private generateCacheKey(members: PoolMemberRoute[], options: SmartRouteOptions): string {
-    // Use H3 indexes at resolution 9 for location hashing
-    const locationHashes = members.map(m => {
-      const pickupH3 = h3.latLngToCell(m.pickup.latitude, m.pickup.longitude, 9);
-      const dropoffH3 = h3.latLngToCell(m.dropoff.latitude, m.dropoff.longitude, 7);
-      return `${pickupH3}:${dropoffH3}`;
-    }).sort().join('|');
+  private buildGoogleRoute(
+    sourceWaypoints: RouteWaypoint[],
+    matrix: TrafficRouteMatrix,
+    candidate: OptimizationCandidate,
+    route: GoogleMapsRoute,
+    calculatedAt: Date,
+    topologyFingerprint: string
+  ): CombinedSmartRoute {
+    const ordered = candidate.order.map((index) => ({ ...sourceWaypoints[index] }));
+    const legs = this.buildLegs(ordered, candidate.order, matrix, route);
+    this.applyWaypointMetrics(ordered, legs);
+    const savings = this.calculateDistanceSavings(sourceWaypoints, matrix, candidate.distanceMeters);
 
-    const driverRes = options.useCoarseDriverLocation ? 7 : 9;
-    const driverHash = options.driverLocation
-      ? h3.latLngToCell(options.driverLocation.latitude, options.driverLocation.longitude, driverRes)
+    return {
+      polyline: route.geometry.encoded,
+      coordinates: route.geometry.coordinates,
+      totalDistanceKm: Math.round(route.distance * 10) / 10,
+      totalDurationMinutes: route.duration,
+      baseDurationMinutes: route.duration,
+      durationInTraffic: route.durationInTraffic,
+      trafficLevel: route.trafficLevel,
+      trafficAware: true,
+      trafficCapturedAt: calculatedAt.toISOString(),
+      waypoints: ordered,
+      legs,
+      optimizationScore: candidate.constraintsSatisfied ? Math.min(100, 75 + Math.max(0, savings)) : 60,
+      savingsVsIndividual: savings,
+      optimizationObjective: 'traffic_time',
+      constraintsSatisfied: candidate.constraintsSatisfied,
+      detourViolations: candidate.detourViolations,
+      routeSummary: route.summary || 'Traffic-optimized pool route',
+      routingProvider: 'google_routes',
+      routeVersion: ROUTE_VERSION,
+      degraded: false,
+      pendingDriver: false,
+      fromCache: false,
+      calculatedAt: calculatedAt.toISOString(),
+      topologyFingerprint,
+    };
+  }
+
+  private buildMatrixBackedRoute(
+    sourceWaypoints: RouteWaypoint[],
+    matrix: TrafficRouteMatrix,
+    candidate: OptimizationCandidate,
+    calculatedAt: Date,
+    status: {
+      provider: SmartRouteProvider;
+      trafficAware: boolean;
+      degraded: boolean;
+      pendingDriver: boolean;
+      summary: string;
+      geometry?: GoogleMapsRoute | null;
+    },
+    topologyFingerprint: string
+  ): CombinedSmartRoute {
+    const ordered = candidate.order.map((index) => ({ ...sourceWaypoints[index] }));
+    const legs = this.buildLegs(
+      ordered,
+      candidate.order,
+      matrix,
+      status.trafficAware ? undefined : status.geometry ?? undefined
+    );
+    this.applyWaypointMetrics(ordered, legs);
+    const savings = this.calculateDistanceSavings(sourceWaypoints, matrix, candidate.distanceMeters);
+    const baseMinutes = status.geometry && !status.trafficAware
+      ? status.geometry.duration
+      : Math.round(candidate.baseDurationSeconds / 60);
+    const trafficMinutes = status.trafficAware
+      ? Math.round(candidate.durationSeconds / 60)
+      : status.geometry?.durationInTraffic ?? baseMinutes;
+
+    return {
+      polyline: status.geometry?.geometry.encoded ?? '',
+      coordinates: status.geometry?.geometry.coordinates ?? [],
+      totalDistanceKm: status.geometry
+        ? Math.round(status.geometry.distance * 10) / 10
+        : Math.round(candidate.distanceMeters / 100) / 10,
+      totalDurationMinutes: baseMinutes,
+      baseDurationMinutes: baseMinutes,
+      durationInTraffic: trafficMinutes,
+      trafficLevel: status.trafficAware
+        ? this.getTrafficLevel(candidate.baseDurationSeconds, candidate.durationSeconds)
+        : 'moderate',
+      trafficAware: status.trafficAware,
+      trafficCapturedAt: status.trafficAware ? calculatedAt.toISOString() : undefined,
+      waypoints: ordered,
+      legs,
+      optimizationScore: candidate.constraintsSatisfied ? Math.min(100, 75 + Math.max(0, savings)) : 60,
+      savingsVsIndividual: savings,
+      optimizationObjective: 'traffic_time',
+      constraintsSatisfied: candidate.constraintsSatisfied,
+      detourViolations: candidate.detourViolations,
+      routeSummary: status.summary,
+      routingProvider: status.provider,
+      routeVersion: ROUTE_VERSION,
+      degraded: status.degraded,
+      pendingDriver: status.pendingDriver,
+      fromCache: false,
+      calculatedAt: calculatedAt.toISOString(),
+      topologyFingerprint,
+    };
+  }
+
+  private async buildGeometricFallback(
+    waypoints: RouteWaypoint[],
+    calculatedAt: Date,
+    topologyFingerprint: string
+  ): Promise<CombinedSmartRoute | null> {
+    const matrix = this.createGeometricMatrix(waypoints);
+    const fixedOrigin = waypoints[0]?.type === 'driver' ? 0 : undefined;
+    const candidate = this.selectOptimalOrder(waypoints, matrix, fixedOrigin, true);
+    if (!candidate) return null;
+
+    const orderedWaypoints = candidate.order.map((index) => waypoints[index]);
+    const roadRoute = googleMapsService.isAvailable()
+      ? await this.fetchFixedOrderRoadRoute(orderedWaypoints)
+      : null;
+
+    return this.buildMatrixBackedRoute(
+      waypoints,
+      matrix,
+      candidate,
+      calculatedAt,
+      {
+        provider: roadRoute ? 'google_directions_fallback' : 'geometric_fallback',
+        trafficAware: false,
+        degraded: true,
+        pendingDriver: false,
+        summary: roadRoute
+          ? 'Road route — live traffic optimization unavailable'
+          : 'Stops available — road route unavailable',
+        geometry: roadRoute,
+      },
+      topologyFingerprint
+    );
+  }
+
+  private async buildPreDriverFallback(
+    waypoints: RouteWaypoint[],
+    calculatedAt: Date,
+    topologyFingerprint: string
+  ): Promise<CombinedSmartRoute | null> {
+    const matrix = this.createGeometricMatrix(waypoints);
+    const candidate = this.selectOptimalOrder(waypoints, matrix, undefined, true);
+    if (!candidate) return null;
+
+    const orderedWaypoints = candidate.order.map((index) => waypoints[index]);
+    const roadPreview = googleMapsService.isAvailable()
+      ? await this.fetchFixedOrderRoadRoute(orderedWaypoints)
+      : null;
+
+    return this.buildMatrixBackedRoute(
+      waypoints,
+      matrix,
+      candidate,
+      calculatedAt,
+      {
+        provider: roadPreview ? 'google_directions_preview' : 'geometric_preview',
+        trafficAware: false,
+        degraded: true,
+        pendingDriver: true,
+        summary: roadPreview
+          ? 'Road route preview — traffic optimization unavailable'
+          : 'Stops preview — road geometry unavailable',
+        geometry: roadPreview,
+      },
+      topologyFingerprint
+    );
+  }
+
+  private async fetchFixedOrderRoadRoute(
+    orderedWaypoints: RouteWaypoint[]
+  ): Promise<GoogleMapsRoute | null> {
+    if (orderedWaypoints.length < 2) return null;
+
+    const origin = orderedWaypoints[0].location;
+    const destination = orderedWaypoints[orderedWaypoints.length - 1].location;
+    const intermediates = orderedWaypoints
+      .slice(1, -1)
+      .map((waypoint) => waypoint.location);
+
+    // Directions keeps waypoints in request order unless the `optimize:true`
+    // prefix is sent. Never send that prefix: precedence was already enforced
+    // by the exact optimizer.
+    return googleMapsService.getRoute(origin, destination, {
+      mode: 'driving',
+      alternatives: false,
+      waypoints: intermediates,
+      trafficModel: 'best_guess',
+    });
+  }
+
+  private buildLegs(
+    ordered: RouteWaypoint[],
+    order: number[],
+    matrix: TrafficRouteMatrix,
+    route?: GoogleMapsRoute
+  ): CombinedSmartRoute['legs'] {
+    const legs: CombinedSmartRoute['legs'] = [];
+    for (let index = 0; index < ordered.length - 1; index++) {
+      const matrixLeg = matrix[order[index]]?.[order[index + 1]];
+      const routeLeg = route?.legs?.[index];
+      const from = ordered[index];
+      const to = ordered[index + 1];
+      legs.push({
+        from,
+        to,
+        distanceKm: routeLeg?.distance ?? (matrixLeg?.distanceMeters ?? 0) / 1000,
+        durationMinutes: routeLeg?.duration ?? (matrixLeg?.durationSeconds ?? 0) / 60,
+        baseDurationMinutes: routeLeg?.baseDuration ?? (matrixLeg?.staticDurationSeconds ?? 0) / 60,
+        polyline: routeLeg?.polyline ?? '',
+        instruction: this.generateLegInstruction(to),
+      });
+    }
+    return legs;
+  }
+
+  private applyWaypointMetrics(
+    ordered: RouteWaypoint[],
+    legs: CombinedSmartRoute['legs']
+  ): void {
+    let eta = 0;
+    ordered.forEach((waypoint, index) => {
+      waypoint.order = index;
+      if (index === 0) {
+        waypoint.estimatedArrivalMinutes = 0;
+        waypoint.distanceFromPreviousKm = 0;
+        return;
+      }
+      const leg = legs[index - 1];
+      eta += leg?.durationMinutes ?? 0;
+      waypoint.estimatedArrivalMinutes = Math.round(eta);
+      waypoint.distanceFromPreviousKm = leg?.distanceKm ?? 0;
+    });
+  }
+
+  private generateLegInstruction(to: RouteWaypoint): string {
+    if (to.type === 'pickup') return `Pick up passenger at ${to.address || 'waypoint'}`;
+    if (to.type === 'dropoff') return `Drop off passenger at ${to.address || 'waypoint'}`;
+    return 'Continue to driver location';
+  }
+
+  private createGeometricMatrix(waypoints: RouteWaypoint[]): TrafficRouteMatrix {
+    return waypoints.map((origin, originIndex) =>
+      waypoints.map((destination, destinationIndex): TrafficMatrixCell => {
+        const distanceKm = originIndex === destinationIndex
+          ? 0
+          : calculateDistance(
+              origin.location.latitude,
+              origin.location.longitude,
+              destination.location.latitude,
+              destination.location.longitude
+            );
+        const durationSeconds = estimateTravelTime(distanceKm) * 60;
+        return {
+          originIndex,
+          destinationIndex,
+          distanceMeters: distanceKm * 1000,
+          durationSeconds,
+          staticDurationSeconds: durationSeconds,
+          condition: 'ROUTE_EXISTS',
+        };
+      })
+    );
+  }
+
+  private calculateDistanceSavings(
+    waypoints: RouteWaypoint[],
+    matrix: TrafficRouteMatrix,
+    combinedDistanceMeters: number
+  ): number {
+    let individualDistance = 0;
+    for (let index = 0; index < waypoints.length; index++) {
+      const pickup = waypoints[index];
+      if (pickup.type !== 'pickup') continue;
+      const dropoffIndex = waypoints.findIndex(
+        (waypoint) => waypoint.type === 'dropoff' && waypoint.userId === pickup.userId
+      );
+      individualDistance += matrix[index]?.[dropoffIndex]?.distanceMeters ?? 0;
+    }
+    if (individualDistance <= 0) return 0;
+    return Math.max(0, Math.round(((individualDistance - combinedDistanceMeters) / individualDistance) * 100));
+  }
+
+  private getTrafficLevel(
+    baseDurationSeconds: number,
+    trafficDurationSeconds: number
+  ): 'low' | 'moderate' | 'high' {
+    if (baseDurationSeconds <= 0) return 'low';
+    const ratio = trafficDurationSeconds / baseDurationSeconds;
+    if (ratio <= 1.1) return 'low';
+    if (ratio <= 1.3) return 'moderate';
+    return 'high';
+  }
+
+  private createTopologyFingerprint(members: PoolMemberRoute[]): string {
+    const value = [...members]
+      .sort((left, right) => left.userId.localeCompare(right.userId))
+      .map((member) => [
+        member.userId,
+        member.pickup.latitude.toFixed(6),
+        member.pickup.longitude.toFixed(6),
+        member.dropoff.latitude.toFixed(6),
+        member.dropoff.longitude.toFixed(6),
+      ].join(':'))
+      .join('|');
+    return crypto.createHash('sha256').update(value).digest('hex').slice(0, 20);
+  }
+
+  private createCacheKey(
+    members: PoolMemberRoute[],
+    driverLocation: Location | undefined,
+    poolId?: string
+  ): string {
+    const phase = driverLocation ? 'final' : 'preview';
+    const topology = this.createTopologyFingerprint(members);
+    if (poolId) return `smart-route:v5:pool:${poolId}:${topology}:${phase}`;
+    const driver = driverLocation
+      ? `${driverLocation.latitude.toFixed(6)},${driverLocation.longitude.toFixed(6)}`
       : 'no-driver';
-
-    return `smart-route:${locationHashes}:${driverHash}:${options.optimizeFor}`;
+    return `smart-route:v5:${topology}:${driver}:${phase}`;
   }
 
-  /**
-   * Get service statistics
-   */
+  private roundMinutes(seconds: number): number {
+    return Math.round((seconds / 60) * 10) / 10;
+  }
+
   getStats(): { requestCount: number; cacheHits: number; hitRate: number } {
     return {
       requestCount: this.requestCount,
@@ -794,9 +877,6 @@ export class SmartRouteService {
     };
   }
 
-  /**
-   * Reset statistics
-   */
   resetStats(): void {
     this.requestCount = 0;
     this.cacheHits = 0;

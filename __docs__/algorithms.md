@@ -1,57 +1,39 @@
-
 ## SmartRouteService Algorithms
 
-### 1. `orderWaypointsOptimally` - Greedy Nearest Neighbor with Constraints
+### 1. Exact pickup/drop-off sequence search
 
-**Purpose**: Orders pickup and dropoff waypoints to minimize travel distance while ensuring each passenger is picked up before being dropped off.
-
-**Algorithm**:
-- Start at driver location when provided, otherwise pick the pickup closest to the pickup centroid.
-- Greedy nearest neighbor selection across remaining pickups and eligible dropoffs.
-- Dropoffs are only eligible after the corresponding pickup has occurred.
-
-**Complexity**:
-- Time: O(n^2) where n = number of total pickups and dropoffs
-- Space: O(n) for waypoint maps and picked-up set
-
-**Trade-offs**:
-- Fast and deterministic, but not globally optimal
-- Works well for small to medium pool sizes where responsiveness is preferred
-
-### 2. `calculateDistanceToRoute` - Point-to-Route Distance
-
-**Purpose**: Determines if driver has deviated from the planned route for off-route detection.
-
-**Algorithm**: Linear scan to find minimum distance from a point to any coordinate in the route polyline.
-
-**Complexity**:
-- Time: O(k) where k = number of route coordinates
-- Space: O(1)
-
-**Notes**: For very long routes, spatial indexing could reduce lookup time.
-
-### 3. `generateCacheKey` - H3 Cell-Based Cache Key
-
-**Purpose**: Builds stable cache keys that cluster nearby locations for route caching.
+**Purpose**: Select the fastest combined route from a single traffic snapshot while ensuring every pickup occurs before its matching drop-off.
 
 **Algorithm**:
-- Uses H3 hexagonal indexing.
-- Pickups use resolution 9, dropoffs use resolution 7.
-- Driver location uses resolution 9 unless `useCoarseDriverLocation` is true (then 7).
-- Cache key also includes the `optimizeFor` option.
+- Before assignment, optimize every passenger stop with a free first pickup and final drop-off.
+- After assignment, add the driver as the fixed origin and optimize the passenger stops again.
+- Fetch a Google Routes traffic matrix for every stop participating in that phase.
+- Enumerate every precedence-valid stop sequence. The final drop-off is not fixed.
+- Reject sequences with missing matrix edges.
+- Prefer routes satisfying every passenger detour cap (at most 7 extra minutes and 25% extra in-vehicle time).
+- Rank feasible sequences by traffic duration, then road distance. If none are feasible, minimize the largest normalized cap violation before applying the same duration/distance tie-breakers.
 
-**Complexity**:
-- Time: O(n) where n = number of members
-- Space: O(n) for hash strings
+With four passengers there are at most `8! / 2^4 = 2,520` precedence-valid passenger-stop sequences, which is small enough for exact in-memory evaluation.
 
-### 4. One-Shot Route Caching and ETA Adjustment
+### 2. Fixed-order traffic route
 
-**Purpose**: Minimize Google Maps calls while keeping ETA realistic for cached routes.
+After selecting the sequence, the server calls Google Routes `computeRoutes` with `TRAFFIC_AWARE_OPTIMAL`. Google waypoint optimization is intentionally disabled, so the provider cannot break pickup/drop-off precedence. Whole response legs are paired directly with the same ordered stops.
 
-**Algorithm**:
-- First request computes a Google Maps route and caches it for the full trip window.
-- Subsequent requests return cached results and subtract elapsed time from ETA fields.
-- ETA values are clamped to a minimum of 1 minute.
+### 3. Two-phase traffic optimization and provider fallbacks
 
-**Complexity**: O(1) per cached response
+- Before driver assignment, the service traffic-optimizes the passenger-only route and marks only the driver leg as pending.
+- After assignment, it captures a new traffic matrix with the driver fixed as the origin.
+- If the traffic matrix fails, it returns a geometric fallback marked `trafficAware: false` and `degraded: true`.
+- If only final geometry fails, it retains the traffic-optimized matrix order and ETA but marks geometry as degraded.
 
+### 4. One-shot caching
+
+- Preview and final routes use separate pool cache keys.
+- The first request in each phase performs one route-matrix request and one fixed-order route request, then caches that immutable phase result for two hours.
+- Exact member coordinates are fingerprinted to prevent topology changes from reusing stale routes.
+- Simultaneous cold requests share one in-flight calculation.
+- Cached durations are never reduced merely because time elapsed.
+- Driver location and off-route updates do not recalculate the route; driver reassignment, membership changes, and trip completion clear the pool route.
+- A degraded road fallback keeps the same two-hour route TTL; it is not put on a separate 60-second cache policy.
+- Provider failures have an in-memory retry cooldown instead. Disabled/forbidden Routes API responses pause matrix attempts for 30 minutes, while transient failures use shorter cooldowns. When the provider becomes retryable, a degraded cached route is bypassed once and replaced by a traffic-aware snapshot after a successful request.
+- Restarting the backend clears the provider cooldown, so enabling Routes API and restarting immediately retries Google without waiting for the cached fallback to expire.

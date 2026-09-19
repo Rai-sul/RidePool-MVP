@@ -1,5 +1,5 @@
-import React, { useCallback, useState, useEffect } from 'react';
-import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer } from '@react-google-maps/api';
+import React, { useCallback, useState, useEffect, useMemo } from 'react';
+import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer, Polyline } from '@react-google-maps/api';
 import { View, StyleSheet } from 'react-native-web';
 
 const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
@@ -21,6 +21,9 @@ interface GoogleMapViewProps {
   showDirections?: boolean;
   style?: any;
   children?: React.ReactNode;
+  showUserLocation?: boolean;
+  routePolyline?: string;
+  routeCoordinates?: Array<{ lat: number; lng: number }>;
 }
 
 const containerStyle = {
@@ -46,6 +49,8 @@ export default function GoogleMapView({
   showDirections = true,
   style,
   children,
+  routePolyline,
+  routeCoordinates,
 }: GoogleMapViewProps) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
@@ -55,6 +60,13 @@ export default function GoogleMapView({
     googleMapsApiKey: GOOGLE_MAPS_API_KEY,
     libraries: ['places'],
   });
+
+  const routePath = useMemo(() => {
+    const suppliedCoordinates = (routeCoordinates || []).filter(isValidWebCoordinate);
+    if (suppliedCoordinates.length > 1) return suppliedCoordinates;
+    if (!routePolyline) return [];
+    return decodePolyline(routePolyline).filter(isValidWebCoordinate);
+  }, [routeCoordinates, routePolyline]);
 
   const onLoad = useCallback((map: google.maps.Map) => {
     setMap(map);
@@ -66,6 +78,10 @@ export default function GoogleMapView({
 
   // Fetch directions when pickup and dropoff are provided and map is loaded
   useEffect(() => {
+    if (routePath.length > 1) {
+      setDirections(null);
+      return;
+    }
     if (!isLoaded || !showDirections || !pickupLocation || !dropoffLocation) {
       return;
     }
@@ -86,7 +102,16 @@ export default function GoogleMapView({
         }
       }
     );
-  }, [pickupLocation, dropoffLocation, showDirections, isLoaded]);
+  }, [pickupLocation, dropoffLocation, routePath, showDirections, isLoaded]);
+
+  useEffect(() => {
+    if (!map || !isLoaded || routePath.length < 2) return;
+
+    const bounds = new google.maps.LatLngBounds();
+    routePath.forEach((coordinate) => bounds.extend(coordinate));
+    markers.forEach((marker) => bounds.extend({ lat: marker.latitude, lng: marker.longitude }));
+    map.fitBounds(bounds, 48);
+  }, [isLoaded, map, markers, routePath]);
 
   const mapCenter = {
     lat: center.latitude,
@@ -156,6 +181,17 @@ export default function GoogleMapView({
           />
         )}
 
+        {routePath.length > 1 && (
+          <Polyline
+            path={routePath}
+            options={{
+              strokeColor: '#4285F4',
+              strokeOpacity: 1,
+              strokeWeight: 5,
+            }}
+          />
+        )}
+
         {/* Pickup marker */}
         {pickupLocation && (
           <Marker
@@ -187,6 +223,47 @@ export default function GoogleMapView({
       {children}
     </View>
   );
+}
+
+function decodePolyline(encoded: string): Array<{ lat: number; lng: number }> {
+  const points: Array<{ lat: number; lng: number }> = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+
+  while (index < encoded.length) {
+    let result = 0;
+    let shift = 0;
+    let byte = 0;
+    do {
+      if (index >= encoded.length) return points;
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    lat += result & 1 ? ~(result >> 1) : result >> 1;
+
+    result = 0;
+    shift = 0;
+    do {
+      if (index >= encoded.length) return points;
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    lng += result & 1 ? ~(result >> 1) : result >> 1;
+
+    points.push({ lat: lat * 1e-5, lng: lng * 1e-5 });
+  }
+
+  return points;
+}
+
+function isValidWebCoordinate(coordinate: { lat: number; lng: number }): boolean {
+  return Number.isFinite(coordinate.lat)
+    && Number.isFinite(coordinate.lng)
+    && Math.abs(coordinate.lat) <= 90
+    && Math.abs(coordinate.lng) <= 180;
 }
 
 const styles = StyleSheet.create({

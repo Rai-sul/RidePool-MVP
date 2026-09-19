@@ -7,7 +7,7 @@ import { rideEstimationService, PoolMemberLocation } from '../services/rideEstim
 import { lookupTimeService, SEARCH_TIMING } from '../services/lookupTime.service';
 import { penaltyService } from '../services/penalty.service';
 import { notificationService } from '../services/notification.service';
-import { smartRouteService, PoolMemberRoute } from '../services/smartRoute.service';
+import { smartRouteService, PoolMemberRoute, RouteCapacityError } from '../services/smartRoute.service';
 import { googleMapsService } from '../services/googleMaps.service';
 import { priyoSathiService } from '../services/priyoSathi.service';
 import { CreatePoolRequest, Pool, PoolStatus, Ride, RideStatus, Location, VehicleType } from '../types';
@@ -1652,53 +1652,56 @@ export class PoolController {
         dropoffAddress: ride.dropoff_address,
       }));
 
-      // Parse driver location if provided
+      if (memberRoutes.length > 4) {
+        return res.status(422).json({
+          success: false,
+          error: {
+            code: 'ROUTE_CAPACITY_EXCEEDED',
+            message: 'Combined routing supports at most 4 active passengers',
+            memberCount: memberRoutes.length,
+            maxMembers: 4,
+          },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Use the server's authoritative vehicle location. The client location is
+      // only a fallback for the first request if realtime persistence lags.
       let driverLocation: Location | undefined;
+      if (pool.driver_id) {
+        const { data: vehicleLocation } = await supabaseAdmin
+          .from('vehicle_locations')
+          .select('lat, lng')
+          .eq('driver_id', pool.driver_id)
+          .eq('is_active', true)
+          .order('recorded_at', { ascending: false })
+          .limit(1)
+          .single();
 
-      // COST OPTIMIZATION: Only include driver location for route calculation if:
-      // 1. We are waiting for driver (need to show path to pickup)
-      // 2. The trip hasn't started yet
-      // Once STARTED, we use a static route (Pickup 1 -> Destination) to save costs/cache efficiently
-      // The client will still show the driver's real-time position on the map, but the blue line won't redraw
-      const shouldIncludeDriverInRoute = ['WAITING_FOR_DRIVER', 'READY_TO_START'].includes(pool.status);
-
-      if (shouldIncludeDriverInRoute) {
-        if (driver_lat && driver_lng) {
+        if (vehicleLocation) {
           driverLocation = {
-            latitude: parseFloat(driver_lat as string),
-            longitude: parseFloat(driver_lng as string),
+            latitude: Number(vehicleLocation.lat),
+            longitude: Number(vehicleLocation.lng),
           };
-        } else if (pool.driver_id) {
-          // Try to get driver's last known location from vehicle_locations
-          const { data: vehicleLocation } = await supabaseAdmin
-            .from('vehicle_locations')
-            .select('lat, lng')
-            .eq('driver_id', pool.driver_id)
-            .eq('is_active', true)
-            .order('recorded_at', { ascending: false })
-            .limit(1)
-            .single();
-
-          if (vehicleLocation) {
-            driverLocation = {
-              latitude: vehicleLocation.lat,
-              longitude: vehicleLocation.lng,
-            };
-          }
+        } else if (driver_lat && driver_lng) {
+          driverLocation = {
+            latitude: Number(driver_lat),
+            longitude: Number(driver_lng),
+          };
         }
       }
 
-      // Calculate combined smart route using "ONE-SHOT OPTIMIZATION" strategy
-      // - First request: Calls Google Maps API ONCE (~$0.01)
-      // - All subsequent requests: Returns cached route (FREE)
-      // - Cache duration: 2 hours (covers entire trip)
+      // Calculate the combined route once per lifecycle phase:
+      // - Pre-driver: passenger-only traffic matrix + fixed-order route
+      // - Post-driver: new matrix with the driver fixed as origin
+      // - Subsequent requests in each phase return the two-hour snapshot cache
       const combinedRoute = await smartRouteService.calculateCombinedRoute(
         memberRoutes,
         {
           driverLocation,
           optimizeFor: 'balanced',
           trafficModel: 'best_guess',
-          useCoarseDriverLocation: true, // Maximizes cache hits by rounding driver location
+          useCoarseDriverLocation: false,
         },
         poolId // Pass poolId for stable cache key across the entire trip
       );
@@ -1711,7 +1714,12 @@ export class PoolController {
         });
       }
 
-      logger.info(`[Pool] Combined route for pool ${poolId}: ${combinedRoute.waypoints.length} waypoints, ${combinedRoute.totalDistanceKm}km, fromCache=${combinedRoute.fromCache}`);
+      logger.info(
+        `[Pool] Combined route for pool ${poolId}: ${combinedRoute.waypoints.length} waypoints, `
+        + `${combinedRoute.totalDistanceKm}km, provider=${combinedRoute.routingProvider}, `
+        + `geometryPoints=${combinedRoute.coordinates.length}, pendingDriver=${combinedRoute.pendingDriver}, `
+        + `fromCache=${combinedRoute.fromCache}`
+      );
 
       res.json({
         success: true,
@@ -1723,9 +1731,12 @@ export class PoolController {
             coordinates: combinedRoute.coordinates,
             totalDistanceKm: combinedRoute.totalDistanceKm,
             totalDurationMinutes: combinedRoute.totalDurationMinutes,
+            baseDurationMinutes: combinedRoute.baseDurationMinutes,
             durationInTraffic: combinedRoute.durationInTraffic,
             trafficLevel: combinedRoute.trafficLevel,
             routeSummary: combinedRoute.routeSummary,
+            trafficAware: combinedRoute.trafficAware,
+            trafficCapturedAt: combinedRoute.trafficCapturedAt,
           },
           waypoints: combinedRoute.waypoints.map(wp => ({
             id: wp.id,
@@ -1742,22 +1753,44 @@ export class PoolController {
             toId: leg.to.id,
             distanceKm: leg.distanceKm,
             durationMinutes: leg.durationMinutes,
+            baseDurationMinutes: leg.baseDurationMinutes,
             instruction: leg.instruction,
           })),
           optimization: {
             score: combinedRoute.optimizationScore,
             savingsPercent: combinedRoute.savingsVsIndividual,
+            objective: combinedRoute.optimizationObjective,
+            constraintsSatisfied: combinedRoute.constraintsSatisfied,
+            detourViolations: combinedRoute.detourViolations,
           },
           meta: {
             fromCache: combinedRoute.fromCache,
             calculatedAt: combinedRoute.calculatedAt,
             memberCount: memberRoutes.length,
             hasDriverLocation: !!driverLocation,
+            routingProvider: combinedRoute.routingProvider,
+            routeVersion: combinedRoute.routeVersion,
+            trafficAgeSeconds: combinedRoute.trafficCapturedAt
+              ? Math.max(0, Math.round((Date.now() - new Date(combinedRoute.trafficCapturedAt).getTime()) / 1000))
+              : null,
+            degraded: combinedRoute.degraded,
+            pendingDriver: combinedRoute.pendingDriver,
           },
         },
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (error instanceof RouteCapacityError) {
+        return res.status(422).json({
+          success: false,
+          error: {
+            code: error.code,
+            message: error.message,
+            maxMembers: error.maxMembers,
+          },
+          timestamp: new Date().toISOString(),
+        });
+      }
       next(error);
     }
   }
@@ -1811,13 +1844,12 @@ export class PoolController {
         });
       }
 
-      // For now, just return that no recalculation is needed
-      // Full implementation would compare driver location to cached route
       res.json({
         success: true,
         data: {
           needsRecalculation: false,
-          message: 'Driver is on route',
+          message: 'Route is immutable under the one-shot traffic snapshot policy',
+          policy: 'one_shot',
         },
         timestamp: new Date().toISOString(),
       });

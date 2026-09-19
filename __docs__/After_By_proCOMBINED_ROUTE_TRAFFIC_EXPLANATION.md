@@ -84,16 +84,19 @@ with:
 
 In `Server/src/services/smartRoute.service.ts`:
 
-- Uses a **one-shot optimization strategy**:
-  - First call for pool -> fetch from Google API.
-  - Cache result for **2 hours** (`ONE_SHOT_ROUTE_CACHE_TTL = 7200`).
+- Uses a **two-phase, one-shot-per-phase optimization strategy**:
+  - Before assignment -> optimize and cache the passenger-only traffic route.
+  - After assignment -> optimize and cache a new route with the driver fixed as origin.
+  - Cache each result for **2 hours** (`ONE_SHOT_ROUTE_CACHE_TTL = 7200`).
   - Later calls -> return cached route (no new API call).
-- Cache key is stable per pool when `poolId` is provided: `smart-route:pool:<poolId>`.
-- Builds an initial ordered waypoint list with constraints:
-  - pickup must happen before that same user’s dropoff.
-  - greedy nearest-neighbor heuristic for next stop selection.
+- Preview and final cache keys are separate and exact member coordinates are fingerprinted.
+- Before driver assignment it enumerates every pickup-before-drop-off sequence and chooses the globally fastest feasible passenger-only matrix route.
+- After driver assignment it repeats the exact search with the driver fixed as the route origin.
+- Both phases minimize traffic duration and use road distance as a tie-breaker.
+- Passenger in-vehicle detour is capped at 7 extra minutes and 25% above the direct traffic duration.
+- Normal and degraded road snapshots both keep the two-hour one-shot cache policy. A provider-specific cooldown prevents repeated Routes API calls while the API is disabled; once retryable, degraded cache entries are bypassed and replaced after a successful traffic calculation. A backend restart retries immediately after Routes API is enabled.
 
-Then it calls `fetchOptimizedRoute(...)`.
+Google is given the selected fixed order and is not allowed to reorder it.
 
 ---
 
@@ -101,21 +104,7 @@ Then it calls `fetchOptimizedRoute(...)`.
 
 In `Server/src/services/googleMaps.service.ts`:
 
-`getBestRouteWithTraffic(origin, destination, waypoints)`:
-
-- Sends request to Google Directions API with:
-  - `departure_time=now`
-  - `traffic_model=best_guess`
-  - `alternatives=true`
-  - `waypoints=optimize:true|...` (when waypoints exist)
-- Parses all returned routes.
-- Computes each route's:
-  - distance
-  - base duration
-  - `durationInTraffic`
-  - traffic level (`low/moderate/high`) from traffic/base ratio.
-- Sorts by `durationInTraffic` ascending and picks fastest-in-traffic route.
-- Caches this best-route result for **10 minutes** (`ROUTE_CACHE_TTL = 600`) with H3-based cache keys.
+`computeTrafficRouteMatrix(locations, departureTime)` requests exact pairwise traffic durations and road distances with `TRAFFIC_AWARE_OPTIMAL`. `computeFixedOrderTrafficRoute(orderedLocations, departureTime)` then requests the final polyline and whole legs for the selected order, also with `TRAFFIC_AWARE_OPTIMAL` and without provider waypoint optimization.
 
 `smartRouteService` then uses that result to construct:
 
@@ -135,6 +124,7 @@ In `Server/src/services/googleMaps.service.ts`:
 - `route.totalDurationMinutes`
 - `route.durationInTraffic`
 - `route.trafficLevel`
+- `route.trafficAware` and `route.trafficCapturedAt`
 - ordered `waypoints` with `estimatedArrivalMinutes`
 - leg breakdown
 - optimization metrics
@@ -146,8 +136,8 @@ In `Server/src/services/googleMaps.service.ts`:
 
 Traffic-aware means:
 
-- ETA uses Google’s current traffic model (`duration_in_traffic`).
-- Route selection is based on traffic-adjusted time, not only geometric distance.
+- ETA and stop selection use one Google Routes traffic snapshot.
+- Route selection minimizes traffic-adjusted time and uses distance as a tie-breaker.
 
 It does **not** mean:
 
@@ -161,8 +151,8 @@ The system intentionally prefers cached one-shot route results for cost control.
 
 There are two related pieces:
 
-- `POST /pools/:poolId/combined-route/update` exists, but currently returns `needsRecalculation: false` in controller.
-- `smartRouteService` has off-route recalculation methods, but controller currently does not invoke full recalculation flow yet.
+- `POST /pools/:poolId/combined-route/update` returns `needsRecalculation: false` with the `one_shot` policy.
+- Off-route location updates do not create another billable combined-route calculation.
 
 So today, core optimization is done on initial combined-route calculation + cache reuse.
 
@@ -300,4 +290,4 @@ Implementation prompt:
 
    Go through the file @__docs__/After_By_proCOMBINED_ROUTE_TRAFFIC_EXPLANATION.md and also go through the Implementation prompt part of the @__doc
 s__/After_By_proCOMBINED_ROUTE_TRAFFIC_EXPLANATION.md file and make sure that driver instead of using legacy route, rider and driver both use the same
-combined-route route. So that driver can get the pool's cached route data and approach based on that properly. 
+combined-route route. So that driver can get the pool's cached route data and approach based on that properly.

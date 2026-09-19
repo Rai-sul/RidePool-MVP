@@ -26,8 +26,41 @@ export interface GoogleMapsRoute {
     southwest: Location;
   };
   steps?: RouteStep[]; // Turn-by-turn directions (optional)
+  legs?: GoogleMapsRouteLeg[]; // Whole stop-to-stop legs in request order
   summary?: string; // Route summary (e.g., "via Mirpur Road")
   trafficLevel: 'low' | 'moderate' | 'high'; // Traffic level based on duration difference
+}
+
+export interface GoogleMapsRouteLeg {
+  distance: number; // kilometers
+  duration: number; // traffic-aware minutes
+  baseDuration: number; // minutes without traffic
+  polyline: string;
+}
+
+export interface TrafficMatrixCell {
+  originIndex: number;
+  destinationIndex: number;
+  distanceMeters: number;
+  durationSeconds: number;
+  staticDurationSeconds: number;
+  condition: string;
+}
+
+export type TrafficRouteMatrix = Array<Array<TrafficMatrixCell | null>>;
+
+export type RoutesApiFailureReason =
+  | 'SERVICE_DISABLED'
+  | 'PERMISSION_DENIED'
+  | 'RATE_LIMITED'
+  | 'INVALID_REQUEST'
+  | 'NETWORK_ERROR'
+  | 'MALFORMED_RESPONSE';
+
+export interface RoutesApiFailure {
+  reason: RoutesApiFailureReason;
+  status?: number;
+  retryAt: number;
 }
 
 export interface RouteStep {
@@ -81,6 +114,37 @@ export interface BestRouteResult {
   selectedReason: string; // Why this route was selected
 }
 
+interface RoutesApiMatrixElement {
+  originIndex?: number;
+  destinationIndex?: number;
+  status?: { code?: number; message?: string };
+  condition?: string;
+  distanceMeters?: number;
+  duration?: string;
+  staticDuration?: string;
+}
+
+interface RoutesApiResponse {
+  routes?: Array<{
+    distanceMeters?: number;
+    duration?: string;
+    staticDuration?: string;
+    description?: string;
+    polyline?: { encodedPolyline?: string };
+    viewport?: {
+      low?: { latitude?: number; longitude?: number };
+      high?: { latitude?: number; longitude?: number };
+    };
+    legs?: Array<{
+      distanceMeters?: number;
+      duration?: string;
+      staticDuration?: string;
+      polyline?: { encodedPolyline?: string };
+    }>;
+  }>;
+  error?: { code?: number; message?: string; status?: string };
+}
+
 // ============================================
 // GOOGLE MAPS SERVICE
 // ============================================
@@ -88,7 +152,11 @@ export interface BestRouteResult {
 export class GoogleMapsService {
   private readonly baseUrl =
     "https://maps.googleapis.com/maps/api/directions/json";
+  private readonly routesBaseUrl = "https://routes.googleapis.com";
   private readonly apiKey: string;
+  private routesApiFailure: RoutesApiFailure | null = null;
+  private trafficMatrixAttempted = false;
+  private routesApiLastFailureAt: number | null = null;
 
   constructor() {
     this.apiKey = config.googleMaps.apiKey;
@@ -96,6 +164,310 @@ export class GoogleMapsService {
       console.warn(
         "[GoogleMapsService] Warning: GOOGLE_MAPS_API_KEY not configured. Google Maps features will be disabled."
       );
+    }
+  }
+
+  /**
+   * Degraded route snapshots may be reused while a known provider failure is
+   * cooling down. Once this returns true, SmartRoute retries the matrix and
+   * replaces the degraded cache if Google has recovered or been enabled.
+   */
+  shouldRefreshDegradedRoute(calculatedAt?: string): boolean {
+    if (this.routesApiFailure) {
+      return Date.now() >= this.routesApiFailure.retryAt;
+    }
+    // Retry one degraded Redis snapshot after each backend start. This makes
+    // enabling Routes API + restarting recover immediately without shortening
+    // the route's normal TTL.
+    if (!this.trafficMatrixAttempted) return true;
+    if (!this.routesApiLastFailureAt || !calculatedAt) return false;
+    const routeCalculatedAt = Date.parse(calculatedAt);
+    return Number.isFinite(routeCalculatedAt) && routeCalculatedAt <= this.routesApiLastFailureAt;
+  }
+
+  getRoutesApiFailure(): RoutesApiFailure | null {
+    return this.routesApiFailure ? { ...this.routesApiFailure } : null;
+  }
+
+  private canRequestTrafficMatrix(): boolean {
+    return !this.routesApiFailure || Date.now() >= this.routesApiFailure.retryAt;
+  }
+
+  /**
+   * Fetch a traffic-aware cost matrix for an exact set of stops.
+   * Matrix responses are indexed explicitly because Google does not guarantee
+   * that streamed elements arrive in origin/destination order.
+   */
+  async computeTrafficRouteMatrix(
+    locations: Location[],
+    departureTime: Date = new Date()
+  ): Promise<TrafficRouteMatrix | null> {
+    if (!this.apiKey || locations.length === 0) return null;
+    if (!this.canRequestTrafficMatrix()) return null;
+
+    // TRAFFIC_AWARE_OPTIMAL matrices are limited to 100 elements. The current
+    // pool limit is driver + 8 passenger stops = 9 x 9 = 81 elements.
+    if (locations.length * locations.length > 100) {
+      console.error('[GoogleMapsService] Traffic matrix exceeds the 100 element limit');
+      return null;
+    }
+    this.trafficMatrixAttempted = true;
+
+    const waypoints = locations.map((location) => ({
+      waypoint: {
+        location: {
+          latLng: {
+            latitude: location.latitude,
+            longitude: location.longitude,
+          },
+        },
+      },
+    }));
+    // Google defaults an omitted departureTime to the request time. Do not
+    // send a just-created timestamp after it has already become "past", which
+    // is invalid for DRIVE requests. Explicit future times remain supported.
+    const futureDepartureTime = departureTime.getTime() > Date.now()
+      ? departureTime.toISOString()
+      : undefined;
+
+    try {
+      const response = await fetch(
+        `${this.routesBaseUrl}/distanceMatrix/v2:computeRouteMatrix`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': this.apiKey,
+            'X-Goog-FieldMask': [
+              'originIndex',
+              'destinationIndex',
+              'status',
+              'condition',
+              'distanceMeters',
+              'duration',
+              'staticDuration',
+            ].join(','),
+          },
+          body: JSON.stringify({
+            origins: waypoints,
+            destinations: waypoints,
+            travelMode: 'DRIVE',
+            routingPreference: 'TRAFFIC_AWARE_OPTIMAL',
+            ...(futureDepartureTime ? { departureTime: futureDepartureTime } : {}),
+            languageCode: 'en',
+            units: 'METRIC',
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const responseText = await response.text();
+        this.recordRoutesApiFailure(response.status, responseText);
+        console.error(`[GoogleMapsService] Route matrix error: ${response.status} ${responseText}`);
+        return null;
+      }
+
+      const elements = (await response.json()) as RoutesApiMatrixElement[];
+      if (!Array.isArray(elements)) {
+        this.routesApiLastFailureAt = Date.now();
+        this.routesApiFailure = {
+          reason: 'MALFORMED_RESPONSE',
+          retryAt: Date.now() + 60_000,
+        };
+        return null;
+      }
+
+      this.routesApiFailure = null;
+
+      const matrix: TrafficRouteMatrix = Array.from(
+        { length: locations.length },
+        () => Array<TrafficMatrixCell | null>(locations.length).fill(null)
+      );
+
+      for (const element of elements) {
+        const originIndex = element.originIndex;
+        const destinationIndex = element.destinationIndex;
+        if (
+          originIndex === undefined ||
+          destinationIndex === undefined ||
+          originIndex < 0 ||
+          destinationIndex < 0 ||
+          originIndex >= locations.length ||
+          destinationIndex >= locations.length
+        ) {
+          continue;
+        }
+
+        if ((element.status?.code ?? 0) !== 0 || element.condition === 'ROUTE_NOT_FOUND') {
+          continue;
+        }
+
+        matrix[originIndex][destinationIndex] = {
+          originIndex,
+          destinationIndex,
+          distanceMeters: element.distanceMeters ?? 0,
+          durationSeconds: this.parseGoogleDuration(element.duration),
+          staticDurationSeconds: this.parseGoogleDuration(element.staticDuration ?? element.duration),
+          condition: element.condition ?? 'ROUTE_EXISTS',
+        };
+      }
+
+      // The diagonal is useful to callers even when Google omits it.
+      for (let index = 0; index < locations.length; index++) {
+        matrix[index][index] ??= {
+          originIndex: index,
+          destinationIndex: index,
+          distanceMeters: 0,
+          durationSeconds: 0,
+          staticDurationSeconds: 0,
+          condition: 'ROUTE_EXISTS',
+        };
+      }
+
+      return matrix;
+    } catch (error) {
+      this.routesApiLastFailureAt = Date.now();
+      this.routesApiFailure = {
+        reason: 'NETWORK_ERROR',
+        retryAt: Date.now() + 30_000,
+      };
+      console.error('[GoogleMapsService] Error fetching traffic route matrix:', error);
+      return null;
+    }
+  }
+
+  private recordRoutesApiFailure(status: number, responseText: string): void {
+    const normalized = responseText.toUpperCase();
+    let reason: RoutesApiFailureReason;
+    let cooldownMs: number;
+
+    if (normalized.includes('SERVICE_DISABLED')) {
+      reason = 'SERVICE_DISABLED';
+      cooldownMs = 30 * 60_000;
+    } else if (status === 403) {
+      reason = 'PERMISSION_DENIED';
+      cooldownMs = 30 * 60_000;
+    } else if (status === 429) {
+      reason = 'RATE_LIMITED';
+      cooldownMs = 60_000;
+    } else if (status >= 500) {
+      reason = 'NETWORK_ERROR';
+      cooldownMs = 30_000;
+    } else {
+      reason = 'INVALID_REQUEST';
+      cooldownMs = 5 * 60_000;
+    }
+
+    const failedAt = Date.now();
+    this.routesApiLastFailureAt = failedAt;
+    this.routesApiFailure = {
+      reason,
+      status,
+      retryAt: failedAt + cooldownMs,
+    };
+  }
+
+  /**
+   * Fetch final geometry and whole legs for a server-selected stop order.
+   * optimizeWaypointOrder is intentionally omitted so pickup/drop-off
+   * precedence cannot be changed by the provider.
+   */
+  async computeFixedOrderTrafficRoute(
+    orderedLocations: Location[],
+    departureTime: Date = new Date()
+  ): Promise<GoogleMapsRoute | null> {
+    if (!this.apiKey || orderedLocations.length < 2) return null;
+
+    const asWaypoint = (location: Location) => ({
+      location: {
+        latLng: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+        },
+      },
+    });
+    const futureDepartureTime = departureTime.getTime() > Date.now()
+      ? departureTime.toISOString()
+      : undefined;
+
+    try {
+      const response = await fetch(`${this.routesBaseUrl}/directions/v2:computeRoutes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': this.apiKey,
+          'X-Goog-FieldMask': [
+            'routes.distanceMeters',
+            'routes.duration',
+            'routes.staticDuration',
+            'routes.description',
+            'routes.polyline.encodedPolyline',
+            'routes.viewport',
+            'routes.legs.distanceMeters',
+            'routes.legs.duration',
+            'routes.legs.staticDuration',
+            'routes.legs.polyline.encodedPolyline',
+          ].join(','),
+        },
+        body: JSON.stringify({
+          origin: asWaypoint(orderedLocations[0]),
+          destination: asWaypoint(orderedLocations[orderedLocations.length - 1]),
+          intermediates: orderedLocations.slice(1, -1).map(asWaypoint),
+          travelMode: 'DRIVE',
+          routingPreference: 'TRAFFIC_AWARE_OPTIMAL',
+          computeAlternativeRoutes: false,
+          ...(futureDepartureTime ? { departureTime: futureDepartureTime } : {}),
+          languageCode: 'en',
+          units: 'METRIC',
+          // OVERVIEW follows the selected roads while remaining compact enough
+          // for native, web, and Expo Go Static Maps rendering.
+          polylineQuality: 'OVERVIEW',
+          polylineEncoding: 'ENCODED_POLYLINE',
+        }),
+      });
+
+      if (!response.ok) {
+        console.error(`[GoogleMapsService] Compute route error: ${response.status} ${await response.text()}`);
+        return null;
+      }
+
+      const data = (await response.json()) as RoutesApiResponse;
+      const route = data.routes?.[0];
+      const encoded = route?.polyline?.encodedPolyline;
+      if (!route || !encoded) return null;
+
+      const durationSeconds = this.parseGoogleDuration(route.duration);
+      const staticDurationSeconds = this.parseGoogleDuration(route.staticDuration ?? route.duration);
+      const coordinates = this.decodePolyline(encoded);
+      const fallbackBounds = this.calculateBounds(coordinates);
+
+      return {
+        distance: (route.distanceMeters ?? 0) / 1000,
+        duration: Math.round(staticDurationSeconds / 60),
+        durationInTraffic: Math.round(durationSeconds / 60),
+        geometry: { encoded, coordinates },
+        bounds: {
+          northeast: {
+            latitude: route.viewport?.high?.latitude ?? fallbackBounds.northeast.latitude,
+            longitude: route.viewport?.high?.longitude ?? fallbackBounds.northeast.longitude,
+          },
+          southwest: {
+            latitude: route.viewport?.low?.latitude ?? fallbackBounds.southwest.latitude,
+            longitude: route.viewport?.low?.longitude ?? fallbackBounds.southwest.longitude,
+          },
+        },
+        legs: (route.legs ?? []).map((leg) => ({
+          distance: (leg.distanceMeters ?? 0) / 1000,
+          duration: this.parseGoogleDuration(leg.duration) / 60,
+          baseDuration: this.parseGoogleDuration(leg.staticDuration ?? leg.duration) / 60,
+          polyline: leg.polyline?.encodedPolyline ?? '',
+        })),
+        summary: route.description || 'Traffic-optimized pool route',
+        trafficLevel: this.calculateTrafficLevel(staticDurationSeconds, durationSeconds),
+      };
+    } catch (error) {
+      console.error('[GoogleMapsService] Error fetching fixed-order traffic route:', error);
+      return null;
     }
   }
 
@@ -223,6 +595,12 @@ export class GoogleMapsService {
           },
         },
         steps,
+        legs: route.legs.map((routeLeg) => ({
+          distance: routeLeg.distance.value / 1000,
+          duration: (routeLeg.duration_in_traffic?.value ?? routeLeg.duration.value) / 60,
+          baseDuration: routeLeg.duration.value / 60,
+          polyline: '',
+        })),
         summary: route.summary,
         trafficLevel,
       };
@@ -246,21 +624,13 @@ export class GoogleMapsService {
     destination: Location,
     waypoints?: Location[]
   ): Promise<BestRouteResult | null> {
-    // ========================================
-    // COST OPTIMIZATION: Check cache first
-    // Uses H3 Resolution 7 (~5.2km) for destination-level grouping
-    // This groups nearby routes together to maximize cache hits
-    // ========================================
-    const originH3 = h3Utils.latLngToH3(origin, H3_RESOLUTION.DESTINATION);
-    const destH3 = h3Utils.latLngToH3(destination, H3_RESOLUTION.DESTINATION);
-    
-    let cacheKey = `route:best:${originH3}:${destH3}`;
+    // Geometry and waypoint order are exact inputs. Never reuse a polyline
+    // merely because another trip happened to share coarse H3 cells.
+    const locationKey = (location: Location) =>
+      `${location.latitude.toFixed(6)},${location.longitude.toFixed(6)}`;
+    let cacheKey = `route:best:v2:${locationKey(origin)}:${locationKey(destination)}`;
     if (waypoints && waypoints.length > 0) {
-      // Include waypoints in cache key (sorted by H3 to maximize cache hits)
-      const waypointsKey = waypoints
-        .map(wp => h3Utils.latLngToH3(wp, H3_RESOLUTION.DESTINATION))
-        .sort()
-        .join('-');
+      const waypointsKey = waypoints.map(locationKey).join('|');
       cacheKey += `:${waypointsKey}`;
     }
 
@@ -430,10 +800,45 @@ export class GoogleMapsService {
   /**
    * Calculate traffic level based on duration difference
    */
+  private parseGoogleDuration(value?: string): number {
+    if (!value) return 0;
+    const seconds = Number.parseFloat(value.replace(/s$/, ''));
+    return Number.isFinite(seconds) ? seconds : 0;
+  }
+
+  private calculateBounds(coordinates: Array<{ lat: number; lng: number }>): {
+    northeast: Location;
+    southwest: Location;
+  } {
+    if (coordinates.length === 0) {
+      return {
+        northeast: { latitude: 0, longitude: 0 },
+        southwest: { latitude: 0, longitude: 0 },
+      };
+    }
+
+    let minLat = coordinates[0].lat;
+    let maxLat = coordinates[0].lat;
+    let minLng = coordinates[0].lng;
+    let maxLng = coordinates[0].lng;
+    for (const coordinate of coordinates.slice(1)) {
+      minLat = Math.min(minLat, coordinate.lat);
+      maxLat = Math.max(maxLat, coordinate.lat);
+      minLng = Math.min(minLng, coordinate.lng);
+      maxLng = Math.max(maxLng, coordinate.lng);
+    }
+
+    return {
+      northeast: { latitude: maxLat, longitude: maxLng },
+      southwest: { latitude: minLat, longitude: minLng },
+    };
+  }
+
   private calculateTrafficLevel(
     baseDuration: number,
     trafficDuration: number
   ): 'low' | 'moderate' | 'high' {
+    if (baseDuration <= 0) return 'low';
     const ratio = trafficDuration / baseDuration;
     if (ratio <= 1.1) return 'low';
     if (ratio <= 1.3) return 'moderate';

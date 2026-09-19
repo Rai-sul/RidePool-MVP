@@ -235,7 +235,18 @@ export interface CombinedRouteLeg {
   toId: string;
   distanceKm: number;
   durationMinutes: number;
+  baseDurationMinutes?: number;
   instruction: string;
+}
+
+export interface CombinedRouteDetourViolation {
+  userId: string;
+  directDurationMinutes: number;
+  combinedDurationMinutes: number;
+  extraMinutes: number;
+  extraPercent: number;
+  exceededByMinutes: number;
+  exceededByPercent: number;
 }
 
 export interface CombinedRouteResponse {
@@ -246,21 +257,39 @@ export interface CombinedRouteResponse {
     coordinates: Array<{ lat: number; lng: number }>;
     totalDistanceKm: number;
     totalDurationMinutes: number;
+    baseDurationMinutes: number;
     durationInTraffic: number;
     trafficLevel: 'low' | 'moderate' | 'high';
     routeSummary: string;
+    trafficAware: boolean;
+    trafficCapturedAt?: string;
   };
   waypoints: CombinedRouteWaypoint[];
   legs: CombinedRouteLeg[];
   optimization: {
     score: number;
     savingsPercent: number;
+    objective: 'traffic_time';
+    constraintsSatisfied: boolean;
+    detourViolations: CombinedRouteDetourViolation[];
   };
   meta: {
     fromCache: boolean;
     calculatedAt: string;
     memberCount: number;
     hasDriverLocation: boolean;
+    routingProvider:
+      | 'google_routes'
+      | 'google_routes_matrix'
+      | 'google_routes_matrix_directions'
+      | 'google_directions_preview'
+      | 'google_directions_fallback'
+      | 'geometric_preview'
+      | 'geometric_fallback';
+    routeVersion: string;
+    trafficAgeSeconds: number | null;
+    degraded: boolean;
+    pendingDriver: boolean;
   };
 }
 

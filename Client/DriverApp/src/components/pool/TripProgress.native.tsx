@@ -26,6 +26,12 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
   return error instanceof Error && error.message ? error.message : fallback;
 };
 
+const isValidMapCoordinate = (coordinate: { latitude: number; longitude: number }): boolean =>
+  Number.isFinite(coordinate.latitude)
+  && Number.isFinite(coordinate.longitude)
+  && Math.abs(coordinate.latitude) <= 90
+  && Math.abs(coordinate.longitude) <= 180;
+
 export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: TripProgressProps) {
   const mapRef = useRef<MapViewComponent>(null);
 
@@ -76,13 +82,14 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
   const [combinedRoute, setCombinedRoute] = useState<CombinedRouteResponse | null>(null);
   const [loadingCombinedRoute, setLoadingCombinedRoute] = useState(false);
   const prevPoolStatusRef = useRef<string | null>(null);
+  const lastRoutePhaseRef = useRef<'preview' | 'final' | null>(null);
 
   const routeDurationMinutes = getRouteDurationMinutes(combinedRoute?.route);
   const routePolylineCoordinates = useMemo(
-    () => combinedRoute?.route.coordinates.map((coordinate) => ({
+    () => (combinedRoute?.route.coordinates ?? []).map((coordinate) => ({
       latitude: coordinate.lat,
       longitude: coordinate.lng,
-    })) || [],
+    })).filter(isValidMapCoordinate),
     [combinedRoute]
   );
 
@@ -116,7 +123,7 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
 
   // Update map region when driver location changes
   useEffect(() => {
-    if (driverLocation && mapRef.current) {
+    if (driverLocation && mapRef.current && routePolylineCoordinates.length < 2) {
       mapRef.current.animateToRegion({
         latitude: driverLocation.lat,
         longitude: driverLocation.lng,
@@ -124,13 +131,25 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
         longitudeDelta: 0.015,
       }, 500);
     }
-  }, [driverLocation]);
+  }, [driverLocation, routePolylineCoordinates.length]);
+
+  useEffect(() => {
+    if (!mapRef.current || routePolylineCoordinates.length < 2) return;
+    mapRef.current.fitToCoordinates(routePolylineCoordinates, {
+      edgePadding: { top: 60, right: 40, bottom: 60, left: 40 },
+      animated: true,
+    });
+  }, [routePolylineCoordinates]);
 
   // Fetch combined route when pool status changes
   useEffect(() => {
     const validStatuses = ['READY_TO_START', 'STARTED', 'WAITING_FOR_DRIVER'];
     if (!poolId || !validStatuses.includes(poolStatus)) return;
-    if (prevPoolStatusRef.current === poolStatus && combinedRoute) return;
+    const requestedPhase = driverLocation ? 'final' : 'preview';
+    if (
+      prevPoolStatusRef.current === poolStatus
+      && lastRoutePhaseRef.current === requestedPhase
+    ) return;
 
     let isMounted = true;
     let retryCount = 0;
@@ -140,15 +159,19 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
       setLoadingCombinedRoute(true);
 
       try {
-        const response = await driverService.getPoolRoute(poolId);
+        const response = await driverService.getPoolRoute(poolId, driverLocation || undefined);
         if (!isMounted) return;
 
         if (response.success && response.data) {
           const data = response.data;
-          const hasValid = data.waypoints.length >= 2 && data.route.coordinates.length > 0;
+          const hasRoadGeometry = Boolean(data.route.polyline)
+            || data.route.coordinates.length > 1;
+          const hasValid = data.waypoints.length >= 2
+            && (hasRoadGeometry || data.meta.pendingDriver);
           if (hasValid || retryCount >= 2) {
             setCombinedRoute(data);
             prevPoolStatusRef.current = poolStatus;
+            lastRoutePhaseRef.current = data.meta.pendingDriver ? 'preview' : 'final';
           } else if (retryCount < 2) {
             retryCount++;
             setTimeout(fetchRoute, 2000);
@@ -164,7 +187,7 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
 
     fetchRoute();
     return () => { isMounted = false; };
-  }, [poolId, poolStatus]);
+  }, [driverLocation, poolId, poolStatus]);
 
   // Handle navigate button — opens Google Maps with optimized multi-stop route
   const handleStartNavigation = useCallback(async () => {
@@ -672,7 +695,7 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
           <View className="mx-6 mt-4 bg-white rounded-2xl p-5 border-2 border-gray-200">
             <View className="flex-row items-center justify-between mb-4">
               <Text className="font-semibold">Smart Route</Text>
-              {combinedRoute.route?.trafficLevel && (
+              {combinedRoute.route?.trafficAware && combinedRoute.route?.trafficLevel && (
                 <View className={`px-2 py-1 rounded ${combinedRoute.route.trafficLevel === 'low' ? 'bg-green-100' : combinedRoute.route.trafficLevel === 'moderate' ? 'bg-yellow-100' : 'bg-red-100'}`}>
                   <Text className={`text-xs font-medium ${combinedRoute.route.trafficLevel === 'low' ? 'text-green-700' : combinedRoute.route.trafficLevel === 'moderate' ? 'text-yellow-700' : 'text-red-700'}`}>
                     {combinedRoute.route.trafficLevel.charAt(0).toUpperCase() + combinedRoute.route.trafficLevel.slice(1)} traffic
@@ -680,6 +703,38 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
                 </View>
               )}
             </View>
+
+            {combinedRoute.meta.pendingDriver && (
+              <View className="mb-3 rounded-lg bg-blue-50 px-3 py-2">
+                <Text className="text-xs text-blue-700">
+                  Passenger stops are traffic-optimized. The driver leg will be added and re-optimized after assignment.
+                </Text>
+              </View>
+            )}
+            {combinedRoute.route.trafficAware && combinedRoute.route.trafficCapturedAt && (
+              <View className="mb-3 rounded-lg bg-gray-50 px-3 py-2">
+                <Text className="text-xs text-gray-600">
+                  One-shot traffic snapshot from {new Date(combinedRoute.route.trafficCapturedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </View>
+            )}
+            {combinedRoute.meta.degraded && (
+              <View className="mb-3 rounded-lg bg-amber-50 px-3 py-2">
+                <Text className="text-xs text-amber-700">
+                  {combinedRoute.route.polyline || combinedRoute.route.coordinates.length > 1
+                    ? 'Road route shown, but live traffic optimization is unavailable.'
+                    : 'Road route is temporarily unavailable. Stops are shown without a fabricated route line.'}
+                </Text>
+              </View>
+            )}
+            {!combinedRoute.optimization.constraintsSatisfied && (
+              <View className="mb-3 rounded-lg bg-red-50 px-3 py-2">
+                <Text className="text-xs font-medium text-red-700">Passenger detour limit exceeded</Text>
+                <Text className="text-xs text-red-600">
+                  The fastest all-stop route exceeds the configured limit for {combinedRoute.optimization.detourViolations.length} passenger(s).
+                </Text>
+              </View>
+            )}
 
             <View className="gap-3">
               {combinedRoute.waypoints.map((waypoint: CombinedRouteWaypoint, idx: number) => {
