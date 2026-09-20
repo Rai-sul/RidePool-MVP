@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Calendar, MapPin, ChevronRight, AlertCircle, X, User, Phone, Car, Clock } from './Icons';
 import { Button } from './ui/button';
 import { UserProfile } from '../contexts/GlobalContext';
+import ScheduledRides from './ScheduledRides';
 
 const pastTrips = [
   {
@@ -130,19 +131,9 @@ export default function TripsScreen({ userProfile, onBookRide }: TripsScreenProp
           ))}
         </ScrollView>
       ) : (
-        <View className="flex-1 items-center justify-center p-8">
-          <View className="w-16 h-16 bg-gray-100 rounded-full items-center justify-center mb-4">
-            <Calendar size={32} color="#9ca3af" />
-          </View>
-          <Text className="text-xl font-semibold mb-2">No upcoming trips</Text>
-          <Text className="text-gray-500 mb-6 text-center">Book a ride to get started</Text>
-          <Button 
-            className={isFemale ? 'bg-pink-500' : 'bg-blue-600'}
-            onPress={onBookRide}
-          >
-            <Text className="text-white font-semibold">Book a Ride</Text>
-          </Button>
-        </View>
+        // Upcoming trips are scheduled (advance) bookings, with their
+        // confirmation step surfaced here.
+        <ScheduledRides embedded onBookRide={onBookRide} isFemale={isFemale} />
       )}
 
       {/* Report Issue Button */}

@@ -7,6 +7,7 @@ import { driverService } from '../../src/services/driver.service';
 import { locationService } from '../../src/services/location.service';
 import { useDriverStore } from '../../src/store/useDriverStore';
 import type { Pool, Location } from '../../src/types';
+import { capacityFor } from '../../src/config/vehicleCapacity';
 
 export default function Home() {
   const router = useRouter();
@@ -129,7 +130,7 @@ export default function Home() {
           total_earnings: data.estimated_earnings ? Number(data.estimated_earnings) : 0,
           fare_per_person: 0,
           current_passengers: data.passengers ? Number(data.passengers) : 0,
-          max_passengers: 4,
+          max_passengers: capacityFor(data.vehicle_type as string | undefined),
           nearest_pickup_km: null,
           destination: data.destination_address ? {
             lat: Number(data.destination_lat || 0),
@@ -194,7 +195,7 @@ export default function Home() {
           fare_per_person: acceptData.fare_per_person || 0,
           total_earnings: acceptData.total_earnings || 0,
           current_passengers: acceptData.passengers?.length || 0,
-          max_passengers: acceptData.max_passengers || 4,
+          max_passengers: acceptData.max_passengers || capacityFor(acceptData.vehicle_type),
         } as Pool);
         setAvailablePools([]);
         // Navigation to trip-progress is handled by the activePool useEffect

@@ -50,6 +50,16 @@ export const API_ENDPOINTS = {
     // FREE Google Maps navigation - no API cost, uses native app
     NAVIGATION_LINK: (poolId: string) => `/pools/${poolId}/navigation-link`,
   },
+  // Advance (scheduled) bookings. There is deliberately no discovery endpoint:
+  // advance riders are auto-assigned, and eligible advance pools surface to
+  // instant riders through POOL.SEARCH.
+  ADVANCE_BOOKING: {
+    LIST: '/advance-bookings',
+    CREATE: '/advance-bookings',
+    UPDATE: (rideId: string) => `/advance-bookings/${rideId}`,
+    CANCEL: (rideId: string) => `/advance-bookings/${rideId}`,
+    CONFIRM: (poolId: string) => `/advance-bookings/${poolId}/confirm`,
+  },
   DRIVER: {
     GO_ONLINE: '/driver/go-online',
     GO_OFFLINE: '/driver/go-offline',

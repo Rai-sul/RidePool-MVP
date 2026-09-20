@@ -12,7 +12,6 @@ export interface CreatePoolRequest {
   destination_address?: string;
   destination_name?: string;
   vehicle_type: VehicleType;
-  max_passengers?: number;
   gender_restriction?: GenderPreference;
 }
 
@@ -96,6 +95,13 @@ export interface PoolSearchResult {
     };
     // Distance from user's pickup to pool's current location
     distanceToPoolKm?: number;
+    // Confirmed advance pool, listed here because it is inside its Active
+    // Pickup Range. Joining one works exactly like joining an instant pool.
+    isAdvance?: boolean;
+    // When the vehicle starts its route, for advance pools only
+    scheduledPickupAt?: string;
+    currentPassengers?: number;
+    maxPassengers?: number;
   }>;
   alternatives: Array<{
     action: string;

@@ -12,6 +12,7 @@ import { inputSanitizer, stripNullBytes } from './middleware/inputSanitizer';
 import { logger } from './utils/logger';
 import { unifiedCacheService } from './services/unifiedCache.service';
 import { gracefulShutdownService } from './services/gracefulShutdown.service';
+import { advanceSchedulerService } from './services/advanceScheduler.service';
 import { config } from './config/env';
 
 dotenv.config();
@@ -77,11 +78,17 @@ async function startServer() {
     logger.warn('Cache unavailable, running without cache:', error);
   }
 
+  // Advance bookings are driven by a database sweep rather than in-process
+  // timers, so pending pools survive a restart.
+  advanceSchedulerService.start();
+  gracefulShutdownService.addCleanupHandler(async () => advanceSchedulerService.stop());
+
   const HOST = process.env.HOST || '0.0.0.0';
   const server = app.listen(PORT, HOST, () => {
     logger.info(`Server running on ${HOST}:${PORT}`);
     logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
     logger.info(`MVP Mode: ${config.mvpMode ? 'enabled' : 'disabled'}`);
+    logger.info(`Advance booking time unit: ${config.advanceBooking.unitSeconds === 1 ? 'seconds (test mode)' : 'minutes'}`);
     console.log(`Server is running on http://${HOST}:${PORT}`);
   });
 

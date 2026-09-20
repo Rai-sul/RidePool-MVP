@@ -48,6 +48,10 @@ export interface ScoredMatchingResult extends H3MatchingResult {
   };
   // Distance from user's pickup to pool's current location
   distanceToPoolKm?: number;
+  // Advance pool surfaced inside its Active Pickup Range (see isAdvancePoolJoinableNow)
+  isAdvance?: boolean;
+  // When the vehicle starts its route, for advance pools only
+  scheduledPickupAt?: string;
   // Estimated time (in minutes) for driver to detour from pool pickup to user's pickup
   pickupDetourMinutes?: number;
   // Estimated detour time in minutes (calculated from destination detour distance)
@@ -127,6 +131,71 @@ export class PoolMatchingService {
   // Minimum score threshold for a pool to be considered
   private readonly MINIMUM_MATCH_SCORE = 30;
 
+  // Pool states an instant rider can be shown. SCHEDULED is included so that
+  // advance pools can appear in the same list, but only while
+  // isAdvancePoolJoinableNow allows it.
+  private readonly DISCOVERABLE_STATUSES: PoolStatus[] = [
+    "SCHEDULED",
+    "WAITING_FOR_RIDERS",
+    "WAITING_FOR_DRIVER",
+  ];
+
+  /**
+   * Whether an advance pool is inside its Active Pickup Range.
+   *
+   * The range opens the moment the pool reaches two confirmed riders - merely
+   * joining is not enough - and closes at the scheduled pickup time. Instant
+   * pools are unaffected and always pass.
+   *
+   * Always evaluated against server time. The same conditions are re-checked
+   * under a row lock in atomic_join_pool, so a stale discovery result cannot
+   * be replayed into a join.
+   */
+  isAdvancePoolJoinableNow(
+    pool: Pick<Pool, "is_advance" | "active_range_start_at" | "scheduled_pickup_at">,
+    now: Date = new Date()
+  ): boolean {
+    if (!pool.is_advance) {
+      return true;
+    }
+
+    if (!pool.active_range_start_at || !pool.scheduled_pickup_at) {
+      return false;
+    }
+
+    const nowMs = now.getTime();
+    return (
+      nowMs >= new Date(pool.active_range_start_at).getTime() &&
+      nowMs < new Date(pool.scheduled_pickup_at).getTime()
+    );
+  }
+
+  /**
+   * Remove pools that exist but must not be shown right now.
+   *
+   * An instant pool disappears once its lookup window has run out. An advance
+   * pool is only visible inside its Active Pickup Range, so it stays hidden
+   * before two riders confirm and from the scheduled pickup time onwards.
+   */
+  private filterByLiveness(pools: any[]): any[] {
+    const TOTAL_SEARCH_MS = SEARCH_TIMING.TOTAL_SECONDS * 1000; // 40 seconds
+    const now = new Date();
+    const nowMs = now.getTime();
+
+    return pools.filter((pool: any) => {
+      if (pool.is_advance) {
+        return this.isAdvancePoolJoinableNow(pool, now);
+      }
+
+      // WAITING_FOR_DRIVER pools stay valid; only an open search can go stale.
+      if (pool.status !== 'WAITING_FOR_RIDERS') {
+        return true;
+      }
+
+      return nowMs - new Date(pool.created_at).getTime() < TOTAL_SEARCH_MS;
+    });
+  }
+
   /**
    * Find matching pools for a ride using H3 hexagon indexing with intelligent scoring
    *
@@ -176,10 +245,7 @@ export class PoolMatchingService {
         .from("pools")
         .select("*")
         .eq("vehicle_type", ride.vehicle_type)
-        .in("status", [
-          "WAITING_FOR_RIDERS",
-          "WAITING_FOR_DRIVER",
-        ] as PoolStatus[])
+        .in("status", this.DISCOVERABLE_STATUSES)
         .or(`destination_h3_index.in.(${destinationSearchHexagons.join(',')}),extended_search_h3.cs.{${destinationH3}}`)
         .or(`pickup_h3_index.in.(${dbPickupHexagons.join(',')}),extended_pickup_h3.cs.{${pickupH3}}`)
         .neq("creator_user_id", userId)
@@ -194,21 +260,9 @@ export class PoolMatchingService {
       // Filter pools where current_passengers < max_passengers (can't do column comparison in Supabase)
       let pools = rawPools?.filter((pool: any) => pool.current_passengers < pool.max_passengers) || [];
 
-      // Filter out pools whose search time has expired (still in WAITING_FOR_RIDERS but older than lookup time)
-      // This ensures users don't see stale pools where the creator hasn't acted yet
-      const TOTAL_SEARCH_MS = SEARCH_TIMING.TOTAL_SECONDS * 1000; // 40 seconds
-      const now = Date.now();
-      pools = pools.filter((pool: any) => {
-        // Only filter WAITING_FOR_RIDERS pools - WAITING_FOR_DRIVER pools are valid
-        if (pool.status !== 'WAITING_FOR_RIDERS') {
-          return true;
-        }
-        // Check if pool search time has expired
-        const poolCreatedAt = new Date(pool.created_at).getTime();
-        const poolAge = now - poolCreatedAt;
-        // Only show pools that are still within their lookup time window
-        return poolAge < TOTAL_SEARCH_MS;
-      });
+      // Drop pools that are no longer showable: expired instant searches, and
+      // advance pools outside their Active Pickup Range.
+      pools = this.filterByLiveness(pools);
 
       // Filter pools by pickup H3 - pools should have similar pickup location
       // Also check if pool has extended_pickup_h3 (from extended search phase)
@@ -365,6 +419,8 @@ export class PoolMatchingService {
             score: scoreResult.totalScore,
             scoreBreakdown: scoreResult,
             routeOverlapPercentage: Math.round(routeOverlap * 100),
+            isAdvance: !!pool.is_advance,
+            scheduledPickupAt: pool.scheduled_pickup_at || undefined,
           });
         }
       }
@@ -502,7 +558,7 @@ export class PoolMatchingService {
         .from("pools")
         .select("*")
         .eq("vehicle_type", ride.vehicle_type)
-        .in("status", ["WAITING_FOR_RIDERS", "WAITING_FOR_DRIVER"] as PoolStatus[])
+        .in("status", this.DISCOVERABLE_STATUSES)
         .or(`destination_h3_index.in.(${destinationSearchHexagons.join(',')}),extended_search_h3.cs.{${destinationH3}}`)
         .or(`pickup_h3_index.in.(${dbPickupHexagons.join(',')}),extended_pickup_h3.cs.{${pickupH3}}`)
         .neq("creator_user_id", userId)
@@ -530,21 +586,9 @@ export class PoolMatchingService {
       // Filter pools where current_passengers < max_passengers (can't do column comparison in Supabase)
       let pools = rawPools?.filter((pool: any) => pool.current_passengers < pool.max_passengers) || [];
 
-      // Filter out pools whose search time has expired (still in WAITING_FOR_RIDERS but older than lookup time)
-      // This ensures users don't see stale pools where the creator hasn't acted yet
-      const TOTAL_SEARCH_MS = SEARCH_TIMING.TOTAL_SECONDS * 1000; // 40 seconds
-      const now = Date.now();
-      pools = pools.filter((pool: any) => {
-        // Only filter WAITING_FOR_RIDERS pools - WAITING_FOR_DRIVER pools are valid
-        if (pool.status !== 'WAITING_FOR_RIDERS') {
-          return true;
-        }
-        // Check if pool search time has expired
-        const poolCreatedAt = new Date(pool.created_at).getTime();
-        const poolAge = now - poolCreatedAt;
-        // Only show pools that are still within their lookup time window
-        return poolAge < TOTAL_SEARCH_MS;
-      });
+      // Drop pools that are no longer showable: expired instant searches, and
+      // advance pools outside their Active Pickup Range.
+      pools = this.filterByLiveness(pools);
 
       // Filter pools by pickup H3 - pools should have similar pickup location
       // Also check if pool has extended_pickup_h3 (from extended search phase)
@@ -754,6 +798,8 @@ export class PoolMatchingService {
           poolPickupLocation,
           poolDropoffLocation,
           distanceToPoolKm,
+          isAdvance: !!pool.is_advance,
+          scheduledPickupAt: pool.scheduled_pickup_at || undefined,
         });
       }
 

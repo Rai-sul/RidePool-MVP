@@ -7,6 +7,7 @@ import { geolocationService } from '../services/geolocation.service';
 import { rideEstimationService } from '../services/rideEstimation.service';
 import { CreateRideRequest, Ride, RideStatus, Location, VehicleType } from '../types';
 import { h3Utils } from '../utils/h3.utils';
+import { resolveGenderRestriction } from '../utils/genderRestriction';
 
 export class RideController {
   async requestRide(req: AuthRequest, res: Response, next: NextFunction) {
@@ -47,7 +48,8 @@ export class RideController {
           dropoff_address: rideData.dropoff_address,
           dropoff_h3_index: dropoffH3,
           vehicle_type: rideData.vehicle_type,
-          gender_restriction: rideData.gender_restriction || 'ANY',
+          // A female-only request is honoured only if the profile backs it.
+          gender_restriction: await resolveGenderRestriction(userId, rideData.gender_restriction),
           status: 'CREATING_POOL' as RideStatus,
         })
         .select()

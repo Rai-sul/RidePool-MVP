@@ -9,6 +9,7 @@ import { driverService } from '../../services/driver.service';
 import { locationService } from '../../services/location.service';
 import { PassengerBillingDialog } from './PassengerBillingDialog';
 import type { CombinedRouteResponse, CombinedRouteWaypoint, Pool } from '../../types';
+import { capacityFor } from '../../config/vehicleCapacity';
 
 interface TripProgressProps {
   poolId: string;
@@ -585,7 +586,7 @@ export function TripProgress({ poolId, initialLocation, onComplete, onCancel }: 
                 <Text className="text-gray-600">Passengers</Text>
                 <View className="flex-row items-center gap-2">
                   <Users size={16} color="#6b7280" />
-                  <Text className="font-medium">{passengers.length}/{pool?.max_passengers || 4}</Text>
+                  <Text className="font-medium">{passengers.length}/{pool?.max_passengers || capacityFor(pool?.vehicle_type)}</Text>
                 </View>
               </View>
               <View className="flex-row justify-between">

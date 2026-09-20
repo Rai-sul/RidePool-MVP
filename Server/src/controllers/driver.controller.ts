@@ -3,7 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import { supabaseAdmin } from '../config/supabase';
 import { h3Utils } from '../utils/h3.utils';
 import { calculateDistance, estimateTravelTime } from '../utils/helper';
-import { Pool, PoolStatus, Location } from '../types';
+import { Pool, PoolStatus, Location, VehicleType } from '../types';
 import { CONSTANTS } from '../config/constants';
 import { config } from '../config/env';
 import { smartRouteService } from '../services/smartRoute.service';
@@ -1500,7 +1500,7 @@ export class DriverController {
         });
       }
 
-      const maxPassengers = vehicle_type === 'CNG' ? 3 : 4;
+      const maxPassengers = CONSTANTS.VEHICLE_CAPACITY[vehicle_type as VehicleType];
 
       const { data: vehicle, error } = await supabaseAdmin
         .from('vehicles')

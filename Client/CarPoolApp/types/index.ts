@@ -76,6 +76,9 @@ export type RideStatus =
   | 'COMPLETED'
   | 'CANCELLED';
 
+// Instant riders pick a pool themselves; advance riders are auto-assigned.
+export type BookingType = 'INSTANT' | 'ADVANCE';
+
 export interface Ride {
   id: string;
   user_id: string;
@@ -97,7 +100,11 @@ export interface Ride {
   vehicle_type: VehicleType;
   gender_restriction: GenderPreference;
   status: RideStatus;
-  
+
+  // Advance booking (null for instant rides)
+  booking_type: BookingType;
+  scheduled_pickup_at: string | null;
+
   // Pricing & distance
   fare: number | null;
   distance_km: number | null;
@@ -115,6 +122,7 @@ export interface Ride {
 }
 
 export type PoolStatus =
+  | 'SCHEDULED'        // Advance pool gathering bookings before its pickup window
   | 'WAITING_FOR_RIDERS'
   | 'WAITING_FOR_DRIVER'
   | 'READY_TO_START'
@@ -157,7 +165,15 @@ export interface Pool {
   extended_search_h3: string[] | null;
   extended_pickup_h3: string[] | null;
   fare_per_person: number | null;
-  
+
+  // Advance scheduling (all null for instant pools)
+  is_advance?: boolean;
+  scheduled_pickup_at?: string | null;       // Earliest member pickup = vehicle start
+  scheduled_window_end_at?: string | null;   // Latest member pickup
+  confirmation_opens_at?: string | null;
+  confirmation_deadline_at?: string | null;
+  active_range_start_at?: string | null;     // Set when 2 members have confirmed
+
   // Lifecycle
   created_at: string;
   updated_at: string;
@@ -176,10 +192,12 @@ export interface PoolMember {
   pool_id: string;
   user_id: string;
   ride_id: string;
-  join_type: 'INITIAL' | 'MATCHED' | 'ADDED';
+  join_type: 'INITIAL' | 'MATCHED' | 'ADDED' | 'ADVANCE' | 'BACKFILL';
   join_score: number | null;
   is_front_route: boolean;
   joined_at: string;
+  scheduled_pickup_at?: string | null;
+  confirmed_at?: string | null;
   left_at: string | null;
 }
 

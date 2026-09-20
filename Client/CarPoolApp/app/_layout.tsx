@@ -90,6 +90,7 @@ function AppLayout() {
                 <Stack.Screen name="all-transactions" options={{ headerShown: true, headerTitle: 'All Transactions' }} />
                 <Stack.Screen name="friends" options={{ headerShown: false }} />
                 <Stack.Screen name="trips" options={{ headerShown: false }} />
+                <Stack.Screen name="scheduled-rides" options={{ headerShown: false }} />
                 <Stack.Screen name="help-support" options={{ headerShown: true, headerTitle: 'Help & Support' }} />
                 <Stack.Screen name="personal-info" options={{ headerShown: true, headerTitle: 'Personal Info' }} />
                 <Stack.Screen name="saved-places" options={{ headerShown: true, headerTitle: 'Saved Places' }} />

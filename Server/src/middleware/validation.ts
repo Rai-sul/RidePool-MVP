@@ -51,12 +51,27 @@ export const CreatePoolSchema = z.object({
   destination_address: z.string().max(500).optional(),
   destination_name: z.string().max(200).optional(),
   vehicle_type: VehicleTypeEnum,
-  max_passengers: z.number().int().min(2).max(4).default(4),
+  // max_passengers is not accepted from the client: capacity is fixed per
+  // vehicle type (CNG 2, CAR 3) and derived on the server.
   gender_restriction: GenderPreferenceEnum.optional().default('ANY'),
 });
 
 export const JoinPoolSchema = z.object({
   ride_id: z.string().uuid(),
+});
+
+export const CreateAdvanceBookingSchema = z.object({
+  pickup_lat: z.number().min(-90).max(90),
+  pickup_lng: z.number().min(-180).max(180),
+  pickup_address: z.string().max(500).optional(),
+  pickup_name: z.string().max(200).optional(),
+  destination_lat: z.number().min(-90).max(90),
+  destination_lng: z.number().min(-180).max(180),
+  destination_address: z.string().max(500).optional(),
+  destination_name: z.string().max(200).optional(),
+  vehicle_type: VehicleTypeEnum,
+  gender_restriction: GenderPreferenceEnum.optional().default('ANY'),
+  scheduled_pickup_at: z.string().datetime({ offset: true }),
 });
 
 export const GoOnlineSchema = z.object({

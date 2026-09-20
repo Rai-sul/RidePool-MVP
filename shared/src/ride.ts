@@ -9,12 +9,16 @@ export type RideStatus =
   | 'CANCELLED';
 
 export type PoolStatus =
+  | 'SCHEDULED'        // Advance pool gathering bookings before its pickup window
   | 'WAITING_FOR_RIDERS'
   | 'WAITING_FOR_DRIVER'
   | 'READY_TO_START'
   | 'STARTED'
   | 'COMPLETED'
   | 'CANCELLED';
+
+// Instant riders pick a pool themselves; advance riders are auto-assigned.
+export type BookingType = 'INSTANT' | 'ADVANCE';
 
 export interface Ride {
   id: string;
@@ -31,6 +35,8 @@ export interface Ride {
   vehicle_type: VehicleType;
   gender_restriction: GenderPreference;
   status: RideStatus;
+  booking_type: BookingType;
+  scheduled_pickup_at: string | null;
   fare: number | null;
   distance_km: number | null;
   is_on_front_route: boolean;
@@ -66,6 +72,15 @@ export interface Pool {
   extended_search_h3: string[] | null;
   extended_pickup_h3: string[] | null;
   fare_per_person: number | null;
+
+  // Advance scheduling (all null for instant pools)
+  is_advance: boolean;
+  scheduled_pickup_at: string | null;       // Earliest member pickup = vehicle start
+  scheduled_window_end_at: string | null;   // Latest member pickup
+  confirmation_opens_at: string | null;
+  confirmation_deadline_at: string | null;
+  active_range_start_at: string | null;     // Set when 2 members have confirmed
+
   created_at: string;
   updated_at: string;
   started_at: string | null;
@@ -77,10 +92,12 @@ export interface PoolMember {
   pool_id: string;
   user_id: string;
   ride_id: string;
-  join_type: 'INITIAL' | 'MATCHED' | 'ADDED';
+  join_type: 'INITIAL' | 'MATCHED' | 'ADDED' | 'ADVANCE' | 'BACKFILL';
   join_score: number | null;
   is_front_route: boolean;
   joined_at: string;
+  scheduled_pickup_at: string | null;
+  confirmed_at: string | null;
   left_at: string | null;
 }
 
@@ -100,9 +117,42 @@ export interface CreatePoolRequest {
   destination_lng: number;
   destination_address?: string;
   vehicle_type: VehicleType;
-  max_passengers: number;
+  // Capacity is fixed per vehicle type (CNG 2, CAR 3) and set by the server.
   gender_restriction?: GenderPreference;
 }
+
+export interface CreateAdvanceBookingRequest {
+  pickup_lat: number;
+  pickup_lng: number;
+  pickup_address?: string;
+  pickup_name?: string;
+  destination_lat: number;
+  destination_lng: number;
+  destination_address?: string;
+  destination_name?: string;
+  vehicle_type: VehicleType;
+  gender_restriction?: GenderPreference;
+  scheduled_pickup_at: string;  // ISO 8601
+}
+
+export interface AdvanceBookingResult {
+  ride_id: string;
+  pool_id: string;
+  created_pool: boolean;
+  scheduled_pickup_at: string;
+  pool_scheduled_pickup_at: string;
+  confirmation_opens_at: string;
+  current_passengers: number;
+  max_passengers: number;
+}
+
+/** Outcome of the confirmation deadline for a pool that ends up short of riders. */
+export type AdvanceDispatchOutcome =
+  | 'DISPATCHED'
+  | 'WAIT_FOR_MATCH'
+  | 'ASK_USER_TO_EXTEND'
+  | 'CANCEL_POOL'
+  | 'CANCELLED';
 
 export interface JoinPoolRequest {
   pool_id: string;

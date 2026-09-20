@@ -146,6 +146,19 @@ RidePool uses a modular monolith architecture with clear separation of concerns,
 └──────────────────┘
 ```
 
+Confirmed advance pools appear in this same list while they are inside their
+Active Pickup Range, so instant riders can backfill them without a separate
+browser. See [Advance Booking](./advance-booking.md).
+
+## Advance Booking
+
+Riders can also schedule a ride ahead of time. Scheduled bookings are pooled
+automatically - the rider never picks a pool - and the pool runs a
+confirmation step shortly before pickup before its driver search starts.
+
+Full lifecycle, time windows, endpoints and the Active Pickup Range rules:
+[Advance Booking](./advance-booking.md).
+
 ## Security Architecture
 
 ```

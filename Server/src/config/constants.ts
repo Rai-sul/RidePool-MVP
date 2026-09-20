@@ -6,6 +6,12 @@ export const CONSTANTS = {
     CAR: 'CAR' as VehicleType,
     CNG: 'CNG' as VehicleType,
   },
+  // App-wide passenger capacity per vehicle type. Every pool, instant or
+  // advance, is sized from this - never from a client-supplied value.
+  VEHICLE_CAPACITY: {
+    CNG: 2,
+    CAR: 3,
+  } as Record<VehicleType, number>,
   RIDE_STATUS: {
     PENDING: 'PENDING' as RideStatus,
     SEARCHING: 'SEARCHING' as RideStatus,
@@ -17,6 +23,7 @@ export const CONSTANTS = {
     CANCELLED: 'CANCELLED' as RideStatus,
   },
   POOL_STATUS: {
+    SCHEDULED: 'SCHEDULED' as PoolStatus,
     WAITING_FOR_RIDERS: 'WAITING_FOR_RIDERS' as PoolStatus,
     WAITING_FOR_DRIVER: 'WAITING_FOR_DRIVER' as PoolStatus,
     DRIVER_ASSIGNED: 'DRIVER_ASSIGNED' as PoolStatus,
@@ -26,7 +33,6 @@ export const CONSTANTS = {
     CANCELLED: 'CANCELLED' as PoolStatus,
   },
   MIN_PASSENGERS: 2,
-  MAX_PASSENGERS_CAR: 3,
   PICKUP_RANGE_KM: 2,
   DESTINATION_RANGE_KM: 5,
   H3: H3_RESOLUTION,

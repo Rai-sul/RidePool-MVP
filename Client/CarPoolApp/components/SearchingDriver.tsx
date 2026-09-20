@@ -124,7 +124,6 @@ export default function SearchingDriver({ onCancel, onDriverFound, onSearchExpir
         destination_address: selectedDestination.address,
         destination_name: selectedDestination.name,
         vehicle_type: selectedPool.vehicle_type,
-        max_passengers: selectedPool.max_passengers,
         gender_restriction: selectedPool.gender_restriction,
       });
       

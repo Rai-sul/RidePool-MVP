@@ -10,6 +10,8 @@ import {
   validationErrorResponse,
   conflictResponse,
 } from '../utils/response';
+import { CONSTANTS } from '../config/constants';
+import { VehicleType } from '../types';
 import { logger } from '../utils/logger';
 
 const registerSchema = z.object({
@@ -160,7 +162,7 @@ class AuthController {
       let vehicleRecord: { id: string; vehicle_type: string; vehicle_number: string } | null = null;
 
       if (wantsDriver && vehicle_type && vehicle_plate) {
-        const maxPassengers = vehicle_type === 'CNG' ? 3 : 4;
+        const maxPassengers = CONSTANTS.VEHICLE_CAPACITY[vehicle_type as VehicleType];
         const { data: createdVehicle, error: vehicleError } = await supabaseAdmin
           .from('vehicles')
           .insert({

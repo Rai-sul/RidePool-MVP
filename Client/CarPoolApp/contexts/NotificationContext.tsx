@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, ReactNod
 import { Platform, AppState } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+import { router } from 'expo-router';
 import { useAuthContext } from './AuthContext';
 import { apiClient } from '../utils/apiClient';
 import { API_ENDPOINTS } from '../config/api.config';
@@ -159,6 +160,12 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         inviterName: data.inviter as string,
         notificationId: response.notification.request.identifier,
       });
+    }
+
+    // A scheduled ride is asking to be confirmed - take the rider straight there.
+    if (data?.action === 'CONFIRM_ADVANCE_BOOKING') {
+      console.log('[Notifications] Opening scheduled rides to confirm');
+      router.push('/scheduled-rides');
     }
   }, []);
 

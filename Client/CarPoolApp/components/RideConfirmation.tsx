@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MapPin, Users, ChevronRight, ChevronLeft, Car, AlertCircle, Plus, RefreshCw, UserPlus, Taka } from './Icons';
+import { MapPin, Users, ChevronRight, ChevronLeft, Car, AlertCircle, Plus, RefreshCw, UserPlus, Taka, Clock } from './Icons';
 import { Button } from './ui/button';
 import type { Destination, UserProfile, Pool, Location } from '../contexts/GlobalContext';
 import { usePools } from '../hooks/usePools';
@@ -13,6 +13,8 @@ import { ApiError } from '../utils/apiClient';
 import GoogleMapView from './GoogleMapView';
 import AvailablePoolCard, { PoolSearchResultData, CoRiderInfo } from './AvailablePoolCard';
 import PriyoSathiInviteModal from './PriyoSathiInviteModal';
+import ScheduleRidePicker from './ScheduleRidePicker';
+import { useAdvanceBookings } from '../hooks/useAdvanceBookings';
 
 type RideConfirmationProps = {
   pickupLocation?: Location | null;
@@ -28,6 +30,9 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
   const [selectedPoolId, setSelectedPoolId] = useState<string | null>(null);
   const [activeRideType, setActiveRideType] = useState<'female-only' | 'regular'>(rideType || 'regular');
   const [selectedVehicleType, setSelectedVehicleType] = useState<'CAR' | 'CNG' | null>(null);
+  // Booking mode: ride now and pick a pool, or schedule and be auto-assigned.
+  const [bookingMode, setBookingMode] = useState<'INSTANT' | 'ADVANCE'>('INSTANT');
+  const [scheduledPickupAt, setScheduledPickupAt] = useState<Date | null>(null);
   const [showConfirmButton, setShowConfirmButton] = useState(false);
   const [isCreatingPool, setIsCreatingPool] = useState(false);
   const [isJoiningPool, setIsJoiningPool] = useState(false);
@@ -69,6 +74,22 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
 
   // Use the rides hook to create rides
   const { requestRide } = useRides();
+
+  // Scheduled bookings. fetchBookings also reports the server's time windows,
+  // which the picker needs before the first booking is made.
+  const {
+    createBooking,
+    fetchBookings,
+    timing: advanceTiming,
+    loading: advanceLoading,
+    error: advanceError,
+  } = useAdvanceBookings();
+
+  useEffect(() => {
+    if (bookingMode === 'ADVANCE' && !advanceTiming) {
+      fetchBookings();
+    }
+  }, [bookingMode, advanceTiming, fetchBookings]);
 
   // Get available pools from search results
   const availablePools = searchResults?.pools || [];
@@ -453,8 +474,12 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
     buildMarkersFromPoolDetails,
   ]);
 
-  // Search for pools when location/preferences change
+  // Search for pools when location/preferences change.
+  // Skipped while scheduling: advance riders are auto-assigned, never shown a list.
   useEffect(() => {
+    if (bookingMode === 'ADVANCE') {
+      return;
+    }
     if (!pickupLocation || !destination?.latitude || !destination?.longitude || !selectedVehicleType) {
       return;
     }
@@ -467,7 +492,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
       vehicle_type: selectedVehicleType,
       gender_restriction: (isFemale && activeRideType === 'female-only') ? 'FEMALE_ONLY' : 'ANY',
     });
-  }, [pickupLocation, destination, selectedVehicleType, isFemale, activeRideType]);
+  }, [pickupLocation, destination, selectedVehicleType, isFemale, activeRideType, bookingMode]);
 
   // Handle reload pools - manually refresh pool search results
   const handleReloadPools = useCallback(() => {
@@ -503,7 +528,6 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
         destination_address: destination.address,
         destination_name: destination.name,
         vehicle_type: selectedVehicleType,
-        max_passengers: selectedVehicleType === 'CNG' ? 2 : 4,
         gender_restriction: (isFemale && activeRideType === 'female-only') ? 'FEMALE_ONLY' : 'ANY',
       });
 
@@ -531,6 +555,45 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
       setIsCreatingPool(false);
     }
   }, [pickupLocation, destination, selectedVehicleType, isFemale, activeRideType, createPool, onPoolSelect, invitedFriends]);
+
+  /**
+   * Schedule the ride. The server matches it to a compatible pool or starts a
+   * new one, so there is nothing for the rider to choose here.
+   */
+  const handleScheduleRide = useCallback(async () => {
+    if (!pickupLocation?.latitude || !pickupLocation?.longitude ||
+      !destination?.latitude || !destination?.longitude || !selectedVehicleType || !scheduledPickupAt) {
+      return;
+    }
+
+    const result = await createBooking({
+      pickup_lat: pickupLocation.latitude,
+      pickup_lng: pickupLocation.longitude,
+      pickup_address: pickupLocation.address,
+      pickup_name: pickupLocation.name,
+      destination_lat: destination.latitude,
+      destination_lng: destination.longitude,
+      destination_address: destination.address,
+      destination_name: destination.name,
+      vehicle_type: selectedVehicleType,
+      gender_restriction: (isFemale && activeRideType === 'female-only') ? 'FEMALE_ONLY' : 'ANY',
+      scheduled_pickup_at: scheduledPickupAt.toISOString(),
+    });
+
+    if (!result.success || !result.booking) {
+      Alert.alert('Could not schedule', result.error || 'Please try a different pickup time.');
+      return;
+    }
+
+    const pickupLabel = new Date(result.booking.pool_scheduled_pickup_at).toLocaleString();
+    Alert.alert(
+      'Ride scheduled',
+      result.booking.created_pool
+        ? `You are booked for ${pickupLabel}. We will pool you with riders heading the same way.`
+        : `You joined a pool leaving at ${pickupLabel} with ${result.booking.current_passengers} riders.`,
+      [{ text: 'OK', onPress: onBack }]
+    );
+  }, [pickupLocation, destination, selectedVehicleType, scheduledPickupAt, isFemale, activeRideType, createBooking, onBack]);
 
   // Delay showing the confirm button to prevent touch event overlap
   useEffect(() => {
@@ -619,7 +682,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
         vehicle_type: selectedVehicleType,
         gender_restriction: (isFemale && activeRideType === 'female-only') ? 'FEMALE_ONLY' : 'ANY',
         current_passengers: joinResult.currentPassengers || 2,
-        max_passengers: selectedVehicleType === 'CNG' ? 2 : 4,
+        max_passengers: selectedVehicleType === 'CNG' ? 2 : 3,
         viability_score: poolResult.score || null,
         base_distance_km: null,
         base_duration_minutes: null,
@@ -767,6 +830,51 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
         {/* Bottom Sheet */}
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 140 }}>
           <View className="px-4 py-5">
+            {/* Booking Mode: ride now, or schedule for later */}
+            <View className="mb-6">
+              <View className="flex flex-row items-center gap-2 mb-3 mx-1">
+                <Clock className="w-5 h-5 text-gray-700" />
+                <Text className="text-base font-semibold text-gray-900">When do you need it?</Text>
+              </View>
+              <View className="flex flex-row gap-4">
+                <Button
+                  onPress={() => {
+                    setBookingMode('INSTANT');
+                    setScheduledPickupAt(null);
+                  }}
+                  className={`flex-1 h-12 ${bookingMode === 'INSTANT'
+                      ? 'bg-blue-600 hover:bg-blue-700'
+                      : 'bg-white border-2 border-gray-300'
+                    } active:scale-[0.98]`}
+                >
+                  <Text className={bookingMode === 'INSTANT' ? 'text-white font-semibold' : 'text-gray-900 font-semibold'}>
+                    Ride Now
+                  </Text>
+                </Button>
+                <Button
+                  onPress={() => {
+                    setBookingMode('ADVANCE');
+                    setSelectedPoolId(null);
+                  }}
+                  className={`flex-1 h-12 ${bookingMode === 'ADVANCE'
+                      ? 'bg-blue-600 hover:bg-blue-700'
+                      : 'bg-white border-2 border-gray-300'
+                    } active:scale-[0.98]`}
+                >
+                  <Text className={bookingMode === 'ADVANCE' ? 'text-white font-semibold' : 'text-gray-900 font-semibold'}>
+                    Schedule
+                  </Text>
+                </Button>
+              </View>
+              {bookingMode === 'ADVANCE' && (
+                <View className="mt-3 mx-1">
+                  <Text className="text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    We pool scheduled rides automatically, so there is no list to pick from.
+                  </Text>
+                </View>
+              )}
+            </View>
+
             {/* Ride Type Selector for Female Users */}
             {isFemale && (
               <View className="mb-6">
@@ -1025,8 +1133,24 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
               </View>
             )}
 
-            {/* Available Pools Section */}
-            {selectedVehicleType && (
+            {/* Pickup time - scheduled rides only */}
+            {bookingMode === 'ADVANCE' && selectedVehicleType && (
+              <ScheduleRidePicker
+                timing={advanceTiming}
+                value={scheduledPickupAt}
+                onChange={setScheduledPickupAt}
+              />
+            )}
+
+            {bookingMode === 'ADVANCE' && advanceError && (
+              <View className="mx-1 mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <Text className="text-sm text-red-700">{advanceError}</Text>
+              </View>
+            )}
+
+            {/* Available Pools Section - instant booking only. Advance riders
+                are auto-assigned and never browse pools. */}
+            {bookingMode === 'INSTANT' && selectedVehicleType && (
               <View style={{ marginTop: 8 }}>
                 {/* Section Header */}
                 <View
@@ -1364,7 +1488,9 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                         poolDropoffLocation: creatorDropoffLocation || poolDestinationLocation || poolResult.poolDropoffLocation,
                         distanceToPoolKm: poolResult.distanceToPoolKm,
                         currentPassengers: poolResult.currentPassengers || 1,
-                        maxPassengers: poolResult.maxPassengers || (selectedVehicleType === 'CNG' ? 2 : 4),
+                        maxPassengers: poolResult.maxPassengers || (selectedVehicleType === 'CNG' ? 2 : 3),
+                        isAdvance: poolResult.isAdvance,
+                        scheduledPickupAt: poolResult.scheduledPickupAt,
                       };
 
                       return (
@@ -1425,8 +1551,39 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
           </View>
         </ScrollView>
 
+        {/* Schedule button - shown instead of the join button while scheduling */}
+        {bookingMode === 'ADVANCE' && selectedVehicleType && scheduledPickupAt && (
+          <View
+            className="absolute left-0 right-0 px-4 py-4 bg-white border-t border-gray-200"
+            style={{
+              bottom: 64 + insets.bottom,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 8,
+              elevation: 10
+            }}
+          >
+            <Button
+              onPress={handleScheduleRide}
+              disabled={advanceLoading}
+              className={`w-full h-14 ${isFemale ? 'bg-pink-500 hover:bg-pink-600' : 'bg-blue-600 hover:bg-blue-700'} active:scale-[0.98] transition-transform rounded-xl ${advanceLoading ? 'opacity-70' : ''}`}
+              textClassName="text-white font-bold text-base"
+            >
+              {advanceLoading ? (
+                <View className="flex-row items-center gap-2">
+                  <ActivityIndicator size="small" color="#ffffff" />
+                  <Text className="text-white font-bold text-base">Scheduling...</Text>
+                </View>
+              ) : (
+                'Schedule Ride'
+              )}
+            </Button>
+          </View>
+        )}
+
         {/* Fixed Confirm Button above bottom nav - accounts for system navigation bar */}
-        {showConfirmButton && selectedPoolId && (
+        {bookingMode === 'INSTANT' && showConfirmButton && selectedPoolId && (
           <View
             className="absolute left-0 right-0 px-4 py-4 bg-white border-t border-gray-200"
             style={{

@@ -68,40 +68,44 @@ describe('Validation Schemas', () => {
   });
 
   describe('CreatePoolSchema', () => {
-    it('should validate valid pool data', () => {
-      const validData = {
-        destination_lat: 23.7808,
-        destination_lng: 90.4193,
-        vehicle_type: 'CAR',
-        max_passengers: 4,
-      };
+    const validData = {
+      pickup_lat: 23.8103,
+      pickup_lng: 90.4125,
+      destination_lat: 23.7808,
+      destination_lng: 90.4193,
+      vehicle_type: 'CAR',
+    };
 
+    it('should validate valid pool data', () => {
       const result = CreatePoolSchema.safeParse(validData);
       expect(result.success).toBe(true);
     });
 
-    it('should reject max_passengers below 2', () => {
-      const invalidData = {
-        destination_lat: 23.7808,
-        destination_lng: 90.4193,
-        vehicle_type: 'CAR',
-        max_passengers: 1,
-      };
+    it('should require a pickup location', () => {
+      const { pickup_lat, ...withoutPickup } = validData;
 
-      const result = CreatePoolSchema.safeParse(invalidData);
+      const result = CreatePoolSchema.safeParse(withoutPickup);
       expect(result.success).toBe(false);
     });
 
-    it('should reject max_passengers above 4', () => {
-      const invalidData = {
-        destination_lat: 23.7808,
-        destination_lng: 90.4193,
-        vehicle_type: 'CAR',
-        max_passengers: 5,
-      };
+    it('should ignore a client-supplied max_passengers', () => {
+      // Capacity is fixed per vehicle type on the server (CNG 2, CAR 3), so a
+      // value sent by the client must never reach the pool row.
+      const result = CreatePoolSchema.safeParse({ ...validData, max_passengers: 99 });
 
-      const result = CreatePoolSchema.safeParse(invalidData);
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data).not.toHaveProperty('max_passengers');
+      }
+    });
+
+    it('should default gender_restriction to ANY', () => {
+      const result = CreatePoolSchema.safeParse(validData);
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.gender_restriction).toBe('ANY');
+      }
     });
   });
 

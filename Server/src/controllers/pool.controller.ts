@@ -11,7 +11,9 @@ import { smartRouteService, PoolMemberRoute, RouteCapacityError } from '../servi
 import { googleMapsService } from '../services/googleMaps.service';
 import { priyoSathiService } from '../services/priyoSathi.service';
 import { CreatePoolRequest, Pool, PoolStatus, Ride, RideStatus, Location, VehicleType } from '../types';
+import { CONSTANTS } from '../config/constants';
 import { h3Utils } from '../utils/h3.utils';
+import { resolveGenderRestriction } from '../utils/genderRestriction';
 import { calculateDistance, estimateTravelTime } from '../utils/helper';
 import { unifiedCacheService } from '../services/unifiedCache.service';
 import crypto from 'crypto';
@@ -64,6 +66,20 @@ function extractLocationName(address: string | undefined): string {
   return parts[0].substring(0, 40);
 }
 
+/**
+ * Rejections raised by atomic_join_pool. The pool state can change between
+ * discovery and the join, so each reason gets its own code and the client
+ * refreshes the list after any of them.
+ */
+const JOIN_REJECTIONS = [
+  { code: 'POOL_FULL', message: 'Pool is full' },
+  { code: 'POOL_NO_LONGER_ACTIVE', message: 'This scheduled pool is no longer open for joining' },
+  { code: 'POOL_NO_LONGER_JOINABLE', message: 'Pool is no longer accepting riders' },
+  { code: 'GENDER_NOT_COMPATIBLE', message: 'This pool is restricted to female riders' },
+  { code: 'ALREADY_IN_POOL', message: 'You are already in this pool' },
+  { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
+];
+
 export class PoolController {
   async searchPools(req: AuthRequest, res: Response, next: NextFunction) {
     try {
@@ -91,6 +107,9 @@ export class PoolController {
       const dropoffLat = parseFloat(dropoff_lat as string);
       const dropoffLng = parseFloat(dropoff_lng as string);
 
+      // A female-only search is honoured only if the stored profile backs it.
+      const resolvedGender = await resolveGenderRestriction(userId, gender_restriction as string);
+
       const mockRide: Partial<Ride> = {
         user_id: userId,
         pickup_lat: pickupLat,
@@ -98,7 +117,7 @@ export class PoolController {
         dropoff_lat: dropoffLat,
         dropoff_lng: dropoffLng,
         vehicle_type: vehicle_type as any,
-        gender_restriction: (gender_restriction as string) || 'ANY',
+        gender_restriction: resolvedGender,
         status: 'CREATING_POOL',
       } as Ride;
 
@@ -111,7 +130,7 @@ export class PoolController {
         longitude: dropoffLng,
       });
 
-      logger.info(`[Pool Search] User ${userId} searching with: pickup=${pickup_lat},${pickup_lng} dest=${dropoff_lat},${dropoff_lng} vehicle=${vehicle_type} gender=${gender_restriction || 'ANY'}`);
+      logger.info(`[Pool Search] User ${userId} searching with: pickup=${pickup_lat},${pickup_lng} dest=${dropoff_lat},${dropoff_lng} vehicle=${vehicle_type} gender=${resolvedGender}`);
 
       const searchResult = await poolMatchingService.findMatchingPoolsEnhanced(mockRide as Ride, userId);
 
@@ -160,6 +179,10 @@ export class PoolController {
 
       const poolData: CreatePoolRequest = req.body;
 
+      // Capacity is a property of the vehicle type, not of the request.
+      const maxPassengers = CONSTANTS.VEHICLE_CAPACITY[poolData.vehicle_type as VehicleType];
+      const genderRestriction = await resolveGenderRestriction(userId, poolData.gender_restriction);
+
       const pickup = {
         latitude: poolData.pickup_lat,
         longitude: poolData.pickup_lng,
@@ -174,7 +197,7 @@ export class PoolController {
       const pickupH3 = h3Utils.latLngToH3(pickup, 9);
       const dropoffH3 = h3Utils.latLngToH3(destination, 7);
 
-      logger.info(`[Pool] Creating pool with destination H3: ${destinationH3}, vehicle: ${poolData.vehicle_type}, gender: ${poolData.gender_restriction || 'ANY'}`);
+      logger.info(`[Pool] Creating pool with destination H3: ${destinationH3}, vehicle: ${poolData.vehicle_type}, gender: ${genderRestriction}, capacity: ${maxPassengers}`);
 
       // Calculate initial fare based on pickup to destination
       // This ensures consistent pricing for all pool members with same route
@@ -182,7 +205,7 @@ export class PoolController {
         pickup,
         destination,
         poolData.vehicle_type as VehicleType,
-        2 // Initial estimate for 2 passengers
+        CONSTANTS.MIN_PASSENGERS // Initial estimate for a two-rider pool
       );
 
       // First, create a ride for the pool creator
@@ -200,7 +223,7 @@ export class PoolController {
           dropoff_address: poolData.destination_name || poolData.destination_address,
           dropoff_h3_index: dropoffH3,
           vehicle_type: poolData.vehicle_type,
-          gender_restriction: poolData.gender_restriction || 'ANY',
+          gender_restriction: genderRestriction,
           status: 'CREATING_POOL',
           distance_km: rideEstimate.distanceKm,
         })
@@ -225,8 +248,8 @@ export class PoolController {
           destination_address: poolData.destination_name || poolData.destination_address,
           destination_h3_index: destinationH3,
           vehicle_type: poolData.vehicle_type,
-          max_passengers: poolData.max_passengers,
-          gender_restriction: poolData.gender_restriction || 'ANY',
+          max_passengers: maxPassengers,
+          gender_restriction: genderRestriction,
           current_passengers: 1,
           status: 'WAITING_FOR_RIDERS' as PoolStatus,
           fare_per_person: rideEstimate.fareEstimates.with2Passengers,
@@ -329,6 +352,18 @@ export class PoolController {
         });
       }
 
+      // Advance riders are auto-assigned; they never pick a pool by hand.
+      if (ride.booking_type === 'ADVANCE') {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'ADVANCE_BOOKING_AUTO_ASSIGNED',
+            message: 'Scheduled bookings are matched automatically and cannot join a pool manually',
+          },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       const { data: pool, error: poolError } = await supabaseAdmin
         .from('pools')
         .select('*')
@@ -343,13 +378,26 @@ export class PoolController {
         });
       }
 
+      // Re-verify the Active Pickup Range before anything else. Discovery
+      // results are never trusted, and an unlisted pool id gets no shortcut.
+      if (!poolMatchingService.isAdvancePoolJoinableNow(pool as Pool)) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'POOL_NO_LONGER_ACTIVE',
+            message: 'This scheduled pool is not open for joining right now',
+          },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       const compatibility = poolMatchingService.isRideCompatibleWithPool(ride as Ride, pool as Pool);
 
       if (!compatibility.compatible) {
         return res.status(400).json({
           success: false,
           error: {
-            code: 'INCOMPATIBLE',
+            code: 'ROUTE_NOT_COMPATIBLE',
             message: 'Ride not compatible with pool',
             reason: compatibility.reason,
           },
@@ -364,17 +412,13 @@ export class PoolController {
       });
 
       if (joinError) {
-        if (joinError.message?.includes('POOL_FULL')) {
+        // Anything the locked re-check rejected comes back as a code the
+        // client can show and then refresh the pool list.
+        const rejection = JOIN_REJECTIONS.find((r) => joinError.message?.includes(r.code));
+        if (rejection) {
           return res.status(400).json({
             success: false,
-            error: { code: 'POOL_FULL', message: 'Pool is full' },
-            timestamp: new Date().toISOString(),
-          });
-        }
-        if (joinError.message?.includes('POOL_NOT_AVAILABLE')) {
-          return res.status(400).json({
-            success: false,
-            error: { code: 'POOL_NOT_AVAILABLE', message: 'Pool is no longer available' },
+            error: { code: rejection.code, message: rejection.message },
             timestamp: new Date().toISOString(),
           });
         }

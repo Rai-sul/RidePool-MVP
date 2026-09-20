@@ -27,6 +27,10 @@ export interface PoolSearchResultData {
   distanceToPoolKm?: number;
   currentPassengers?: number;
   maxPassengers?: number;
+  /** Confirmed scheduled pool, shown here because it is inside its pickup range. */
+  isAdvance?: boolean;
+  /** When the vehicle starts its route, for advance pools only. */
+  scheduledPickupAt?: string;
 }
 
 export interface CoRiderInfo {
@@ -68,7 +72,7 @@ export default function AvailablePoolCard({
   previewError = null,
 }: AvailablePoolCardProps) {
   const currentPassengers = pool.currentPassengers || 1;
-  const maxPassengers = pool.maxPassengers || 4;
+  const maxPassengers = pool.maxPassengers || 3;
 
   const formatDistance = (km: number | undefined): string => {
     if (km === undefined) return '--';
@@ -151,9 +155,21 @@ export default function AvailablePoolCard({
             <Users size={24} color="#ffffff" />
           </LinearGradient>
           <View>
-            <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 2 }}>
-              Pool #{pool.poolId.slice(0, 6)}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>
+                Pool #{pool.poolId.slice(0, 6)}
+              </Text>
+              {pool.isAdvance && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#eef2ff', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 }}>
+                  <Clock size={11} color="#4338ca" />
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#4338ca' }}>
+                    {pool.scheduledPickupAt
+                      ? `Leaves ${new Date(pool.scheduledPickupAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                      : 'Scheduled'}
+                  </Text>
+                </View>
+              )}
+            </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <View
                 style={{
