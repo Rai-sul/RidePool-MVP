@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import SearchingDriver from '../components/SearchingDriver.native';
+import SearchingDriver from '../components/SearchingDriver';
 
 export default function SearchingScreen() {
   const router = useRouter();

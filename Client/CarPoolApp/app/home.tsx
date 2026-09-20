@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import LandingPage from '../components/LandingPage';
-import RatingModal from '../components/RatingModal.native';
+import RatingModal from '../components/RatingModal';
 import { useGlobalContext } from '../contexts/GlobalContext';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 

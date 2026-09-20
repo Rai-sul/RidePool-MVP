@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import { useRouter } from 'expo-router';
-import { TripProgress } from '../src/components/pool/TripProgress.native';
+import { TripProgress } from '../src/components/pool/TripProgress';
 import { useDriverStore } from '../src/store/useDriverStore';
 
 export default function TripProgressPage() {

@@ -1,9 +1,9 @@
 import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { AppHeader } from "../layout/AppHeader.native";
-import { MapView } from "../map/MapView.native";
-import { PoolDetailsSheet } from "../pool/PoolDetailsSheet.native";
-import { PoolRequestAlert } from "../pool/PoolRequestAlert.native";
+import { AppHeader } from "../layout/AppHeader";
+import { MapView } from "../map/MapView";
+import { PoolDetailsSheet } from "../pool/PoolDetailsSheet";
+import { PoolRequestAlert } from "../pool/PoolRequestAlert";
 import type { Pool } from "../../types";
 
 interface HomeScreenProps {

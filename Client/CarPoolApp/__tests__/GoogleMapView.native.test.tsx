@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, waitFor } from '@testing-library/react-native';
-import GoogleMapView from '../components/GoogleMapView.native';
+import GoogleMapView from '../components/GoogleMapView';
 
 jest.mock('expo-constants', () => ({
   __esModule: true,

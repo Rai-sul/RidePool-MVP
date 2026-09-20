@@ -4,7 +4,7 @@ import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { Phone, CheckCircle, X, Navigation, MessageCircle, Star } from "lucide-react-native";
 import { useState } from "react";
-import { PassengerBillingDialog } from "./PassengerBillingDialog.native";
+import { PassengerBillingDialog } from "./PassengerBillingDialog";
 import type { Pool } from "../../types";
 
 interface ActiveRideProps {

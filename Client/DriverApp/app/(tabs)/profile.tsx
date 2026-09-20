@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { ProfileScreen } from '../../src/components/screens/ProfileScreen.native';
+import { ProfileScreen } from '../../src/components/screens/ProfileScreen';
 import { authService } from '../../src/services/auth.service';
 import { useDriverStore } from '../../src/store/useDriverStore';
 

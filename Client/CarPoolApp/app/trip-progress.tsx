@@ -1,7 +1,7 @@
 import React, { Component, ErrorInfo } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
-import TripProgress from '../components/TripProgress.native';
+import TripProgress from '../components/TripProgress';
 import { useGlobalContext } from '../contexts/GlobalContext';
 
 // Error boundary for TripProgress — catches transient navigation context errors

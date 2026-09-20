@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import HelpScreen from '../src/components/screens/HelpScreen.native';
+import HelpScreen from '../src/components/screens/HelpScreen';
 
 export default function Help() {
   const router = useRouter();

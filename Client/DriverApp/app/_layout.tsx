@@ -5,7 +5,7 @@ import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider } from '../src/contexts/ThemeContext';
-import { DriverBottomNav } from '../src/components/layout/DriverBottomNav.native';
+import { DriverBottomNav } from '../src/components/layout/DriverBottomNav';
 import { useDriverStore } from '../src/store/useDriverStore';
 import { notificationService } from '../src/services/notification.service';
 

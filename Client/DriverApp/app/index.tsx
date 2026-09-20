@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import LoginScreen from '../src/components/screens/LoginScreen.native';
+import LoginScreen from '../src/components/screens/LoginScreen';
 
 export default function Index() {
   const router = useRouter();

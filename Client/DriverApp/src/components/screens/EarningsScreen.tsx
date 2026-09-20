@@ -3,7 +3,7 @@ import { View, Text, ScrollView, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
-import { DriverStats } from "../driver/DriverStats.native";
+import { DriverStats } from "../driver/DriverStats";
 import { TrendingUp, Download } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
 import { driverService } from "../../services/driver.service";

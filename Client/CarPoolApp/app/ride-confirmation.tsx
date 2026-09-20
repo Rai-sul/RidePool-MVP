@@ -1,5 +1,5 @@
 
-import RideConfirmation from '../components/RideConfirmation.native';
+import RideConfirmation from '../components/RideConfirmation';
 import { useGlobalContext, toDisplayPool } from '../contexts/GlobalContext';
 import { useRouter, router as staticRouter } from 'expo-router';
 import { Pool } from '../types';

@@ -1,4 +1,3 @@
-// Platform-specific module resolution handled by Metro bundler
-// This file enables TypeScript to resolve the module
+import { LinearGradient } from 'expo-linear-gradient';
 
-export { default } from './LinearGradient.native';
+export default LinearGradient;

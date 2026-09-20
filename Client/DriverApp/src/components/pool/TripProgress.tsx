@@ -7,7 +7,7 @@ import { Badge } from '../ui/badge';
 import { usePoolRealtime } from '../../hooks/usePoolRealtime';
 import { driverService } from '../../services/driver.service';
 import { locationService } from '../../services/location.service';
-import { PassengerBillingDialog } from './PassengerBillingDialog.native';
+import { PassengerBillingDialog } from './PassengerBillingDialog';
 import type { CombinedRouteResponse, CombinedRouteWaypoint, Pool } from '../../types';
 
 interface TripProgressProps {

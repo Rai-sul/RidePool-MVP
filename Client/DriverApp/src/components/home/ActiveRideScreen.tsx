@@ -1,6 +1,6 @@
 import { View } from "react-native";
-import { ActiveRide } from "../pool/ActiveRide.native";
-import { MapView } from "../map/MapView.native";
+import { ActiveRide } from "../pool/ActiveRide";
+import { MapView } from "../map/MapView";
 import type { Pool } from "../../types";
 
 interface ActiveRideScreenProps {

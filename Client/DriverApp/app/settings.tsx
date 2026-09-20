@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { SettingsScreen } from '../src/components/screens/SettingsScreen.native';
+import { SettingsScreen } from '../src/components/screens/SettingsScreen';
 
 export default function Settings() {
   const router = useRouter();

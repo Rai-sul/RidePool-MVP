@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
-import { HomeScreen } from '../../src/components/home/HomeScreen.native';
+import { HomeScreen } from '../../src/components/home/HomeScreen';
 import { driverService } from '../../src/services/driver.service';
 import { locationService } from '../../src/services/location.service';
 import { useDriverStore } from '../../src/store/useDriverStore';

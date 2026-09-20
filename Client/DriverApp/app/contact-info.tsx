@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
-import { ContactInfoScreen } from '../src/components/screens/ContactInfoScreen.native';
-import type { ContactInfoData } from '../src/components/screens/ContactInfoScreen.native';
+import { ContactInfoScreen } from '../src/components/screens/ContactInfoScreen';
+import type { ContactInfoData } from '../src/components/screens/ContactInfoScreen';
 
 export default function ContactInfo() {
   const router = useRouter();

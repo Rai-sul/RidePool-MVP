@@ -1,4 +1,4 @@
-import { EarningsScreen } from '../../src/components/screens/EarningsScreen.native';
+import { EarningsScreen } from '../../src/components/screens/EarningsScreen';
 
 export default function Earnings() {
 

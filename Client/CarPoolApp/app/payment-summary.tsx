@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import PaymentSummary from '../components/PaymentSummary.native';
+import PaymentSummary from '../components/PaymentSummary';
 import { useGlobalContext } from '../contexts/GlobalContext';
 
 export default function PaymentSummaryScreen() {

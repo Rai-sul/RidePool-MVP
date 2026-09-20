@@ -1,6 +1,6 @@
 import { View, Text } from "react-native";
 import { Button } from "../ui/button";
-import { PromotionsBanner } from "../driver/PromotionsBanner.native";
+import { PromotionsBanner } from "../driver/PromotionsBanner";
 import { useTheme } from "../../contexts/ThemeContext";
 
 interface PromotionsPanelProps {
