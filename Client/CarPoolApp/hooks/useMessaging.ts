@@ -1,10 +1,13 @@
 import { useState, useCallback } from 'react';
-import { messagingService } from '../services/messaging.service';
-import { Message, Conversation } from '../types';
+import {
+  messagingService,
+  type ConversationWithDetails,
+  type MessageWithDetails,
+} from '../services/messaging.service';
 
 export const useMessaging = () => {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [conversations, setConversations] = useState<ConversationWithDetails[]>([]);
+  const [messages, setMessages] = useState<MessageWithDetails[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,7 +20,7 @@ export const useMessaging = () => {
       setError(null);
       const response = await messagingService.getConversations(params);
       if (response.success && response.data) {
-        setConversations(response.data.data);
+        setConversations(response.data.conversations);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to fetch conversations');
@@ -35,7 +38,7 @@ export const useMessaging = () => {
       setError(null);
       const response = await messagingService.getMessages(conversationId, params);
       if (response.success && response.data) {
-        setMessages(response.data.data);
+        setMessages(response.data.messages);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to fetch messages');
@@ -55,7 +58,7 @@ export const useMessaging = () => {
       setError(null);
       const response = await messagingService.sendMessage(data);
       if (response.success && response.data) {
-        setMessages(prev => [...prev, response.data!]);
+        await fetchMessages(response.data.conversation_id);
         return { success: true, data: response.data };
       }
       throw new Error(response.message || 'Failed to send message');

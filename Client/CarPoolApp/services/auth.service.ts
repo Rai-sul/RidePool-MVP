@@ -2,6 +2,8 @@ import { apiClient } from '../utils/apiClient';
 import { API_ENDPOINTS, API_CONFIG } from '../config/api.config';
 import { ApiResponse, User, UserPreferences, Location, AuthSession } from '../types';
 
+type AuthPayload = ApiResponse<{ user: User; token?: string; session?: AuthSession }>;
+
 export const authService = {
   async register(data: {
     email: string;
@@ -16,7 +18,7 @@ export const authService = {
     console.log('[Auth] Registering user:', data.email);
     console.log('[Auth] API URL:', API_CONFIG.BASE_URL + API_ENDPOINTS.AUTH.REGISTER);
     try {
-      const response = await apiClient.post(API_ENDPOINTS.AUTH.REGISTER, data);
+      const response = await apiClient.post<AuthPayload>(API_ENDPOINTS.AUTH.REGISTER, data);
       console.log('[Auth] Registration response:', response.success ? 'SUCCESS' : 'FAILED');
       
       const session = response.data?.session;
@@ -45,7 +47,7 @@ export const authService = {
     console.log('[Auth] Logging in user:', data.email);
     console.log('[Auth] API URL:', API_CONFIG.BASE_URL + API_ENDPOINTS.AUTH.LOGIN);
     try {
-      const response = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, data);
+      const response = await apiClient.post<AuthPayload>(API_ENDPOINTS.AUTH.LOGIN, data);
       console.log('[Auth] Login response:', response.success ? 'SUCCESS' : 'FAILED');
       // Server returns session.access_token, store it as auth token
       const session = response.data?.session;
@@ -68,13 +70,13 @@ export const authService = {
   },
 
   async logout(): Promise<ApiResponse> {
-    const response = await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT);
+    const response = await apiClient.post<ApiResponse>(API_ENDPOINTS.AUTH.LOGOUT);
     await apiClient.clearToken();
     return response;
   },
 
   async refreshToken(): Promise<ApiResponse<{ token: string }>> {
-    const response = await apiClient.post(API_ENDPOINTS.AUTH.REFRESH);
+    const response = await apiClient.post<ApiResponse<{ token: string }>>(API_ENDPOINTS.AUTH.REFRESH);
     if (response.data?.token) {
       await apiClient.setToken(response.data.token);
     }

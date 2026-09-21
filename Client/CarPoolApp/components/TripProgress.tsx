@@ -123,6 +123,7 @@ function TripProgressInner({ userProfile, pickupLocation, destination, selectedP
         dropoff_lng?: number;
         pickup_address?: string;
         dropoff_address?: string;
+        fare?: number | null;
       };
     }>;
     return poolMembers.find(m => m.user_id === userProfile?.id)?.ride || null;

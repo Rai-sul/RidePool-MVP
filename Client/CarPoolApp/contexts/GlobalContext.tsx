@@ -14,6 +14,7 @@ export type UserProfile = {
   gender: 'male' | 'female';
   full_name?: string;
   phone?: string;
+  dateOfBirth?: string;
   id?: string;
 };
 

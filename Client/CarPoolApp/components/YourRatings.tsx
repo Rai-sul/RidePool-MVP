@@ -79,7 +79,7 @@ export default function YourRatings({ onBack }: YourRatingsProps) {
                     ))}
                   </View>
                 </View>
-                <Text className="text-sm text-gray-600 mb-1">"{feedback.comment}"</Text>
+                <Text className="text-sm text-gray-600 mb-1">&quot;{feedback.comment}&quot;</Text>
                 <Text className="text-xs text-gray-400">{feedback.date}</Text>
               </View>
             ))}

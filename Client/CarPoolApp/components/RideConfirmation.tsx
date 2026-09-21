@@ -439,6 +439,13 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
     fetchPoolPreview(selectedPoolId);
   }, [selectedPoolId, selectedPoolPreview, selectedPoolMarkers.length, fetchPoolPreview]);
 
+  // Filter pools based on gender preference
+  const filteredPools = availablePools.filter((poolResult: any) => {
+    // For now, show all pools from search results
+    // The server already handles gender filtering
+    return true;
+  });
+
   // Fetch pool details for all pools to show member pickups/dropoffs before tap
   useEffect(() => {
     if (!filteredPools.length) return;
@@ -452,10 +459,11 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
       setPoolDetailsLoadingId(poolId);
       poolService.getPoolById(poolId)
         .then((response) => {
-          if (response.success && response.data?.pool) {
-            setPoolDetailsCache(prev => ({ ...prev, [poolId]: response.data.pool }));
+          const pool = response.success ? response.data?.pool : undefined;
+          if (pool) {
+            setPoolDetailsCache(prev => ({ ...prev, [poolId]: pool }));
             if (selectedPoolId === poolId) {
-              buildMarkersFromPoolDetails(poolId, response.data.pool);
+              buildMarkersFromPoolDetails(poolId, pool);
             }
           }
         })
@@ -607,12 +615,6 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
     }
   }, [selectedPoolId]);
 
-  // Filter pools based on gender preference
-  const filteredPools = availablePools.filter((poolResult: any) => {
-    // For now, show all pools from search results
-    // The server already handles gender filtering
-    return true;
-  });
 
   const handlePoolClick = (poolResult: any) => {
     if (selectedPoolId === poolResult.poolId && poolPreviewErrors[poolResult.poolId]) {
@@ -1261,7 +1263,7 @@ export default function RideConfirmation({ pickupLocation, destination, userProf
                       Finding nearby pools...
                     </Text>
                     <Text style={{ fontSize: 13, color: '#6b7280', textAlign: 'center' }}>
-                      We're matching you with riders heading your way
+                      We&apos;re matching you with riders heading your way
                     </Text>
                   </View>
                 )}

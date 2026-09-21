@@ -50,8 +50,12 @@ export const useAuth = () => {
   const register = useCallback(async (data: {
     email: string;
     password: string;
+    first_name: string;
+    last_name: string;
+    gender: 'MALE' | 'FEMALE' | 'OTHER';
     phone?: string;
     full_name?: string;
+    gender_preference?: 'ANY' | 'FEMALE_ONLY';
   }) => {
     try {
       setLoading(true);

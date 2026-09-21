@@ -471,7 +471,7 @@ export default function FriendsScreen({ userProfile }: FriendsScreenProps) {
               <>
                 <View className="space-y-4 mb-6">
                   <View>
-                    <Text className="text-sm text-gray-600 mb-2">Friend's User ID</Text>
+                    <Text className="text-sm text-gray-600 mb-2">Friend&apos;s User ID</Text>
                     <Input
                       placeholder="Enter User ID (UUID)"
                       value={friendId}

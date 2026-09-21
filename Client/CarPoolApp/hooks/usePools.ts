@@ -29,8 +29,8 @@ export const usePools = () => {
         return { 
           success: true, 
           data: response.data,
-          lookupExpiresAt: response.data.lookup_expires_at,
-          lookupTimeSeconds: response.data.lookup_time_seconds,
+          lookupExpiresAt: response.data.search_timing.expires_at,
+          lookupTimeSeconds: response.data.search_timing.total_seconds,
         };
       }
       throw new Error(response.message || 'Failed to create pool');
@@ -56,7 +56,7 @@ export const usePools = () => {
         return { 
           success: true, 
           data: response.data,
-          lookupRemainingSeconds: response.data.lookup_remaining_seconds,
+          lookupRemainingSeconds: response.data.search_timing?.remainingSeconds,
         };
       }
       throw new Error(response.message || 'Failed to get pool');

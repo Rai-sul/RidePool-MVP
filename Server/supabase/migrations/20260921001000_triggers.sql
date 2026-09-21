@@ -9,12 +9,12 @@
 -- updated_at ----------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION public.update_timestamp()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $fn$
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$fn$ LANGUAGE plpgsql;
 
 CREATE TRIGGER t_users_ts BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 CREATE TRIGGER t_wallets_ts BEFORE UPDATE ON public.wallets FOR EACH ROW EXECUTE FUNCTION update_timestamp();
@@ -29,7 +29,7 @@ CREATE TRIGGER t_rides_ts BEFORE UPDATE ON public.rides FOR EACH ROW EXECUTE FUN
 -- only ever send lat/lng — the geography columns that the GIST indexes cover
 -- are filled here, so they can never drift out of step with the numbers.
 CREATE OR REPLACE FUNCTION public.calc_geography()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $fn$
 BEGIN
   IF TG_TABLE_NAME = 'users' THEN
     IF NEW.driver_priority_lat IS NOT NULL AND NEW.driver_priority_lng IS NOT NULL THEN
@@ -48,7 +48,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$fn$ LANGUAGE plpgsql;
 
 CREATE TRIGGER t_users_geo BEFORE INSERT OR UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION calc_geography();
 CREATE TRIGGER t_saved_places_geo BEFORE INSERT OR UPDATE ON public.saved_places FOR EACH ROW EXECUTE FUNCTION calc_geography();
@@ -59,14 +59,14 @@ CREATE TRIGGER t_rides_geo BEFORE INSERT OR UPDATE ON public.rides FOR EACH ROW 
 -- Derived values ------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION public.generate_referral_code()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $fn$
 BEGIN
   IF NEW.referral_code IS NULL THEN
     NEW.referral_code := UPPER(SUBSTRING(MD5(RANDOM()::TEXT), 1, 8));
   END IF;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$fn$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trigger_generate_referral_code
   BEFORE INSERT ON public.users
@@ -75,7 +75,7 @@ CREATE TRIGGER trigger_generate_referral_code
 
 -- Keeps users.average_rating / total_ratings in step with the ratings table.
 CREATE OR REPLACE FUNCTION public.update_user_rating()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $fn$
 DECLARE
   v_avg DECIMAL(3,2);
   v_count INTEGER;
@@ -90,7 +90,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$fn$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trigger_update_user_rating
   AFTER INSERT OR UPDATE ON public.ratings
@@ -98,14 +98,14 @@ CREATE TRIGGER trigger_update_user_rating
   EXECUTE FUNCTION update_user_rating();
 
 CREATE OR REPLACE FUNCTION public.set_ride_cancelled_at()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $fn$
 BEGIN
   IF NEW.status = 'CANCELLED' AND OLD.status != 'CANCELLED' THEN
     NEW.cancelled_at = NOW();
   END IF;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$fn$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trigger_set_ride_cancelled_at
   BEFORE UPDATE ON public.rides

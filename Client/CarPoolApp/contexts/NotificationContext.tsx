@@ -11,6 +11,8 @@ import { API_ENDPOINTS } from '../config/api.config';
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),
@@ -40,8 +42,8 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   
   const { user, isAuthenticated } = useAuthContext();
-  const notificationListener = useRef<Notifications.Subscription>();
-  const responseListener = useRef<Notifications.Subscription>();
+  const notificationListener = useRef<Notifications.Subscription | null>(null);
+  const responseListener = useRef<Notifications.Subscription | null>(null);
 
   // Register for push notifications
   const registerForPushNotifications = useCallback(async () => {
@@ -267,7 +269,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   }, [isAuthenticated]);
 
   // Polling interval ref
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Register for notifications when user logs in
   useEffect(() => {

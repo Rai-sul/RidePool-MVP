@@ -84,7 +84,7 @@ export default function PromoCode({ onBack, userProfile }: PromoCodeProps) {
             <View className="bg-green-50 border border-green-200 rounded-xl p-3 flex flex-row items-center gap-2">
               <Check className="w-5 h-5 text-green-600" />
               <Text className="text-sm text-green-900">
-                Promo code "{appliedCode}" applied successfully!
+                Promo code &quot;{appliedCode}&quot; applied successfully!
               </Text>
             </View>
           )}

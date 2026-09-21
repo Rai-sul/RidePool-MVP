@@ -24,8 +24,8 @@ export default function AddMoney({ onBack, userProfile }: AddMoneyProps) {
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
 
   const isFemale = userProfile?.gender === 'female';
-  const balanceGradientColors = isFemale 
-    ? ['#ec4899', '#e11d48'] 
+  const balanceGradientColors: readonly [string, string] = isFemale
+    ? ['#ec4899', '#e11d48']
     : ['#2563eb', '#06b6d4'];
   const buttonBgColor = isFemale ? 'bg-pink-600' : 'bg-blue-600';
 

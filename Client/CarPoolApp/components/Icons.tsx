@@ -8,11 +8,14 @@ type IconProps = {
   size?: number;
   strokeWidth?: number;
   className?: string;
+  // Forwarded to the underlying SVG; used for filled states such as a
+  // selected star or a solid map pin.
+  fill?: string;
 };
 
 // Create wrapper components that match lucide-react-native API
 const createIcon = (IconComponent: any) => {
-  return ({ color = 'currentColor', size, strokeWidth = 2, ...props }: IconProps) => (
+  const Icon = ({ color = 'currentColor', size, strokeWidth = 2, ...props }: IconProps) => (
     <IconComponent 
       color={color} 
       strokeWidth={strokeWidth}
@@ -20,6 +23,8 @@ const createIcon = (IconComponent: any) => {
       {...props}
     />
   );
+  Icon.displayName = IconComponent?.displayName || IconComponent?.name || 'Icon';
+  return Icon;
 };
 
 export const Car = createIcon(LucideIcons.Car);

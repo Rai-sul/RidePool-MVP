@@ -1,6 +1,6 @@
 -- Purpose: identity and per-user preference tables.
 -- users is the root of almost every foreign key in the schema; it hangs off
--- Supabase's auth.users so a deleted auth account cascades away cleanly.
+-- the Supabase auth.users table, so a deleted account cascades away cleanly.
 --
 -- Foreign keys are NOT declared here. They live in
 -- 20260921000700_foreign_keys.sql so table creation order never matters.

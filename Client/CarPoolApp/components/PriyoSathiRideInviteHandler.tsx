@@ -371,7 +371,7 @@ export default function PriyoSathiRideInviteHandler() {
                 )}
 
                 <Text className="text-gray-700 font-medium text-center text-base">
-                  Join {priyoSathiInvite.inviterName}'s ride?
+                  Join {priyoSathiInvite.inviterName}&apos;s ride?
                 </Text>
                 <Text className="text-gray-500 text-sm text-center mt-1">
                   Your current location will be used as pickup

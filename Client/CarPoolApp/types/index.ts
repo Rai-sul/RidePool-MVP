@@ -188,7 +188,7 @@ export interface Pool {
   // Relations (optional, from joins)
   pool_members?: PoolMember[];
   vehicles?: Vehicle;
-  driver?: { id: string; average_rating: number | null };
+  driver?: { id: string; full_name?: string | null; average_rating: number | null };
 }
 
 export interface PoolMember {

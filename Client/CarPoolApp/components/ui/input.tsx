@@ -8,8 +8,11 @@ type InputProps = {
   className?: string;
   autoFocus?: boolean;
   secureTextEntry?: boolean;
-  keyboardType?: 'default' | 'email-address' | 'numeric' | 'phone-pad';
+  keyboardType?: 'default' | 'email-address' | 'numeric' | 'number-pad' | 'phone-pad' | 'decimal-pad';
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  maxLength?: number;
+  editable?: boolean;
+  multiline?: boolean;
 };
 
 export function Input({ 
@@ -20,7 +23,10 @@ export function Input({
   autoFocus = false,
   secureTextEntry = false,
   keyboardType = 'default',
-  autoCapitalize = 'sentences'
+  autoCapitalize = 'sentences',
+  maxLength,
+  editable,
+  multiline
 }: InputProps) {
   return (
     <TextInput
@@ -32,6 +38,9 @@ export function Input({
       secureTextEntry={secureTextEntry}
       keyboardType={keyboardType}
       autoCapitalize={autoCapitalize}
+      maxLength={maxLength}
+      editable={editable}
+      multiline={multiline}
       className={`border border-gray-300 rounded-lg px-4 py-3 bg-white ${className}`}
     />
   );

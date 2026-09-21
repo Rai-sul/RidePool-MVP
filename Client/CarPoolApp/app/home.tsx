@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import LandingPage from '../components/LandingPage';
 import RatingModal from '../components/RatingModal';
-import { useGlobalContext } from '../contexts/GlobalContext';
+import { useGlobalContext, type Destination, type Location } from '../contexts/GlobalContext';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 
 export default function HomeScreen() {
@@ -17,13 +17,16 @@ export default function HomeScreen() {
     }
   }, [params.showRating]);
 
-  const handleDestinationSelect = (destination, rideType) => {
+  const handleDestinationSelect = (
+    destination: Destination,
+    rideType?: 'female-only' | 'regular'
+  ) => {
     setSelectedDestination(destination);
-    setSelectedRideType(rideType);
+    setSelectedRideType(rideType ?? null);
     router.push('/ride-confirmation');
   };
 
-  const handlePickupSelect = (location) => {
+  const handlePickupSelect = (location: Location) => {
     setPickupLocation(location);
   };
 

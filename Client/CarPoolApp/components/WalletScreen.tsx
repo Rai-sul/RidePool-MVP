@@ -28,8 +28,8 @@ const transactions = [
 
 export default function WalletScreen({ userProfile, onNavigate }: WalletScreenProps) {
   const isFemale = userProfile?.gender === 'female';
-  const balanceGradientColors = isFemale 
-    ? ['#ec4899', '#e11d48'] 
+  const balanceGradientColors: readonly [string, string] = isFemale
+    ? ['#ec4899', '#e11d48']
     : ['#2563eb', '#06b6d4'];
   const buttonTextColor = isFemale ? 'text-pink-600' : 'text-blue-600';
 

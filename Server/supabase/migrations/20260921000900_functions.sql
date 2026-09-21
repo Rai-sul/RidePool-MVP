@@ -12,23 +12,23 @@
 -- Helpers -------------------------------------------------------------------
 
 -- Vehicle capacity is an app-wide rule: CNG carries 2, CAR carries 3.
--- The backend's CONSTANTS.VEHICLE_CAPACITY is the source of truth;
+-- CONSTANTS.VEHICLE_CAPACITY in the backend is the source of truth;
 -- this mirrors it for SQL-side use.
 CREATE OR REPLACE FUNCTION public.vehicle_capacity(p_vehicle_type TEXT)
-RETURNS INTEGER AS $$
+RETURNS INTEGER AS $fn$
   SELECT CASE UPPER(p_vehicle_type) WHEN 'CNG' THEN 2 ELSE 3 END;
-$$ LANGUAGE sql IMMUTABLE;
+$fn$ LANGUAGE sql IMMUTABLE;
 
--- Returns the caller's active pool ids. SECURITY DEFINER so a policy can use
--- it without re-entering pool_members' own row-level security.
+-- Returns the active pool ids for the calling user. SECURITY DEFINER lets a
+-- policy use it without re-entering row-level security on pool_members.
 CREATE OR REPLACE FUNCTION public.get_my_pool_ids()
 RETURNS TABLE (pool_id UUID)
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path TO 'public'
-AS $$
+AS $fn$
   SELECT pool_id FROM public.pool_members WHERE user_id = auth.uid() AND left_at IS NULL;
-$$;
+$fn$;
 
 -- Pool lifecycle ------------------------------------------------------------
 
@@ -39,7 +39,7 @@ CREATE OR REPLACE FUNCTION public.atomic_join_pool(
   p_pool_id UUID,
   p_user_id UUID,
   p_ride_id UUID
-) RETURNS JSON AS $$
+) RETURNS JSON AS $fn$
 DECLARE
   v_pool RECORD;
   v_member_id UUID;
@@ -120,7 +120,7 @@ BEGIN
 EXCEPTION
   WHEN OTHERS THEN RAISE;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$fn$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Driver claims a pool. SKIP LOCKED means two drivers racing for the same
 -- pool produce one winner and one clean "already assigned", never a deadlock.
@@ -128,7 +128,7 @@ CREATE OR REPLACE FUNCTION public.atomic_accept_pool(
   p_pool_id UUID,
   p_driver_id UUID,
   p_vehicle_id UUID
-) RETURNS JSON AS $$
+) RETURNS JSON AS $fn$
 DECLARE
   v_pool RECORD;
 BEGIN
@@ -150,12 +150,12 @@ BEGIN
 
   RETURN json_build_object('success', true, 'pool_id', p_pool_id, 'assigned_at', NOW());
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$fn$ LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION public.atomic_leave_pool(
   p_pool_id UUID,
   p_user_id UUID
-) RETURNS JSON AS $$
+) RETURNS JSON AS $fn$
 DECLARE
   v_member RECORD;
   v_pool RECORD;
@@ -184,7 +184,7 @@ BEGIN
 
   RETURN json_build_object('success', true, 'member_id', v_member.id, 'ride_id', v_member.ride_id);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$fn$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Advance booking -----------------------------------------------------------
 
@@ -200,7 +200,7 @@ CREATE OR REPLACE FUNCTION public.atomic_assign_advance_booking(
   p_window_seconds INTEGER,
   p_confirm_lead_seconds INTEGER,
   p_confirm_window_seconds INTEGER
-) RETURNS JSON AS $$
+) RETURNS JSON AS $fn$
 DECLARE
   v_pool RECORD;
   v_member_id UUID;
@@ -285,14 +285,14 @@ BEGIN
 EXCEPTION
   WHEN OTHERS THEN RAISE;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$fn$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Marks one member confirmed and, on the transition to 2 confirmed members,
 -- opens the Active Pickup Range so instant riders can backfill the pool.
 CREATE OR REPLACE FUNCTION public.atomic_confirm_advance_member(
   p_pool_id UUID,
   p_user_id UUID
-) RETURNS JSON AS $$
+) RETURNS JSON AS $fn$
 DECLARE
   v_pool RECORD;
   v_now TIMESTAMPTZ := NOW();
@@ -344,7 +344,7 @@ BEGIN
 EXCEPTION
   WHEN OTHERS THEN RAISE;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$fn$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Wallet --------------------------------------------------------------------
 
@@ -356,7 +356,7 @@ CREATE OR REPLACE FUNCTION public.atomic_wallet_debit(
   p_reference_type TEXT,
   p_reference_id UUID DEFAULT NULL,
   p_metadata JSONB DEFAULT NULL
-) RETURNS JSON AS $$
+) RETURNS JSON AS $fn$
 DECLARE
   v_wallet RECORD;
   v_new_balance DECIMAL;
@@ -386,7 +386,7 @@ BEGIN
 
   RETURN json_build_object('success', true, 'transaction_id', v_transaction_id, 'new_balance', v_new_balance, 'amount_debited', p_amount);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$fn$ LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION public.atomic_wallet_credit(
   p_user_id UUID,
@@ -394,7 +394,7 @@ CREATE OR REPLACE FUNCTION public.atomic_wallet_credit(
   p_reference_type TEXT,
   p_reference_id UUID DEFAULT NULL,
   p_metadata JSONB DEFAULT NULL
-) RETURNS JSON AS $$
+) RETURNS JSON AS $fn$
 DECLARE
   v_wallet RECORD;
   v_new_balance DECIMAL;
@@ -422,7 +422,7 @@ BEGIN
 
   RETURN json_build_object('success', true, 'transaction_id', v_transaction_id, 'new_balance', v_new_balance, 'amount_credited', p_amount);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$fn$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Payments ------------------------------------------------------------------
 
@@ -434,7 +434,7 @@ CREATE OR REPLACE FUNCTION public.atomic_process_payment(
   p_amount DECIMAL,
   p_payment_method TEXT,
   p_idempotency_key TEXT
-) RETURNS JSON AS $$
+) RETURNS JSON AS $fn$
 DECLARE
   v_existing_payment RECORD;
   v_payment_id UUID;
@@ -468,13 +468,13 @@ BEGIN
 
   RETURN json_build_object('success', true, 'payment_id', v_payment_id, 'status', 'PENDING', 'amount', p_amount);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$fn$ LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION public.complete_payment(
   p_payment_id UUID,
   p_transaction_id TEXT,
   p_gateway_response JSONB DEFAULT NULL
-) RETURNS JSON AS $$
+) RETURNS JSON AS $fn$
 DECLARE
   v_payment RECORD;
 BEGIN
@@ -497,13 +497,13 @@ BEGIN
 
   RETURN json_build_object('success', true, 'payment_id', p_payment_id, 'status', 'COMPLETED');
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$fn$ LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION public.fail_payment(
   p_payment_id UUID,
   p_error_message TEXT,
   p_error_code TEXT DEFAULT NULL
-) RETURNS JSON AS $$
+) RETURNS JSON AS $fn$
 BEGIN
   UPDATE payments
   SET status = 'FAILED',
@@ -517,14 +517,14 @@ BEGIN
 
   RETURN json_build_object('success', true, 'payment_id', p_payment_id, 'status', 'FAILED');
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$fn$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Promise money -------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION public.deposit_promise_money(
   p_user_id UUID,
   p_amount DECIMAL DEFAULT 50.00
-) RETURNS JSON AS $$
+) RETURNS JSON AS $fn$
 DECLARE
   v_user RECORD;
 BEGIN
@@ -547,7 +547,7 @@ BEGIN
 
   RETURN json_build_object('success', true, 'balance', p_amount, 'deposited_at', NOW());
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$fn$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Deducting more than the balance empties it rather than going negative.
 CREATE OR REPLACE FUNCTION public.deduct_promise_money(
@@ -555,7 +555,7 @@ CREATE OR REPLACE FUNCTION public.deduct_promise_money(
   p_amount DECIMAL,
   p_reason TEXT,
   p_ride_id UUID DEFAULT NULL
-) RETURNS JSON AS $$
+) RETURNS JSON AS $fn$
 DECLARE
   v_user RECORD;
   v_new_balance DECIMAL;
@@ -579,16 +579,16 @@ BEGIN
 
   RETURN json_build_object('success', true, 'deducted', LEAST(p_amount, v_user.promise_money_balance), 'new_balance', v_new_balance);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$fn$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Miscellaneous -------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION public.increment_promo_usage(promo_id UUID)
-RETURNS VOID AS $$
+RETURNS VOID AS $fn$
 BEGIN
   UPDATE promo_codes SET usage_count = usage_count + 1 WHERE id = promo_id;
 END;
-$$ LANGUAGE plpgsql;
+$fn$ LANGUAGE plpgsql;
 
 -- Rejects out-of-order GPS pings, which arrive regularly on mobile networks.
 CREATE OR REPLACE FUNCTION public.update_vehicle_location(
@@ -598,7 +598,7 @@ CREATE OR REPLACE FUNCTION public.update_vehicle_location(
   p_heading DOUBLE PRECISION DEFAULT 0,
   p_speed DOUBLE PRECISION DEFAULT 0,
   p_recorded_at TIMESTAMPTZ DEFAULT NOW()
-) RETURNS JSON AS $$
+) RETURNS JSON AS $fn$
 DECLARE
   v_current RECORD;
   v_h3_res8 VARCHAR(20);
@@ -626,4 +626,4 @@ BEGIN
 
   RETURN json_build_object('success', true, 'vehicle_id', p_vehicle_id, 'updated_at', p_recorded_at);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$fn$ LANGUAGE plpgsql SECURITY DEFINER;

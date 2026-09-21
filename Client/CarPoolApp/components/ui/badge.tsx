@@ -1,48 +1,75 @@
-import * as React from "react";
-import { Text } from "react-native-web";
-import { cva, type VariantProps } from "class-variance-authority@0.7.1";
-
-import { cn } from "./utils";
-
-const badgeVariants = cva(
-  "inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none transition-[color,box-shadow] overflow-hidden",
-  {
-    variants: {
-      variant: {
-        default:
-          "border-transparent bg-primary text-primary-foreground",
-        secondary:
-          "border-transparent bg-secondary text-secondary-foreground",
-        destructive:
-          "border-transparent bg-destructive text-white",
-        outline:
-          "text-foreground",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-    },
-  },
-);
+import React from 'react';
+import { Text, TouchableOpacity, View } from 'react-native';
 
 type BadgeProps = {
-  className?: string;
-  variant?: VariantProps<typeof badgeVariants>['variant'];
   children: React.ReactNode;
+  variant?: 'default' | 'secondary' | 'destructive' | 'outline';
+  className?: string;
+  textClassName?: string;
+  onPress?: () => void;
 };
 
-function Badge({
-  className,
-  variant,
+// Follows the same shape as ./button: plain variant switches and NativeWind
+// class names, rather than the web-only cva/react-native-web pairing this
+// component was originally generated with.
+export function Badge({
   children,
+  variant = 'default',
+  className = '',
+  textClassName = '',
+  onPress,
 }: BadgeProps) {
-  return (
-    <Text
-      className={cn(badgeVariants({ variant }), className)}
+  const getVariantStyles = () => {
+    switch (variant) {
+      case 'secondary':
+        return 'bg-gray-100 border-transparent';
+      case 'destructive':
+        return 'bg-red-600 border-transparent';
+      case 'outline':
+        return 'bg-transparent border border-gray-300';
+      default:
+        return 'bg-blue-600 border-transparent';
+    }
+  };
+
+  const getTextVariantStyles = () => {
+    switch (variant) {
+      case 'secondary':
+        return 'text-gray-900';
+      case 'outline':
+        return 'text-gray-900';
+      default:
+        return 'text-white';
+    }
+  };
+
+  const renderChildren = () =>
+    React.Children.map(children, (child) => {
+      if (typeof child === 'string' || typeof child === 'number') {
+        return (
+          <Text className={`text-xs font-medium ${getTextVariantStyles()} ${textClassName}`}>
+            {child}
+          </Text>
+        );
+      }
+      return child;
+    });
+
+  const content = (
+    <View
+      className={`flex flex-row items-center justify-center rounded-md px-2 py-0.5 ${getVariantStyles()} ${className}`}
     >
-      {children}
-    </Text>
+      {renderChildren()}
+    </View>
+  );
+
+  if (!onPress) return content;
+
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+      {content}
+    </TouchableOpacity>
   );
 }
 
-export { Badge, badgeVariants };
+export default Badge;

@@ -425,10 +425,10 @@ export default function AvailablePoolCard({
                     numberOfLines={2}
                   >
                     {getLocationDisplayName(
-                      pool.poolPickupLocation.name,
-                      pool.poolPickupLocation.address,
-                      pool.poolPickupLocation.lat,
-                      pool.poolPickupLocation.lng
+                      pool.poolPickupLocation?.name,
+                      pool.poolPickupLocation?.address,
+                      pool.poolPickupLocation?.lat,
+                      pool.poolPickupLocation?.lng
                     )}
                   </Text>
                 </View>
@@ -476,10 +476,10 @@ export default function AvailablePoolCard({
                     numberOfLines={2}
                   >
                     {getLocationDisplayName(
-                      pool.poolDropoffLocation.name,
-                      pool.poolDropoffLocation.address,
-                      pool.poolDropoffLocation.lat,
-                      pool.poolDropoffLocation.lng
+                      pool.poolDropoffLocation?.name,
+                      pool.poolDropoffLocation?.address,
+                      pool.poolDropoffLocation?.lat,
+                      pool.poolDropoffLocation?.lng
                     )}
                   </Text>
                 </View>
