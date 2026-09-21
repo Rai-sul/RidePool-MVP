@@ -263,11 +263,11 @@ export class PoolController {
         throw error;
       }
 
-      // Update the ride with pool_id - status stays as SEARCHING until riders join
-      // The ride status should only become MATCHED when another rider joins the pool
+      // The creator's ride sits at PENDING while its pool waits for co-riders.
+      // It becomes MATCHED once another rider joins.
       await supabaseAdmin
         .from('rides')
-        .update({ pool_id: pool.id, status: 'SEARCHING' })
+        .update({ pool_id: pool.id, status: 'PENDING' })
         .eq('id', creatorRide.id);
 
       // Add the creator as the first pool member with ride_id

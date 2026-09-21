@@ -1124,7 +1124,7 @@ export class DriverController {
       await supabaseAdmin
         .from('rides')
         .update({
-          status: 'STARTED',
+          status: 'IN_PROGRESS',
           started_at: now,
         })
         .eq('pool_id', pool.id);
@@ -1174,7 +1174,7 @@ export class DriverController {
       await supabaseAdmin
         .from('rides')
         .update({
-          status: 'STARTED',
+          status: 'IN_PROGRESS',
           started_at: new Date().toISOString(),
         })
         .eq('id', ride.id);

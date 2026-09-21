@@ -39,11 +39,13 @@ export default function RidesScreen() {
     switch (status) {
       case 'CREATING_POOL':
         return '#FFA500';
-      case 'WAITING_FOR_DRIVER':
+      case 'PENDING':
         return '#FFA500';
-      case 'DRIVER_ASSIGNED':
+      case 'MATCHED':
         return '#4CAF50';
-      case 'STARTED':
+      case 'WAITING_FOR_DRIVER':
+        return '#4CAF50';
+      case 'IN_PROGRESS':
         return '#2196F3';
       case 'COMPLETED':
         return '#8BC34A';

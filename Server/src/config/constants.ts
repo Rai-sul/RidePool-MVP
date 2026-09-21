@@ -12,12 +12,12 @@ export const CONSTANTS = {
     CNG: 2,
     CAR: 3,
   } as Record<VehicleType, number>,
+  // Exactly the values rides_status_check allows. Nothing else will store.
   RIDE_STATUS: {
+    CREATING_POOL: 'CREATING_POOL' as RideStatus,
     PENDING: 'PENDING' as RideStatus,
-    SEARCHING: 'SEARCHING' as RideStatus,
     MATCHED: 'MATCHED' as RideStatus,
-    DRIVER_ASSIGNED: 'DRIVER_ASSIGNED' as RideStatus,
-    DRIVER_ARRIVED: 'DRIVER_ARRIVED' as RideStatus,
+    WAITING_FOR_DRIVER: 'WAITING_FOR_DRIVER' as RideStatus,
     IN_PROGRESS: 'IN_PROGRESS' as RideStatus,
     COMPLETED: 'COMPLETED' as RideStatus,
     CANCELLED: 'CANCELLED' as RideStatus,

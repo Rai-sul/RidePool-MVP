@@ -327,11 +327,11 @@ export class LookupTimeService {
       .select('user_id, ride_id')
       .eq('pool_id', poolId);
 
-    // Update ride status to CONFIRMED
+    // The pool is confirmed, so every ride in it is now waiting on a driver.
     await supabaseAdmin
       .from('rides')
       .update({
-        status: 'CONFIRMED' as RideStatus,
+        status: 'WAITING_FOR_DRIVER' as RideStatus,
         updated_at: new Date().toISOString(),
       })
       .eq('pool_id', poolId);

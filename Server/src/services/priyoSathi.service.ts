@@ -348,7 +348,7 @@ export class PriyoSathiService {
       .from('rides')
       .select('pickup_lat, pickup_lng, dropoff_lat, dropoff_lng')
       .eq('user_id', companionId)
-      .in('status', ['CREATING_POOL', 'SEARCHING', 'MATCHED', 'CONFIRMED', 'WAITING_FOR_DRIVER'])
+      .in('status', ['CREATING_POOL', 'PENDING', 'MATCHED', 'WAITING_FOR_DRIVER'])
       .order('created_at', { ascending: false })
       .limit(1)
       .single();

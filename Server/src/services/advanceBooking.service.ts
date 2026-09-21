@@ -462,7 +462,7 @@ export class AdvanceBookingService {
 
     await supabaseAdmin
       .from('rides')
-      .update({ pool_id: pool.id, status: 'SEARCHING' as RideStatus })
+      .update({ pool_id: pool.id, status: 'PENDING' as RideStatus })
       .eq('id', ride.id);
 
     logger.info(

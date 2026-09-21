@@ -5,18 +5,23 @@ export const GenderEnum = z.enum(['MALE', 'FEMALE', 'OTHER']);
 export const GenderPreferenceEnum = z.enum(['FEMALE_ONLY', 'ANY']);
 export const VehicleTypeEnum = z.enum(['CAR', 'CNG']);
 
+// Mirrors the rides_status_check constraint in the database.
 export const RideStatusEnum = z.enum([
   'CREATING_POOL',
+  'PENDING',
+  'MATCHED',
   'WAITING_FOR_DRIVER',
-  'DRIVER_ASSIGNED',
-  'STARTED',
+  'IN_PROGRESS',
   'COMPLETED',
   'CANCELLED',
 ]);
 
+// Mirrors the pools_status_check constraint in the database.
 export const PoolStatusEnum = z.enum([
+  'SCHEDULED',
   'WAITING_FOR_RIDERS',
   'WAITING_FOR_DRIVER',
+  'DRIVER_ASSIGNED',
   'READY_TO_START',
   'STARTED',
   'COMPLETED',

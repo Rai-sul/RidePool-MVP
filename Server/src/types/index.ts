@@ -145,14 +145,18 @@ export interface VehicleLocation {
 // RIDES & POOLS
 // ============================================
 
-export type RideStatus = 
+export type RideStatus =
+  // Ride created; the matcher is looking for a pool to put it in.
   | 'CREATING_POOL'
-  | 'SEARCHING'      // Pool creator is searching for other riders
-  | 'MATCHED'        // Another rider has joined the pool
-  | 'CONFIRMED'      // Search time finished with riders joined
+  // The rider created their own pool and is waiting for co-riders.
+  | 'PENDING'
+  // Sharing a pool with at least one co-rider, or auto-assigned to an
+  // advance pool.
+  | 'MATCHED'
+  // The pool is confirmed or full; waiting for a driver to accept it.
   | 'WAITING_FOR_DRIVER'
-  | 'DRIVER_ASSIGNED'
-  | 'STARTED'
+  // The rider has been picked up and the trip is under way.
+  | 'IN_PROGRESS'
   | 'COMPLETED'
   | 'CANCELLED';
 

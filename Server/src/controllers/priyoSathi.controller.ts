@@ -873,7 +873,7 @@ export class PriyoSathiController {
       if (poolId && !poolInfo) {
         const { data: pool } = await supabaseAdmin
           .from('pools')
-          .select('id, status, current_passengers, max_passengers, fare_per_person, destination_address, estimated_duration_minutes, estimated_distance_km, creator_user_id')
+          .select('id, status, current_passengers, max_passengers, fare_per_person, destination_address, estimated_duration_minutes:base_duration_minutes, estimated_distance_km:base_distance_km, creator_user_id')
           .eq('id', poolId)
           .single();
         
@@ -900,7 +900,7 @@ export class PriyoSathiController {
 
         const { data: recentPool } = await supabaseAdmin
           .from('pools')
-          .select('id, status, current_passengers, max_passengers, fare_per_person, destination_address, estimated_duration_minutes, estimated_distance_km')
+          .select('id, status, current_passengers, max_passengers, fare_per_person, destination_address, estimated_duration_minutes:base_duration_minutes, estimated_distance_km:base_distance_km')
           .eq('creator_user_id', ride.user_id)
           .in('status', ['WAITING_FOR_RIDERS', 'WAITING_FOR_DRIVER'])
           .gte('created_at', windowStart)

@@ -416,7 +416,7 @@ export class OfflineService {
     await supabaseAdmin
       .from('rides')
       .update({ 
-        status: 'STARTED',
+        status: 'IN_PROGRESS',
         started_at: new Date().toISOString(),
       })
       .eq('id', ride_id);
@@ -525,7 +525,7 @@ export class OfflineService {
       .from('rides')
       .select('*')
       .eq('user_id', userId)
-      .in('status', ['CREATING_POOL', 'WAITING_FOR_DRIVER', 'DRIVER_ASSIGNED', 'STARTED'])
+      .in('status', ['CREATING_POOL', 'PENDING', 'MATCHED', 'WAITING_FOR_DRIVER', 'IN_PROGRESS'])
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
@@ -537,7 +537,7 @@ export class OfflineService {
       .from('rides')
       .select('pool_id')
       .eq('user_id', userId)
-      .in('status', ['CREATING_POOL', 'WAITING_FOR_DRIVER', 'DRIVER_ASSIGNED', 'STARTED'])
+      .in('status', ['CREATING_POOL', 'PENDING', 'MATCHED', 'WAITING_FOR_DRIVER', 'IN_PROGRESS'])
       .order('created_at', { ascending: false })
       .limit(1)
       .single();

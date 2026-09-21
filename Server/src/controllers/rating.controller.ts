@@ -129,7 +129,7 @@ export class RatingController {
           rater_id: userId,
           rated_id: rated_user_id,
           rating,
-          review: review || null,
+          comment: review || null,
           tags: tags || null,
         })
         .select()
@@ -167,7 +167,7 @@ export class RatingController {
 
       const { data: ratings, error, count } = await supabaseAdmin
         .from('ratings')
-        .select('id, rating, review, tags, created_at, rater:users!rater_id(id)', { count: 'exact' })
+        .select('id, rating, review:comment, tags, created_at, rater:users!rater_id(id)', { count: 'exact' })
         .eq('rated_id', userId)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
@@ -213,7 +213,7 @@ export class RatingController {
         .select(`
           id,
           rating,
-          review,
+          review:comment,
           tags,
           created_at,
           rater:users!rater_id(id),
@@ -254,7 +254,7 @@ export class RatingController {
 
       const { data: received, error: receivedError, count: receivedCount } = await supabaseAdmin
         .from('ratings')
-        .select('id, rating, review, tags, created_at, ride_id, rater:users!rater_id(id)', { count: 'exact' })
+        .select('id, rating, review:comment, tags, created_at, ride_id, rater:users!rater_id(id)', { count: 'exact' })
         .eq('rated_id', userId)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
