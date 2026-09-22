@@ -7,7 +7,7 @@ import {
   TrafficRouteMatrix,
 } from './googleMaps.service';
 import { unifiedCacheService } from './unifiedCache.service';
-import { calculateDistance, estimateTravelTime } from '../utils/helper';
+import { calculateDistance, estimateTravelTime, resolveTrafficLevel } from '../utils/helper';
 import { logger } from '../utils/logger';
 
 export interface PoolMemberRoute {
@@ -623,7 +623,7 @@ export class SmartRouteService {
       baseDurationMinutes: baseMinutes,
       durationInTraffic: trafficMinutes,
       trafficLevel: status.trafficAware
-        ? this.getTrafficLevel(candidate.baseDurationSeconds, candidate.durationSeconds)
+        ? resolveTrafficLevel(candidate.baseDurationSeconds, candidate.durationSeconds)
         : 'moderate',
       trafficAware: status.trafficAware,
       trafficCapturedAt: status.trafficAware ? calculatedAt.toISOString() : undefined,
@@ -824,17 +824,6 @@ export class SmartRouteService {
     }
     if (individualDistance <= 0) return 0;
     return Math.max(0, Math.round(((individualDistance - combinedDistanceMeters) / individualDistance) * 100));
-  }
-
-  private getTrafficLevel(
-    baseDurationSeconds: number,
-    trafficDurationSeconds: number
-  ): 'low' | 'moderate' | 'high' {
-    if (baseDurationSeconds <= 0) return 'low';
-    const ratio = trafficDurationSeconds / baseDurationSeconds;
-    if (ratio <= 1.1) return 'low';
-    if (ratio <= 1.3) return 'moderate';
-    return 'high';
   }
 
   private createTopologyFingerprint(members: PoolMemberRoute[]): string {

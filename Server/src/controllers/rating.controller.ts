@@ -4,6 +4,8 @@ import { supabaseAdmin } from '../config/supabase';
 import { z } from 'zod';
 import { logger } from '../utils/logger';
 
+import { createdResponse, errorResponse, successResponse, unauthorizedResponse } from '../utils/response';
+
 const SubmitRatingSchema = z.object({
   ride_id: z.string().uuid(),
   rated_user_id: z.string().uuid(),
@@ -22,34 +24,18 @@ export class RatingController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const parseResult = SubmitRatingSchema.safeParse(req.body);
       if (!parseResult.success) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request data',
-            details: parseResult.error.issues,
-          },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'VALIDATION_ERROR', 'Invalid request data', 400, parseResult.error.issues);
       }
 
       const { ride_id, rated_user_id, rating, review, tags } = parseResult.data;
 
       if (rated_user_id === userId) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'SELF_RATING', message: 'Cannot rate yourself' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'SELF_RATING', 'Cannot rate yourself', 400);
       }
 
       const { data: ride, error: rideError } = await supabaseAdmin
@@ -59,30 +45,18 @@ export class RatingController {
         .single();
 
       if (rideError || !ride) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'RIDE_NOT_FOUND', message: 'Ride not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'RIDE_NOT_FOUND', 'Ride not found', 404);
       }
 
       if (ride.status !== 'COMPLETED') {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'RIDE_NOT_COMPLETED', message: 'Can only rate completed rides' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'RIDE_NOT_COMPLETED', 'Can only rate completed rides', 400);
       }
 
       const poolData = ride.pools as any;
       const isPassenger = ride.user_id === userId;
       const isDriver = poolData?.driver_id === userId;
       if (!isPassenger && !isDriver) {
-        return res.status(403).json({
-          success: false,
-          error: { code: 'NOT_PARTICIPANT', message: 'You were not part of this ride' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NOT_PARTICIPANT', 'You were not part of this ride', 403);
       }
 
       const validRatedUser = isPassenger
@@ -98,11 +72,7 @@ export class RatingController {
           .single();
 
         if (!poolMember && rated_user_id !== poolData?.driver_id) {
-          return res.status(400).json({
-            success: false,
-            error: { code: 'INVALID_RATED_USER', message: 'User was not part of this ride' },
-            timestamp: new Date().toISOString(),
-          });
+          return errorResponse(res, 'INVALID_RATED_USER', 'User was not part of this ride', 400);
         }
       }
 
@@ -115,11 +85,7 @@ export class RatingController {
         .single();
 
       if (existingRating) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'ALREADY_RATED', message: 'You have already rated this user for this ride' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'ALREADY_RATED', 'You have already rated this user for this ride', 400);
       }
 
       const { data: newRating, error: insertError } = await supabaseAdmin
@@ -143,14 +109,10 @@ export class RatingController {
 
       logger.info(`[Rating] User ${userId} rated ${rated_user_id} with ${rating} stars for ride ${ride_id}`);
 
-      res.status(201).json({
-        success: true,
-        data: {
-          rating_id: newRating.id,
-          rating,
-          message: 'Rating submitted successfully',
-        },
-        timestamp: new Date().toISOString(),
+      createdResponse(res, {
+        rating_id: newRating.id,
+        rating,
+        message: 'Rating submitted successfully',
       });
     } catch (error) {
       next(error);
@@ -182,22 +144,18 @@ export class RatingController {
         .eq('id', userId)
         .single();
 
-      res.json({
-        success: true,
-        data: {
-          ratings: ratings || [],
-          summary: {
-            average_rating: userStats?.average_rating || 0,
-            total_ratings: userStats?.total_ratings || 0,
-          },
-          pagination: {
-            page,
-            limit,
-            total: count || 0,
-            total_pages: Math.ceil((count || 0) / limit),
-          },
+      successResponse(res, {
+        ratings: ratings || [],
+        summary: {
+          average_rating: userStats?.average_rating || 0,
+          total_ratings: userStats?.total_ratings || 0,
         },
-        timestamp: new Date().toISOString(),
+        pagination: {
+          page,
+          limit,
+          total: count || 0,
+          total_pages: Math.ceil((count || 0) / limit),
+        },
       });
     } catch (error) {
       next(error);
@@ -226,11 +184,7 @@ export class RatingController {
         throw error;
       }
 
-      res.json({
-        success: true,
-        data: { ratings: ratings || [] },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { ratings: ratings || [] });
     } catch (error) {
       next(error);
     }
@@ -240,11 +194,7 @@ export class RatingController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const queryResult = GetRatingsQuerySchema.safeParse(req.query);
@@ -269,22 +219,18 @@ export class RatingController {
         .eq('id', userId)
         .single();
 
-      res.json({
-        success: true,
-        data: {
-          ratings_received: received || [],
-          summary: {
-            average_rating: userStats?.average_rating || 0,
-            total_ratings: userStats?.total_ratings || 0,
-          },
-          pagination: {
-            page,
-            limit,
-            total: receivedCount || 0,
-            total_pages: Math.ceil((receivedCount || 0) / limit),
-          },
+      successResponse(res, {
+        ratings_received: received || [],
+        summary: {
+          average_rating: userStats?.average_rating || 0,
+          total_ratings: userStats?.total_ratings || 0,
         },
-        timestamp: new Date().toISOString(),
+        pagination: {
+          page,
+          limit,
+          total: receivedCount || 0,
+          total_pages: Math.ceil((receivedCount || 0) / limit),
+        },
       });
     } catch (error) {
       next(error);
@@ -316,14 +262,10 @@ export class RatingController {
         ? Math.round((ratings!.reduce((sum, r) => sum + r.rating, 0) / total) * 10) / 10
         : 0;
 
-      res.json({
-        success: true,
-        data: {
-          breakdown,
-          total,
-          average,
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        breakdown,
+        total,
+        average,
       });
     } catch (error) {
       next(error);

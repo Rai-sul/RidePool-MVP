@@ -3,6 +3,8 @@ import { AuthRequest } from '../middleware/auth';
 import { walletService } from '../services/wallet.service';
 import { z } from 'zod';
 
+import { createdResponse, errorResponse, successResponse, unauthorizedResponse } from '../utils/response';
+
 const TopUpSchema = z.object({
   amount: z.number().positive().max(50000),
   payment_method: z.enum(['BKASH', 'NAGAD', 'ROCKET', 'CARD']),
@@ -24,31 +26,19 @@ export class WalletController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const wallet = await walletService.getOrCreateWallet(userId);
 
       if (!wallet) {
-        return res.status(500).json({
-          success: false,
-          error: { code: 'WALLET_ERROR', message: 'Failed to get wallet' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'WALLET_ERROR', 'Failed to get wallet', 500);
       }
 
-      res.json({
-        success: true,
-        data: {
-          balance: wallet.balance,
-          currency: wallet.currency,
-          wallet_id: wallet.id,
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        balance: wallet.balance,
+        currency: wallet.currency,
+        wallet_id: wallet.id,
       });
     } catch (error) {
       next(error);
@@ -59,24 +49,12 @@ export class WalletController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const parseResult = TopUpSchema.safeParse(req.body);
       if (!parseResult.success) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request data',
-            details: parseResult.error.issues,
-          },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'VALIDATION_ERROR', 'Invalid request data', 400, parseResult.error.issues);
       }
 
       const { amount, payment_method, transaction_id } = parseResult.data;
@@ -87,22 +65,14 @@ export class WalletController {
       });
 
       if (!result.success) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'TOPUP_FAILED', message: result.error },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'TOPUP_FAILED', result.error, 400);
       }
 
-      res.status(201).json({
-        success: true,
-        data: {
-          transaction_id: result.transaction?.id,
-          amount,
-          new_balance: result.newBalance,
-          message: 'Wallet topped up successfully',
-        },
-        timestamp: new Date().toISOString(),
+      createdResponse(res, {
+        transaction_id: result.transaction?.id,
+        amount,
+        new_balance: result.newBalance,
+        message: 'Wallet topped up successfully',
       });
     } catch (error) {
       next(error);
@@ -113,24 +83,12 @@ export class WalletController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const parseResult = WithdrawSchema.safeParse(req.body);
       if (!parseResult.success) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request data',
-            details: parseResult.error.issues,
-          },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'VALIDATION_ERROR', 'Invalid request data', 400, parseResult.error.issues);
       }
 
       const { amount } = parseResult.data;
@@ -140,22 +98,14 @@ export class WalletController {
       });
 
       if (!result.success) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'WITHDRAW_FAILED', message: result.error },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'WITHDRAW_FAILED', result.error, 400);
       }
 
-      res.json({
-        success: true,
-        data: {
-          transaction_id: result.transaction?.id,
-          amount,
-          new_balance: result.newBalance,
-          message: 'Withdrawal successful',
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        transaction_id: result.transaction?.id,
+        amount,
+        new_balance: result.newBalance,
+        message: 'Withdrawal successful',
       });
     } catch (error) {
       next(error);
@@ -166,11 +116,7 @@ export class WalletController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const page = parseInt(req.query.page as string) || 1;
@@ -178,18 +124,14 @@ export class WalletController {
 
       const result = await walletService.getTransactionHistory(userId, page, limit);
 
-      res.json({
-        success: true,
-        data: {
-          transactions: result.transactions,
-          pagination: {
-            page,
-            limit,
-            total: result.total,
-            total_pages: Math.ceil(result.total / limit),
-          },
+      successResponse(res, {
+        transactions: result.transactions,
+        pagination: {
+          page,
+          limit,
+          total: result.total,
+          total_pages: Math.ceil(result.total / limit),
         },
-        timestamp: new Date().toISOString(),
       });
     } catch (error) {
       next(error);
@@ -200,34 +142,22 @@ export class WalletController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const amount = parseFloat(req.query.amount as string);
       if (isNaN(amount) || amount <= 0) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'INVALID_AMOUNT', message: 'Valid amount is required' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'INVALID_AMOUNT', 'Valid amount is required', 400);
       }
 
       const hasBalance = await walletService.hasEnoughBalance(userId, amount);
       const currentBalance = await walletService.getBalance(userId);
 
-      res.json({
-        success: true,
-        data: {
-          has_sufficient_balance: hasBalance,
-          current_balance: currentBalance,
-          required_amount: amount,
-          shortfall: hasBalance ? 0 : amount - currentBalance,
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        has_sufficient_balance: hasBalance,
+        current_balance: currentBalance,
+        required_amount: amount,
+        shortfall: hasBalance ? 0 : amount - currentBalance,
       });
     } catch (error) {
       next(error);
@@ -238,24 +168,12 @@ export class WalletController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const parseResult = DebitSchema.safeParse(req.body);
       if (!parseResult.success) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request data',
-            details: parseResult.error.issues,
-          },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'VALIDATION_ERROR', 'Invalid request data', 400, parseResult.error.issues);
       }
 
       const { amount, reference_type, reference_id } = parseResult.data;
@@ -263,22 +181,14 @@ export class WalletController {
       const result = await walletService.debit(userId, amount, reference_type, reference_id);
 
       if (!result.success) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'PAYMENT_FAILED', message: result.error },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'PAYMENT_FAILED', result.error, 400);
       }
 
-      res.json({
-        success: true,
-        data: {
-          transaction_id: result.transaction?.id,
-          amount,
-          new_balance: result.newBalance,
-          message: 'Payment successful',
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        transaction_id: result.transaction?.id,
+        amount,
+        new_balance: result.newBalance,
+        message: 'Payment successful',
       });
     } catch (error) {
       next(error);

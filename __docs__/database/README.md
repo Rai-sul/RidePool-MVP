@@ -1,112 +1,88 @@
-# Database Schema - Critical Features
+# Database
 
-## New Tables Added
+Supabase / PostgreSQL. Migrations live in `Server/supabase/migrations/` and are
+applied with `npm run migrate` from `Server/`.
 
-### driver_sessions
-Tracks driver online/offline sessions.
+---
 
-```
-+-------------------+--------------+--------------------------------+
-| Column            | Type         | Description                    |
-+-------------------+--------------+--------------------------------+
-| id                | UUID PK      | Session identifier             |
-| driver_id         | UUID FK      | Reference to users table       |
-| vehicle_id        | UUID FK      | Reference to vehicles table    |
-| status            | VARCHAR(20)  | ONLINE, BUSY, OFFLINE          |
-| started_at        | TIMESTAMPTZ  | Session start time             |
-| ended_at          | TIMESTAMPTZ  | Session end time (null=active) |
-| initial_lat       | DECIMAL      | Starting latitude              |
-| initial_lng       | DECIMAL      | Starting longitude             |
-| earnings_session  | DECIMAL      | Earnings during session        |
-| rides_completed   | INTEGER      | Rides completed in session     |
-+-------------------+--------------+--------------------------------+
-```
+## Migration layout
 
-### driver_earnings
-Records driver earnings per ride/pool.
+Migrations are **ordered by concern**, not by feature. Keep that shape when
+adding one — put a new table in the matching `tables_*` file's successor rather
+than creating a feature-shaped migration that mixes tables, indexes and grants.
 
-```
-+-------------------+--------------+--------------------------------+
-| Column            | Type         | Description                    |
-+-------------------+--------------+--------------------------------+
-| id                | UUID PK      | Earning record ID              |
-| driver_id         | UUID FK      | Reference to users table       |
-| ride_id           | UUID FK      | Reference to rides table       |
-| pool_id           | UUID FK      | Reference to pools table       |
-| base_fare         | DECIMAL      | Total fare before commission   |
-| distance_fare     | DECIMAL      | Distance-based fare component  |
-| time_fare         | DECIMAL      | Time-based fare component      |
-| tips              | DECIMAL      | Tips received                  |
-| bonuses           | DECIMAL      | Bonus amounts                  |
-| platform_commission | DECIMAL    | 20% platform commission        |
-| net_earnings      | DECIMAL      | Driver take-home amount        |
-| payment_status    | VARCHAR(20)  | PENDING, PROCESSED, PAID       |
-+-------------------+--------------+--------------------------------+
-```
+| File | Contents |
+|---|---|
+| `…000100_extensions.sql` | Postgres extensions |
+| `…000200_tables_identity.sql` | `users`, `vehicles`, device/session identity |
+| `…000300_tables_rides.sql` | `rides`, `pools`, `pool_members`, locations |
+| `…000400_tables_money.sql` | `wallets`, `payments`, promo, promise money |
+| `…000500_tables_messaging.sql` | `conversations`, `messages`, notifications |
+| `…000600_tables_ops.sql` | audit, offline sync, analytics, cooldowns |
+| `…000700_foreign_keys.sql` | All FK constraints |
+| `…000800_indexes.sql` | All indexes, including H3 lookups |
+| `…000900_functions.sql` | Every stored function (below) |
+| `…001000_triggers.sql` | Triggers |
+| `…001100_row_level_security.sql` | RLS policies |
+| `…001200_grants.sql` | Role grants |
+| `…001300_realtime.sql` | Realtime publication |
+| `…001400_seed_app_metadata.sql` | Seed data |
 
-### user_cancellations
-Tracks ride cancellations for penalty system.
+## Tables
 
-```
-+-------------------------+--------------+--------------------------------+
-| Column                  | Type         | Description                    |
-+-------------------------+--------------+--------------------------------+
-| id                      | UUID PK      | Record ID                      |
-| user_id                 | UUID FK      | User who cancelled             |
-| ride_id                 | UUID FK      | Cancelled ride                 |
-| cancelled_at            | TIMESTAMPTZ  | Cancellation timestamp         |
-| cancellation_time_seconds| INTEGER     | Seconds since ride creation    |
-| is_deliberate           | BOOLEAN      | TRUE if >30 seconds            |
-| penalty_applied         | BOOLEAN      | TRUE if led to cooldown        |
-+-------------------------+--------------+--------------------------------+
-```
+**Identity** — `users`, `vehicles`, `device_tokens`, `driver_sessions`
 
-### cooldown_periods
-Active cooldown penalties.
+**Rides & pools** — `rides`, `pools`, `pool_members`, `vehicle_locations`,
+`saved_places`, `priyo_sathi`
 
-```
-+-------------------+--------------+--------------------------------+
-| Column            | Type         | Description                    |
-+-------------------+--------------+--------------------------------+
-| id                | UUID PK      | Cooldown record ID             |
-| user_id           | UUID FK      | User under cooldown            |
-| starts_at         | TIMESTAMPTZ  | Cooldown start                 |
-| ends_at           | TIMESTAMPTZ  | Cooldown end                   |
-| reason            | VARCHAR(50)  | Reason code                    |
-| penalty_count     | INTEGER      | Number of penalties            |
-+-------------------+--------------+--------------------------------+
-```
+**Money** — `wallets`, `wallet_transactions`, `payments`,
+`promise_money_transactions`, `promo_codes`, `user_promo_usage`,
+`driver_earnings`, `driver_daily_stats`
 
-## Database Functions
+**Messaging** — `conversations`, `conversation_participants`, `messages`,
+`notifications`, `notification_preferences`
 
-### atomic_join_pool(p_pool_id, p_user_id, p_ride_id)
-Atomically joins a user to a pool with row locking.
-- Prevents overbooking race condition
-- Returns JSON with success status and member_id
+**Operations** — `audit_logs`, `offline_actions`, `sync_logs`,
+`user_cancellations`, `cooldown_periods`, `ratings`, `app_metadata`
 
-### atomic_accept_pool(p_pool_id, p_driver_id, p_vehicle_id)
-Atomically assigns a driver to a pool.
-- Uses SKIP LOCKED to prevent deadlocks
-- Prevents multiple drivers accepting same pool
+Location columns are H3-indexed: `pickup_h3_index` (res 9),
+`destination_h3_index` (res 7), driver cells at res 8.
 
-### atomic_wallet_debit(p_user_id, p_amount, p_reference_type, p_reference_id)
-Atomically deducts from wallet balance.
-- Prevents negative balance
-- Creates transaction record
+## Atomic functions
 
-## Indexes
+Concurrency-sensitive work happens **inside Postgres**, not in application
+transactions. Call these via `supabase.rpc(...)` — never reimplement the check
+in TypeScript, because two Node instances cannot serialise against each other.
 
-Performance indexes added:
-- `idx_driver_sessions_active` - Active driver lookup
-- `idx_driver_earnings_date` - Earnings by date
-- `idx_user_cancellations_recent` - Recent cancellations lookup
-- `idx_cooldown_periods_active` - Active cooldowns
+| Function | Guarantees |
+|---|---|
+| `atomic_join_pool` | Row locking. Capacity, Active Pickup Range, trusted gender and duplicate-join checks in one transaction. |
+| `atomic_leave_pool` | Consistent member removal and passenger recount. |
+| `atomic_accept_pool` | `SKIP LOCKED` — prevents two drivers being assigned the same pool. |
+| `atomic_assign_advance_booking` | Advance auto-assignment plus the pool-wide pickup window. |
+| `atomic_confirm_advance_member` | Opens the Active Pickup Range at the 2nd confirmation. |
+| `atomic_wallet_credit` | Credits a balance and writes the transaction record. |
+| `atomic_wallet_debit` | Prevents a negative balance; writes the transaction record. |
+| `atomic_process_payment` / `complete_payment` / `fail_payment` | Payment state machine. |
+| `deposit_promise_money` / `deduct_promise_money` | Promise-money ledger. |
+| `increment_promo_usage` | Race-free promo redemption counting. |
+| `update_vehicle_location` | Driver location upsert. |
+| `get_my_pool_ids` | RLS helper — the caller's pool IDs. |
+| `vehicle_capacity` | Capacity lookup, mirroring `CONSTANTS.VEHICLE_CAPACITY`. |
 
-## Migration File
+> `vehicle_capacity` in SQL and `CONSTANTS.VEHICLE_CAPACITY` in TypeScript must
+> agree (CNG 2, CAR 3). Change both together.
 
-Location: `Server/supabase/migrations/20260119_critical_features.sql`
+## Security
 
-Apply with:
-```bash
-cd Server && npx supabase db push
-```
+Row Level Security is enabled; policies live in
+`…001100_row_level_security.sql`. The server uses the service-role key and
+therefore bypasses RLS — authorization for server routes is enforced by the
+`authenticate` / `authorization` middleware instead. RLS protects clients that
+talk to Supabase directly.
+
+## Before you `db push`
+
+The live project may not be baselined against this migration set. Confirm which
+migrations Supabase believes are applied **before** pushing, or you risk
+replaying migrations against a populated database.

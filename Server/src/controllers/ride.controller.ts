@@ -9,6 +9,8 @@ import { CreateRideRequest, Ride, RideStatus, Location, VehicleType } from '../t
 import { h3Utils } from '../utils/h3.utils';
 import { resolveGenderRestriction } from '../utils/genderRestriction';
 
+import { errorResponse, successResponse, unauthorizedResponse } from '../utils/response';
+
 export class RideController {
   async requestRide(req: AuthRequest, res: Response, next: NextFunction) {
     try {
@@ -156,21 +158,13 @@ export class RideController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, vehicle_type, estimated_passengers } = req.query;
 
       if (!pickup_lat || !pickup_lng || !dropoff_lat || !dropoff_lng || !vehicle_type) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'MISSING_PARAMS', message: 'Missing required parameters: pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, vehicle_type' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'MISSING_PARAMS', 'Missing required parameters: pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, vehicle_type', 400);
       }
 
       const pickup: Location = {
@@ -188,11 +182,7 @@ export class RideController {
       const isDropoffValid = await geolocationService.validateLocation(dropoff);
 
       if (!isPickupValid || !isDropoffValid) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'INVALID_LOCATION', message: 'Invalid pickup or dropoff coordinates' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'INVALID_LOCATION', 'Invalid pickup or dropoff coordinates', 400);
       }
 
       // Record ride intent for Priyo Sathi visibility (estimate flow)
@@ -210,41 +200,37 @@ export class RideController {
         estimatedPassengers
       );
 
-      res.json({
-        success: true,
-        data: {
-          estimate: {
-            distanceKm: estimate.distanceKm,
-            durationMinutes: estimate.durationMinutes,
-            durationInTraffic: estimate.durationInTraffic,
-            eta: `${estimate.durationInTraffic} min`,
-            etaWithoutTraffic: `${estimate.durationMinutes} min`,
-            fareEstimates: estimate.fareEstimates,
-            estimatedFare: estimate.estimatedFare,
-            estimatedSavings: estimate.estimatedSavings,
-            trafficLevel: estimate.trafficLevel,
-          },
-          route: estimate.route ? {
-            encoded: estimate.route.encoded,
-            coordinates: estimate.route.coordinates,
-            summary: estimate.route.summary,
-            selectedReason: estimate.selectedRouteReason,
-          } : null,
-          alternativeRoutes: estimate.alternativeRoutes.map(alt => ({
-            description: alt.description,
-            distanceKm: alt.distanceKm,
-            durationInTraffic: alt.durationInTraffic,
-            timeDifference: alt.timeDifference,
-            trafficLevel: alt.trafficLevel,
-          })),
-          message: `${estimate.durationInTraffic} min via ${estimate.route?.summary || 'best route'} • ৳${estimate.estimatedFare}/person`,
-          trafficInfo: estimate.trafficLevel === 'low' 
-            ? '🟢 Light traffic' 
-            : estimate.trafficLevel === 'moderate' 
-              ? '🟡 Moderate traffic' 
-              : '🔴 Heavy traffic',
+      successResponse(res, {
+        estimate: {
+          distanceKm: estimate.distanceKm,
+          durationMinutes: estimate.durationMinutes,
+          durationInTraffic: estimate.durationInTraffic,
+          eta: `${estimate.durationInTraffic} min`,
+          etaWithoutTraffic: `${estimate.durationMinutes} min`,
+          fareEstimates: estimate.fareEstimates,
+          estimatedFare: estimate.estimatedFare,
+          estimatedSavings: estimate.estimatedSavings,
+          trafficLevel: estimate.trafficLevel,
         },
-        timestamp: new Date().toISOString(),
+        route: estimate.route ? {
+          encoded: estimate.route.encoded,
+          coordinates: estimate.route.coordinates,
+          summary: estimate.route.summary,
+          selectedReason: estimate.selectedRouteReason,
+        } : null,
+        alternativeRoutes: estimate.alternativeRoutes.map(alt => ({
+          description: alt.description,
+          distanceKm: alt.distanceKm,
+          durationInTraffic: alt.durationInTraffic,
+          timeDifference: alt.timeDifference,
+          trafficLevel: alt.trafficLevel,
+        })),
+        message: `${estimate.durationInTraffic} min via ${estimate.route?.summary || 'best route'} • ৳${estimate.estimatedFare}/person`,
+        trafficInfo: estimate.trafficLevel === 'low' 
+          ? '🟢 Light traffic' 
+          : estimate.trafficLevel === 'moderate' 
+            ? '🟡 Moderate traffic' 
+            : '🔴 Heavy traffic',
       });
     } catch (error) {
       next(error);

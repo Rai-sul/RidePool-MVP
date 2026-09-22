@@ -1,7 +1,46 @@
+/**
+ * Google Maps integration.
+ *
+ * ---------------------------------------------------------------------------
+ * COST MODEL — every `fetch` in this file is a billed request.
+ * ---------------------------------------------------------------------------
+ * Two Google products are used, and they are NOT interchangeable:
+ *
+ *  1. Directions API (`this.baseUrl`)            — `getRoute`, `getBestRouteWithTraffic`
+ *  2. Routes API     (`this.routesBaseUrl`)      — `computeTrafficRouteMatrix`,
+ *                                                  `computeFixedOrderTrafficRoute`
+ *
+ * Every billable method is fronted by a cache, and the read-through helpers
+ * (`getRoute`, `getBestRouteWithTraffic`, `getDistance`) additionally collapse
+ * concurrent identical requests via `dedupe()` so that N callers asking for the
+ * same route at the same moment produce exactly one billed call.
+ *
+ * Cache key rules — these matter, do not "simplify" them:
+ *  - Anything returning GEOMETRY (a polyline) must key on EXACT coordinates and
+ *    the full option set. Two trips that merely share a coarse H3 cell do not
+ *    share a road route, and reusing a polyline across them draws a visibly
+ *    wrong line on the map.
+ *  - Only `getDistance` may key on coarse H3 cells, because it returns scalars
+ *    (distance/duration) where cell-level approximation is acceptable.
+ *  - Never cache a failure. A `null` result means the provider was unavailable;
+ *    pinning that for the whole TTL would extend a transient outage.
+ *
+ * The Routes API methods deliberately have no cache of their own: they are
+ * always reached through `smartRoute.service.ts`, which owns a longer-lived,
+ * pool-scoped route snapshot cache plus its own in-flight deduplication.
+ *
+ * ---------------------------------------------------------------------------
+ * ADDING A NEW BILLED CALL
+ * ---------------------------------------------------------------------------
+ * Wrap it in `readThrough()` with a key built from `encodeLocation()`, pick the
+ * TTL from the constants below, and return `null` on failure so the caller can
+ * fall back instead of caching an error.
+ */
 import { Location } from "../types";
 import { config } from "../config/env";
-import { cacheService } from "./cache.service";
+import { unifiedCacheService } from "./unifiedCache.service";
 import { h3Utils, H3_RESOLUTION } from "../utils/h3.utils";
+import { encodeLocation, resolveTrafficLevel } from "../utils/helper";
 
 // SUPER COST-EFFECTIVE: Extended cache TTLs to minimize API costs
 // Traffic-aware route cache: 10 minutes (was 5 min) - traffic data still fresh enough
@@ -108,6 +147,11 @@ export interface GoogleMapsDirectionsResponse {
   error_message?: string;
 }
 
+/** One route option inside a Directions API response. */
+type DirectionsRoute = GoogleMapsDirectionsResponse["routes"][number];
+/** One stop-to-stop leg inside a Directions API route. */
+type DirectionsLeg = DirectionsRoute["legs"][number];
+
 export interface BestRouteResult {
   bestRoute: GoogleMapsRoute;
   alternativeRoutes: AlternativeRoute[];
@@ -158,6 +202,9 @@ export class GoogleMapsService {
   private trafficMatrixAttempted = false;
   private routesApiLastFailureAt: number | null = null;
 
+  /** Collapses concurrent identical requests so they share one billed call. */
+  private readonly inFlight = new Map<string, Promise<unknown>>();
+
   constructor() {
     this.apiKey = config.googleMaps.apiKey;
     if (!this.apiKey) {
@@ -165,6 +212,51 @@ export class GoogleMapsService {
         "[GoogleMapsService] Warning: GOOGLE_MAPS_API_KEY not configured. Google Maps features will be disabled."
       );
     }
+  }
+
+  // ==========================================
+  // COST CONTROL HELPERS
+  // ==========================================
+
+  /**
+   * Run `fetcher` at most once per key across all concurrent callers.
+   * The promise is removed as soon as it settles, so a later call re-fetches.
+   */
+  private dedupe<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+    const pending = this.inFlight.get(key) as Promise<T> | undefined;
+    if (pending) return pending;
+
+    const request = fetcher().finally(() => this.inFlight.delete(key));
+    this.inFlight.set(key, request);
+    return request;
+  }
+
+  /**
+   * Cache-first wrapper around a billed call.
+   *
+   * Only successful (non-null) results are stored: caching a failure would turn
+   * a momentary provider outage into a TTL-long one.
+   */
+  private async readThrough<T>(
+    cacheKey: string,
+    ttlSeconds: number,
+    fetcher: () => Promise<T | null>
+  ): Promise<T | null> {
+    const cached = await unifiedCacheService.get<T>(cacheKey);
+    if (cached) return cached;
+
+    return this.dedupe(cacheKey, async () => {
+      // Re-check after winning the dedupe race: an earlier caller may have
+      // populated the cache while this one was queued behind it.
+      const fresh = await unifiedCacheService.get<T>(cacheKey);
+      if (fresh) return fresh;
+
+      const value = await fetcher();
+      if (value !== null) {
+        await unifiedCacheService.set(cacheKey, value, ttlSeconds);
+      }
+      return value;
+    });
   }
 
   /**
@@ -463,7 +555,7 @@ export class GoogleMapsService {
           polyline: leg.polyline?.encodedPolyline ?? '',
         })),
         summary: route.description || 'Traffic-optimized pool route',
-        trafficLevel: this.calculateTrafficLevel(staticDurationSeconds, durationSeconds),
+        trafficLevel: resolveTrafficLevel(staticDurationSeconds, durationSeconds),
       };
     } catch (error) {
       console.error('[GoogleMapsService] Error fetching fixed-order traffic route:', error);
@@ -498,116 +590,78 @@ export class GoogleMapsService {
       return null;
     }
 
-    try {
-      const params = new URLSearchParams({
-        origin: `${origin.latitude},${origin.longitude}`,
-        destination: `${destination.latitude},${destination.longitude}`,
-        key: this.apiKey,
-        mode: options.mode || "driving",
-        alternatives: (options.alternatives || false).toString(),
-        language: "en",
-        units: "metric",
-        // Request traffic-aware duration by setting departure_time to now
-        departure_time: "now",
-        traffic_model: options.trafficModel || "best_guess",
-      });
+    // Geometry is part of the result, so the key must pin the exact stops and
+    // every option that can change the road choice.
+    const cacheKey = [
+      'route:directions:v1',
+      encodeLocation(origin),
+      encodeLocation(destination),
+      options.mode || 'driving',
+      (options.alternatives || false).toString(),
+      options.trafficModel || 'best_guess',
+      (options.waypoints || []).map((wp) => encodeLocation(wp)).join('|') || 'none',
+      (options.avoid || []).join('|') || 'none',
+    ].join(':');
 
-      // Add waypoints if provided
-      if (options.waypoints && options.waypoints.length > 0) {
-        const waypointsStr = options.waypoints
-          .map((wp) => `${wp.latitude},${wp.longitude}`)
-          .join("|");
-        params.append("waypoints", waypointsStr);
-      }
+    return this.readThrough(cacheKey, ROUTE_CACHE_TTL, async () => {
+      try {
+        const url = this.buildDirectionsUrl(origin, destination, {
+          mode: options.mode || "driving",
+          alternatives: options.alternatives || false,
+          trafficModel: options.trafficModel || "best_guess",
+          waypoints: options.waypoints,
+          avoid: options.avoid,
+        });
 
-      // Add avoid parameters if provided
-      if (options.avoid && options.avoid.length > 0) {
-        params.append("avoid", options.avoid.join("|"));
-      }
+        const response = await fetch(url);
+        const data = (await response.json()) as GoogleMapsDirectionsResponse;
 
-      const url = `${this.baseUrl}?${params.toString()}`;
+        if (data.status !== "OK") {
+          console.error(
+            `[GoogleMapsService] API error: ${data.status} - ${
+              data.error_message || "Unknown error"
+            }`
+          );
+          return null;
+        }
 
-      const response = await fetch(url);
-      const data = (await response.json()) as GoogleMapsDirectionsResponse;
+        if (!data.routes || data.routes.length === 0) {
+          console.warn("[GoogleMapsService] No routes found");
+          return null;
+        }
 
-      if (data.status !== "OK") {
-        console.error(
-          `[GoogleMapsService] API error: ${data.status} - ${
-            data.error_message || "Unknown error"
-          }`
-        );
+        // Use the first route (best route by Google's algorithm)
+        const route = data.routes[0];
+        const totals = this.sumDirectionsLegs(route.legs);
+
+        return {
+          distance: totals.distanceMeters / 1000, // Convert meters to kilometers
+          duration: Math.round(totals.durationSeconds / 60), // Convert seconds to minutes
+          durationInTraffic: Math.round(totals.durationInTrafficSeconds / 60), // With traffic
+          geometry: {
+            encoded: route.overview_polyline.points,
+            // Decode polyline using custom implementation
+            coordinates: this.decodePolyline(route.overview_polyline.points),
+          },
+          bounds: this.toBounds(route.bounds),
+          steps: this.toRouteSteps(route.legs[0]), // For single-leg routes
+          legs: route.legs.map((routeLeg) => ({
+            distance: routeLeg.distance.value / 1000,
+            duration: (routeLeg.duration_in_traffic?.value ?? routeLeg.duration.value) / 60,
+            baseDuration: routeLeg.duration.value / 60,
+            polyline: '',
+          })),
+          summary: route.summary,
+          trafficLevel: resolveTrafficLevel(
+            totals.durationSeconds,
+            totals.durationInTrafficSeconds
+          ),
+        };
+      } catch (error) {
+        console.error("[GoogleMapsService] Error fetching route:", error);
         return null;
       }
-
-      if (!data.routes || data.routes.length === 0) {
-        console.warn("[GoogleMapsService] No routes found");
-        return null;
-      }
-
-      // Use the first route (best route by Google's algorithm)
-      const route = data.routes[0];
-      const leg = route.legs[0]; // For single-leg routes
-
-      // Calculate total distance and duration
-      const totalDistance = route.legs.reduce(
-        (sum, leg) => sum + leg.distance.value,
-        0
-      );
-      const totalDuration = route.legs.reduce(
-        (sum, leg) => sum + leg.duration.value,
-        0
-      );
-      const totalDurationInTraffic = route.legs.reduce(
-        (sum, leg) => sum + (leg.duration_in_traffic?.value || leg.duration.value),
-        0
-      );
-
-      // Decode polyline using custom implementation
-      const coordinates = this.decodePolyline(route.overview_polyline.points);
-
-      // Extract steps if available
-      const steps: RouteStep[] = leg.steps.map((step) => ({
-        distance: step.distance.value / 1000, // Convert to km
-        duration: step.duration.value / 60, // Convert to minutes
-        instruction: this.stripHtmlTags(step.html_instructions),
-        polyline: step.polyline.points,
-      }));
-
-      // Calculate traffic level
-      const trafficLevel = this.calculateTrafficLevel(totalDuration, totalDurationInTraffic);
-
-      return {
-        distance: totalDistance / 1000, // Convert meters to kilometers
-        duration: Math.round(totalDuration / 60), // Convert seconds to minutes
-        durationInTraffic: Math.round(totalDurationInTraffic / 60), // With traffic
-        geometry: {
-          encoded: route.overview_polyline.points,
-          coordinates,
-        },
-        bounds: {
-          northeast: {
-            latitude: route.bounds.northeast.lat,
-            longitude: route.bounds.northeast.lng,
-          },
-          southwest: {
-            latitude: route.bounds.southwest.lat,
-            longitude: route.bounds.southwest.lng,
-          },
-        },
-        steps,
-        legs: route.legs.map((routeLeg) => ({
-          distance: routeLeg.distance.value / 1000,
-          duration: (routeLeg.duration_in_traffic?.value ?? routeLeg.duration.value) / 60,
-          baseDuration: routeLeg.duration.value / 60,
-          polyline: '',
-        })),
-        summary: route.summary,
-        trafficLevel,
-      };
-    } catch (error) {
-      console.error("[GoogleMapsService] Error fetching route:", error);
-      return null;
-    }
+    });
   }
 
   /**
@@ -626,16 +680,14 @@ export class GoogleMapsService {
   ): Promise<BestRouteResult | null> {
     // Geometry and waypoint order are exact inputs. Never reuse a polyline
     // merely because another trip happened to share coarse H3 cells.
-    const locationKey = (location: Location) =>
-      `${location.latitude.toFixed(6)},${location.longitude.toFixed(6)}`;
-    let cacheKey = `route:best:v2:${locationKey(origin)}:${locationKey(destination)}`;
+    let cacheKey = `route:best:v2:${encodeLocation(origin)}:${encodeLocation(destination)}`;
     if (waypoints && waypoints.length > 0) {
-      const waypointsKey = waypoints.map(locationKey).join('|');
+      const waypointsKey = waypoints.map((wp) => encodeLocation(wp)).join('|');
       cacheKey += `:${waypointsKey}`;
     }
 
     // Try to get from cache first (saves API cost)
-    const cachedRoute = await cacheService.get<BestRouteResult>(cacheKey);
+    const cachedRoute = await unifiedCacheService.get<BestRouteResult>(cacheKey);
     if (cachedRoute) {
       console.log(`[GoogleMapsService] Cache HIT for route ${cacheKey} - saved 1.2 BDT`);
       return cachedRoute;
@@ -648,153 +700,227 @@ export class GoogleMapsService {
       return null;
     }
 
-    try {
-      const params = new URLSearchParams({
-        origin: `${origin.latitude},${origin.longitude}`,
-        destination: `${destination.latitude},${destination.longitude}`,
-        key: this.apiKey,
-        mode: "driving",
-        alternatives: "true", // Get multiple route options
-        language: "en",
-        units: "metric",
-        departure_time: "now", // Required for traffic data
-        traffic_model: "best_guess",
-      });
+    return this.dedupe(cacheKey, async () => {
+      try {
+        const url = this.buildDirectionsUrl(origin, destination, {
+          mode: "driving",
+          alternatives: true, // Get multiple route options
+          trafficModel: "best_guess",
+          waypoints,
+          optimizeWaypoints: true, // Optimize waypoint order
+        });
 
-      // Add waypoints if provided
-      if (waypoints && waypoints.length > 0) {
-        const waypointsStr = waypoints
-          .map((wp) => `${wp.latitude},${wp.longitude}`)
-          .join("|");
-        params.append("waypoints", `optimize:true|${waypointsStr}`); // Optimize waypoint order
-      }
+        const response = await fetch(url);
+        const data = (await response.json()) as GoogleMapsDirectionsResponse;
 
-      const url = `${this.baseUrl}?${params.toString()}`;
-
-      const response = await fetch(url);
-      const data = (await response.json()) as GoogleMapsDirectionsResponse;
-
-      if (data.status !== "OK") {
-        console.error(
-          `[GoogleMapsService] API error: ${data.status} - ${
-            data.error_message || "Unknown error"
-          }`
-        );
-        return null;
-      }
-
-      if (!data.routes || data.routes.length === 0) {
-        console.warn("[GoogleMapsService] No routes found");
-        return null;
-      }
-
-      // Parse all routes and find the best one
-      const parsedRoutes = data.routes.map((route) => {
-        const totalDistance = route.legs.reduce(
-          (sum, leg) => sum + leg.distance.value,
-          0
-        );
-        const totalDuration = route.legs.reduce(
-          (sum, leg) => sum + leg.duration.value,
-          0
-        );
-        const totalDurationInTraffic = route.legs.reduce(
-          (sum, leg) => sum + (leg.duration_in_traffic?.value || leg.duration.value),
-          0
-        );
-
-        const trafficLevel = this.calculateTrafficLevel(totalDuration, totalDurationInTraffic);
-
-        return {
-          distance: totalDistance / 1000,
-          duration: Math.round(totalDuration / 60),
-          durationInTraffic: Math.round(totalDurationInTraffic / 60),
-          summary: route.summary,
-          trafficLevel,
-          geometry: {
-            encoded: route.overview_polyline.points,
-            coordinates: this.decodePolyline(route.overview_polyline.points),
-          },
-          bounds: route.bounds,
-          legs: route.legs,
-        };
-      });
-
-      // Sort by duration in traffic (ascending) to find best route
-      parsedRoutes.sort((a, b) => a.durationInTraffic - b.durationInTraffic);
-
-      const bestRouteData = parsedRoutes[0];
-      const originalRoute = data.routes[data.routes.findIndex(r => r.summary === bestRouteData.summary)];
-      const leg = originalRoute.legs[0];
-
-      // Build best route
-      const bestRoute: GoogleMapsRoute = {
-        distance: bestRouteData.distance,
-        duration: bestRouteData.duration,
-        durationInTraffic: bestRouteData.durationInTraffic,
-        geometry: bestRouteData.geometry,
-        bounds: {
-          northeast: {
-            latitude: bestRouteData.bounds.northeast.lat,
-            longitude: bestRouteData.bounds.northeast.lng,
-          },
-          southwest: {
-            latitude: bestRouteData.bounds.southwest.lat,
-            longitude: bestRouteData.bounds.southwest.lng,
-          },
-        },
-        steps: leg.steps.map((step) => ({
-          distance: step.distance.value / 1000,
-          duration: step.duration.value / 60,
-          instruction: this.stripHtmlTags(step.html_instructions),
-          polyline: step.polyline.points,
-        })),
-        summary: bestRouteData.summary,
-        trafficLevel: bestRouteData.trafficLevel,
-      };
-
-      // Build alternative routes (excluding the best one)
-      const alternativeRoutes: AlternativeRoute[] = parsedRoutes.slice(1).map((route) => ({
-        distance: route.distance,
-        duration: route.duration,
-        durationInTraffic: route.durationInTraffic,
-        summary: route.summary,
-        trafficLevel: route.trafficLevel,
-        geometry: route.geometry,
-      }));
-
-      // Determine why this route was selected
-      let selectedReason = `Fastest route via ${bestRoute.summary}`;
-      if (alternativeRoutes.length > 0) {
-        const timeSaved = alternativeRoutes[0].durationInTraffic - bestRoute.durationInTraffic;
-        if (timeSaved > 0) {
-          selectedReason += ` (${timeSaved} min faster than alternatives)`;
+        if (data.status !== "OK") {
+          console.error(
+            `[GoogleMapsService] API error: ${data.status} - ${
+              data.error_message || "Unknown error"
+            }`
+          );
+          return null;
         }
+
+        if (!data.routes || data.routes.length === 0) {
+          console.warn("[GoogleMapsService] No routes found");
+          return null;
+        }
+
+        // Parse all routes and find the best one.
+        // `source` keeps each parsed route tied to the exact Google route it came
+        // from. Do NOT re-find it by `summary` after sorting: Google regularly
+        // returns several alternatives sharing one summary ("via Airport Road"),
+        // and matching on that string can attach another route's turn-by-turn
+        // steps to this route's distance, duration and polyline.
+        const parsedRoutes = data.routes.map((route) => {
+          const totals = this.sumDirectionsLegs(route.legs);
+
+          return {
+            distance: totals.distanceMeters / 1000,
+            duration: Math.round(totals.durationSeconds / 60),
+            durationInTraffic: Math.round(totals.durationInTrafficSeconds / 60),
+            summary: route.summary,
+            trafficLevel: resolveTrafficLevel(
+              totals.durationSeconds,
+              totals.durationInTrafficSeconds
+            ),
+            geometry: {
+              encoded: route.overview_polyline.points,
+              coordinates: this.decodePolyline(route.overview_polyline.points),
+            },
+            bounds: route.bounds,
+            legs: route.legs,
+            source: route,
+          };
+        });
+
+        // Sort by duration in traffic (ascending) to find best route
+        parsedRoutes.sort((a, b) => a.durationInTraffic - b.durationInTraffic);
+
+        const bestRouteData = parsedRoutes[0];
+
+        // Build best route
+        const bestRoute: GoogleMapsRoute = {
+          distance: bestRouteData.distance,
+          duration: bestRouteData.duration,
+          durationInTraffic: bestRouteData.durationInTraffic,
+          geometry: bestRouteData.geometry,
+          bounds: this.toBounds(bestRouteData.bounds),
+          steps: this.toRouteSteps(bestRouteData.source.legs[0]),
+          summary: bestRouteData.summary,
+          trafficLevel: bestRouteData.trafficLevel,
+        };
+
+        // Build alternative routes (excluding the best one)
+        const alternativeRoutes: AlternativeRoute[] = parsedRoutes.slice(1).map((route) => ({
+          distance: route.distance,
+          duration: route.duration,
+          durationInTraffic: route.durationInTraffic,
+          summary: route.summary,
+          trafficLevel: route.trafficLevel,
+          geometry: route.geometry,
+        }));
+
+        const result: BestRouteResult = {
+          bestRoute,
+          alternativeRoutes,
+          selectedReason: this.describeRouteSelection(bestRoute, alternativeRoutes),
+        };
+
+        // ========================================
+        // COST OPTIMIZATION: Cache the result
+        // 5-minute TTL balances freshness vs cost savings
+        // ========================================
+        await unifiedCacheService.set(cacheKey, result, ROUTE_CACHE_TTL);
+        console.log(`[GoogleMapsService] Cached route ${cacheKey} for ${ROUTE_CACHE_TTL}s`);
+
+        return result;
+      } catch (error) {
+        console.error("[GoogleMapsService] Error fetching best route:", error);
+        return null;
       }
-      if (bestRoute.trafficLevel === 'low') {
-        selectedReason += ' - Light traffic';
-      } else if (bestRoute.trafficLevel === 'high') {
-        selectedReason += ' - Heavy traffic, but still fastest';
+    });
+  }
+
+  /** Human-readable explanation of why `bestRoute` beat the alternatives. */
+  private describeRouteSelection(
+    bestRoute: GoogleMapsRoute,
+    alternativeRoutes: AlternativeRoute[]
+  ): string {
+    let selectedReason = `Fastest route via ${bestRoute.summary}`;
+
+    if (alternativeRoutes.length > 0) {
+      const timeSaved = alternativeRoutes[0].durationInTraffic - bestRoute.durationInTraffic;
+      if (timeSaved > 0) {
+        selectedReason += ` (${timeSaved} min faster than alternatives)`;
       }
-
-      const result: BestRouteResult = {
-        bestRoute,
-        alternativeRoutes,
-        selectedReason,
-      };
-
-      // ========================================
-      // COST OPTIMIZATION: Cache the result
-      // 5-minute TTL balances freshness vs cost savings
-      // ========================================
-      await cacheService.set(cacheKey, result, ROUTE_CACHE_TTL);
-      console.log(`[GoogleMapsService] Cached route ${cacheKey} for ${ROUTE_CACHE_TTL}s`);
-
-      return result;
-    } catch (error) {
-      console.error("[GoogleMapsService] Error fetching best route:", error);
-      return null;
     }
+
+    if (bestRoute.trafficLevel === 'low') {
+      selectedReason += ' - Light traffic';
+    } else if (bestRoute.trafficLevel === 'high') {
+      selectedReason += ' - Heavy traffic, but still fastest';
+    }
+
+    return selectedReason;
+  }
+
+  // ==========================================
+  // DIRECTIONS API PARSING
+  // ==========================================
+
+  /**
+   * Build a Directions API request URL.
+   *
+   * `optimizeWaypoints` sends Google the `optimize:true` prefix, which lets it
+   * REORDER the stops. Callers that have already decided the stop order (the
+   * pool optimizer, for instance) must leave it off or their precedence
+   * constraints will be silently discarded.
+   */
+  private buildDirectionsUrl(
+    origin: Location,
+    destination: Location,
+    options: {
+      mode: string;
+      alternatives: boolean;
+      trafficModel: string;
+      waypoints?: Location[];
+      optimizeWaypoints?: boolean;
+      avoid?: string[];
+    }
+  ): string {
+    const asParam = (location: Location) => `${location.latitude},${location.longitude}`;
+
+    const params = new URLSearchParams({
+      origin: asParam(origin),
+      destination: asParam(destination),
+      key: this.apiKey,
+      mode: options.mode,
+      alternatives: options.alternatives.toString(),
+      language: "en",
+      units: "metric",
+      // Request traffic-aware duration by setting departure_time to now
+      departure_time: "now",
+      traffic_model: options.trafficModel,
+    });
+
+    if (options.waypoints && options.waypoints.length > 0) {
+      const waypointsStr = options.waypoints.map(asParam).join("|");
+      params.append(
+        "waypoints",
+        options.optimizeWaypoints ? `optimize:true|${waypointsStr}` : waypointsStr
+      );
+    }
+
+    if (options.avoid && options.avoid.length > 0) {
+      params.append("avoid", options.avoid.join("|"));
+    }
+
+    return `${this.baseUrl}?${params.toString()}`;
+  }
+
+  /**
+   * Total a Directions route across all of its legs.
+   * Legs without live traffic data fall back to their base duration.
+   */
+  private sumDirectionsLegs(legs: DirectionsLeg[]): {
+    distanceMeters: number;
+    durationSeconds: number;
+    durationInTrafficSeconds: number;
+  } {
+    return {
+      distanceMeters: legs.reduce((sum, leg) => sum + leg.distance.value, 0),
+      durationSeconds: legs.reduce((sum, leg) => sum + leg.duration.value, 0),
+      durationInTrafficSeconds: legs.reduce(
+        (sum, leg) => sum + (leg.duration_in_traffic?.value || leg.duration.value),
+        0
+      ),
+    };
+  }
+
+  /** Convert a leg's raw Google steps into turn-by-turn instructions. */
+  private toRouteSteps(leg: DirectionsLeg): RouteStep[] {
+    return leg.steps.map((step) => ({
+      distance: step.distance.value / 1000, // Convert to km
+      duration: step.duration.value / 60, // Convert to minutes
+      instruction: this.stripHtmlTags(step.html_instructions),
+      polyline: step.polyline.points,
+    }));
+  }
+
+  /** Convert Google's `{lat,lng}` bounds into the app's `{latitude,longitude}` shape. */
+  private toBounds(bounds: DirectionsRoute["bounds"]): GoogleMapsRoute["bounds"] {
+    return {
+      northeast: {
+        latitude: bounds.northeast.lat,
+        longitude: bounds.northeast.lng,
+      },
+      southwest: {
+        latitude: bounds.southwest.lat,
+        longitude: bounds.southwest.lng,
+      },
+    };
   }
 
   /**
@@ -834,17 +960,6 @@ export class GoogleMapsService {
     };
   }
 
-  private calculateTrafficLevel(
-    baseDuration: number,
-    trafficDuration: number
-  ): 'low' | 'moderate' | 'high' {
-    if (baseDuration <= 0) return 'low';
-    const ratio = trafficDuration / baseDuration;
-    if (ratio <= 1.1) return 'low';
-    if (ratio <= 1.3) return 'moderate';
-    return 'high';
-  }
-
   /**
    * Get distance and duration between two points (simplified version)
    * COST OPTIMIZED: Uses 1-hour cache since distance doesn't change
@@ -857,32 +972,26 @@ export class GoogleMapsService {
     origin: Location,
     destination: Location
   ): Promise<{ distance: number; duration: number; durationInTraffic: number } | null> {
-    // Use H3 for cache key - groups nearby points for more cache hits
+    // Use H3 for cache key - groups nearby points for more cache hits.
+    // Safe here (unlike the geometry-returning methods) because only scalars
+    // are returned, so cell-level approximation is acceptable.
     const originH3 = h3Utils.latLngToH3(origin, H3_RESOLUTION.DESTINATION);
     const destH3 = h3Utils.latLngToH3(destination, H3_RESOLUTION.DESTINATION);
     const cacheKey = `route:distance:${originH3}:${destH3}`;
 
-    // Check cache first
-    const cached = await cacheService.get<{ distance: number; duration: number; durationInTraffic: number }>(cacheKey);
-    if (cached) {
-      return cached;
-    }
+    // Cache for 2 hours (distance doesn't change)
+    return this.readThrough(cacheKey, DISTANCE_CACHE_TTL, async () => {
+      const route = await this.getRoute(origin, destination);
+      if (!route) {
+        return null;
+      }
 
-    const route = await this.getRoute(origin, destination);
-    if (!route) {
-      return null;
-    }
-
-    const result = {
-      distance: route.distance,
-      duration: route.duration,
-      durationInTraffic: route.durationInTraffic,
-    };
-
-    // Cache for 1 hour (distance doesn't change)
-    await cacheService.set(cacheKey, result, DISTANCE_CACHE_TTL);
-
-    return result;
+      return {
+        distance: route.distance,
+        duration: route.duration,
+        durationInTraffic: route.durationInTraffic,
+      };
+    });
   }
 
   /**
@@ -962,32 +1071,54 @@ export class GoogleMapsService {
   ): string {
     const originStr = `${origin.latitude},${origin.longitude}`;
     const destStr = `${destination.latitude},${destination.longitude}`;
-    
+
     // Log the waypoints order for debugging
     console.log(`[GoogleMaps] Generating deep link:`);
     console.log(`  Origin (first pickup): ${originStr}`);
-    
+
     if (waypoints && waypoints.length > 0) {
       waypoints.forEach((wp, idx) => {
         console.log(`  Waypoint ${idx + 1}: ${wp.latitude},${wp.longitude}`);
       });
       console.log(`  Destination (last dropoff): ${destStr}`);
-      
-      // Build waypoints string - these are the INTERMEDIATE stops
-      // Google Maps will show: Origin (A) → Waypoint 1 → Waypoint 2 → Destination (B)
-      const waypointsStr = waypoints.map(wp => `${wp.latitude},${wp.longitude}`).join('|');
-      
-      // Use the standard directions URL format
-      // This shows the complete route with all markers visible
-      const webUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destStr)}&waypoints=${encodeURIComponent(waypointsStr)}&travelmode=driving`;
-      
+
+      const webUrl = this.buildDirectionsDeepLink(origin, destination, waypoints);
+
       console.log(`  Generated URL: ${webUrl}`);
       return webUrl;
-    } else {
-      console.log(`  Destination (last dropoff): ${destStr}`);
-      // No intermediate waypoints - just origin to destination
-      return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destStr)}&travelmode=driving`;
     }
+
+    console.log(`  Destination (last dropoff): ${destStr}`);
+    return this.buildDirectionsDeepLink(origin, destination);
+  }
+
+  /**
+   * Universal Google Maps directions URL.
+   *
+   * Shared by every deep-link generator below. Google renders this as
+   * Origin (A) → Waypoint 1 → … → Destination (B), with every stop as a visible
+   * marker, and it opens the native app when one is installed.
+   */
+  private buildDirectionsDeepLink(
+    origin: Location,
+    destination: Location,
+    waypoints?: Location[]
+  ): string {
+    const asParam = (location: Location) => `${location.latitude},${location.longitude}`;
+
+    const query = [
+      'api=1',
+      `origin=${encodeURIComponent(asParam(origin))}`,
+      `destination=${encodeURIComponent(asParam(destination))}`,
+    ];
+
+    if (waypoints && waypoints.length > 0) {
+      query.push(`waypoints=${encodeURIComponent(waypoints.map(asParam).join('|'))}`);
+    }
+
+    query.push('travelmode=driving');
+
+    return `https://www.google.com/maps/dir/?${query.join('&')}`;
   }
 
   /**
@@ -1009,17 +1140,9 @@ export class GoogleMapsService {
     const destination = allStops[allStops.length - 1];
     const waypoints = allStops.slice(1, -1);
 
-    const originStr = `${origin.latitude},${origin.longitude}`;
-    const destStr = `${destination.latitude},${destination.longitude}`;
-
     console.log(`[GoogleMaps] Generating view route link with ${allStops.length} stops`);
 
-    if (waypoints.length > 0) {
-      const waypointsStr = waypoints.map(wp => `${wp.latitude},${wp.longitude}`).join('|');
-      return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destStr)}&waypoints=${encodeURIComponent(waypointsStr)}&travelmode=driving`;
-    } else {
-      return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destStr)}&travelmode=driving`;
-    }
+    return this.buildDirectionsDeepLink(origin, destination, waypoints);
   }
 
   /**
@@ -1042,30 +1165,20 @@ export class GoogleMapsService {
     const destStr = `${destination.latitude},${destination.longitude}`;
 
     // Universal web URL (works everywhere, opens Google Maps app if installed)
-    let universal: string;
-    
-    if (waypoints && waypoints.length > 0) {
-      const waypointsStr = waypoints.map(wp => `${wp.latitude},${wp.longitude}`).join('|');
-      universal = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destStr)}&waypoints=${encodeURIComponent(waypointsStr)}&travelmode=driving`;
-    } else {
-      universal = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destStr)}&travelmode=driving`;
-    }
-
-    let android: string;
-    let ios: string;
+    const universal = this.buildDirectionsDeepLink(origin, destination, waypoints);
 
     if (waypoints && waypoints.length > 0) {
       // Multi-stop route: use universal URL for all platforms
       // Native schemes (google.navigation:, comgooglemaps://) silently drop waypoints
-      android = universal;
-      ios = universal;
-    } else {
-      // Single destination: use native schemes for direct turn-by-turn navigation
-      android = `google.navigation:q=${destStr}&mode=d`;
-      ios = `comgooglemaps://?saddr=${originStr}&daddr=${destStr}&directionsmode=driving`;
+      return { universal, android: universal, ios: universal };
     }
 
-    return { universal, android, ios };
+    // Single destination: use native schemes for direct turn-by-turn navigation
+    return {
+      universal,
+      android: `google.navigation:q=${destStr}&mode=d`,
+      ios: `comgooglemaps://?saddr=${originStr}&daddr=${destStr}&directionsmode=driving`,
+    };
   }
 
   /**

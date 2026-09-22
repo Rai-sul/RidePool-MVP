@@ -1,5 +1,12 @@
 # Maps API Comparison: Google Maps vs Mapbox
 
+> **HISTORICAL RECORD — not the current system.**
+> Kept for background only. For how RidePool works today, start at
+> [`__docs__/README.md`](../README.md). See [`README.md`](./README.md)
+> in this folder for what this file is and what replaced it.
+
+---
+
 ## Executive Summary
 
 For RidePool's use case (ride-sharing in Dhaka), we recommend **Mapbox for MVP** due to its significantly larger free tier, with a plan to evaluate Google Maps for production if routing quality is insufficient.

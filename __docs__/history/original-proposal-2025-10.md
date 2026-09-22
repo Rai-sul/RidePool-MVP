@@ -1,5 +1,12 @@
 # Project Proposal
 
+> **HISTORICAL RECORD — not the current system.**
+> Kept for background only. For how RidePool works today, start at
+> [`__docs__/README.md`](../README.md). See [`README.md`](./README.md)
+> in this folder for what this file is and what replaced it.
+
+---
+
 # **PROJECT PROPOSAL: RIDE POOL**
 
 We are planning to build a ride-pooling application for Dhaka City, with plans to expand in the future. The core concept is that our system will not operate in the same manner as existing platforms like Uber or Pathao; our main selling point is cost savings. The platform will enable people to share rides to reduce expenses, and at the initial stage, our focus will be solely on pooling. Specifically, if a ride in a sedan (which can accommodate up to three passengers excluding the driver) is not shared by at least two people, the ride will not proceed. In essence, our primary idea at this stage is dedicated car-pooling. Now, on to the features.

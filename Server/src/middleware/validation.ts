@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { z, ZodSchema } from 'zod';
 
+import { errorResponse } from '../utils/response';
+
 export const GenderEnum = z.enum(['MALE', 'FEMALE', 'OTHER']);
 export const GenderPreferenceEnum = z.enum(['FEMALE_ONLY', 'ANY']);
 export const VehicleTypeEnum = z.enum(['CAR', 'CNG']);
@@ -178,15 +180,7 @@ export function validate<T>(schema: ZodSchema<T>, source: 'body' | 'query' | 'pa
           code: issue.code,
         }));
 
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request data',
-            details: errors,
-          },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'VALIDATION_ERROR', 'Invalid request data', 400, errors);
       }
 
       if (source === 'body') {

@@ -4,6 +4,8 @@ import { supabase, supabaseAdmin } from '../config/supabase';
 import { notificationService } from '../services/notification.service';
 import { z } from 'zod';
 
+import { errorResponse, successResponse, unauthorizedResponse } from '../utils/response';
+
 const UpdateProfileSchema = z.object({
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
   gender_preference: z.enum(['FEMALE_ONLY', 'ANY']).optional(),
@@ -28,11 +30,7 @@ export class UserController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       let { data: user, error } = await supabaseAdmin
@@ -69,14 +67,10 @@ export class UserController {
         vehicle = vehicleData;
       }
 
-      res.json({
-        success: true,
-        data: {
-          user,
-          vehicle,
-          requires_gender_preference: requiresGenderPreference,
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        user,
+        vehicle,
+        requires_gender_preference: requiresGenderPreference,
       });
     } catch (error) {
       next(error);
@@ -87,34 +81,18 @@ export class UserController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const parseResult = UpdateProfileSchema.safeParse(req.body);
       if (!parseResult.success) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request data',
-            details: parseResult.error.issues,
-          },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'VALIDATION_ERROR', 'Invalid request data', 400, parseResult.error.issues);
       }
 
       const updates = parseResult.data;
 
       if (Object.keys(updates).length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'NO_UPDATES', message: 'No valid fields to update' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NO_UPDATES', 'No valid fields to update', 400);
       }
 
       const { data: currentUser } = await supabaseAdmin
@@ -124,14 +102,7 @@ export class UserController {
         .single();
 
       if (updates.gender === 'FEMALE' && !updates.gender_preference && !currentUser?.gender_preference) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'GENDER_PREFERENCE_REQUIRED',
-            message: 'Female users must set a gender preference (FEMALE_ONLY or ANY)',
-          },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'GENDER_PREFERENCE_REQUIRED', 'Female users must set a gender preference (FEMALE_ONLY or ANY)', 400);
       }
 
       const dbUpdates: Record<string, any> = { ...updates };
@@ -148,11 +119,7 @@ export class UserController {
         throw error;
       }
 
-      res.json({
-        success: true,
-        data: { user },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { user });
     } catch (error) {
       next(error);
     }
@@ -162,24 +129,12 @@ export class UserController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const parseResult = SetGenderPreferenceSchema.safeParse(req.body);
       if (!parseResult.success) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request data',
-            details: parseResult.error.issues,
-          },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'VALIDATION_ERROR', 'Invalid request data', 400, parseResult.error.issues);
       }
 
       const { gender_preference } = parseResult.data;
@@ -191,14 +146,7 @@ export class UserController {
         .single();
 
       if (gender_preference === 'FEMALE_ONLY' && currentUser?.gender !== 'FEMALE') {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'INVALID_PREFERENCE',
-            message: 'Only female users can select FEMALE_ONLY preference',
-          },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'INVALID_PREFERENCE', 'Only female users can select FEMALE_ONLY preference', 400);
       }
 
       const { data: user, error } = await supabaseAdmin
@@ -215,13 +163,9 @@ export class UserController {
         throw error;
       }
 
-      res.json({
-        success: true,
-        data: {
-          user,
-          message: 'Gender preference updated successfully',
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        user,
+        message: 'Gender preference updated successfully',
       });
     } catch (error) {
       next(error);
@@ -232,24 +176,12 @@ export class UserController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const parseResult = RegisterDeviceTokenSchema.safeParse(req.body);
       if (!parseResult.success) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request data',
-            details: parseResult.error.issues,
-          },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'VALIDATION_ERROR', 'Invalid request data', 400, parseResult.error.issues);
       }
 
       const { token, platform, app_type } = parseResult.data;
@@ -257,18 +189,10 @@ export class UserController {
       const success = await notificationService.registerDeviceToken(userId, token, platform, app_type);
 
       if (!success) {
-        return res.status(500).json({
-          success: false,
-          error: { code: 'TOKEN_REGISTRATION_FAILED', message: 'Failed to register device token' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'TOKEN_REGISTRATION_FAILED', 'Failed to register device token', 500);
       }
 
-      res.json({
-        success: true,
-        data: { message: 'Device token registered successfully' },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { message: 'Device token registered successfully' });
     } catch (error) {
       next(error);
     }
@@ -279,20 +203,12 @@ export class UserController {
       const { token } = req.body;
 
       if (!token) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'MISSING_TOKEN', message: 'Token is required' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'MISSING_TOKEN', 'Token is required', 400);
       }
 
       await notificationService.unregisterDeviceToken(token);
 
-      res.json({
-        success: true,
-        data: { message: 'Device token unregistered' },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { message: 'Device token unregistered' });
     } catch (error) {
       next(error);
     }
@@ -302,11 +218,7 @@ export class UserController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const page = parseInt(req.query.page as string) || 1;
@@ -314,19 +226,15 @@ export class UserController {
 
       const result = await notificationService.getNotifications(userId, page, limit);
 
-      res.json({
-        success: true,
-        data: {
-          notifications: result.notifications,
-          unread_count: result.unread,
-          pagination: {
-            page,
-            limit,
-            total: result.total,
-            total_pages: Math.ceil(result.total / limit),
-          },
+      successResponse(res, {
+        notifications: result.notifications,
+        unread_count: result.unread,
+        pagination: {
+          page,
+          limit,
+          total: result.total,
+          total_pages: Math.ceil(result.total / limit),
         },
-        timestamp: new Date().toISOString(),
       });
     } catch (error) {
       next(error);
@@ -337,11 +245,7 @@ export class UserController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { notificationId } = req.params;
@@ -349,18 +253,10 @@ export class UserController {
       const success = await notificationService.markAsRead(notificationId, userId);
 
       if (!success) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'NOT_FOUND', message: 'Notification not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NOT_FOUND', 'Notification not found', 404);
       }
 
-      res.json({
-        success: true,
-        data: { message: 'Notification marked as read' },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { message: 'Notification marked as read' });
     } catch (error) {
       next(error);
     }
@@ -370,20 +266,12 @@ export class UserController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const count = await notificationService.markAllAsRead(userId);
 
-      res.json({
-        success: true,
-        data: { marked_count: count },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { marked_count: count });
     } catch (error) {
       next(error);
     }
@@ -393,20 +281,12 @@ export class UserController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const preferences = await notificationService.getNotificationPreferences(userId);
 
-      res.json({
-        success: true,
-        data: { preferences },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { preferences });
     } catch (error) {
       next(error);
     }
@@ -416,28 +296,16 @@ export class UserController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const success = await notificationService.updateNotificationPreferences(userId, req.body);
 
       if (!success) {
-        return res.status(500).json({
-          success: false,
-          error: { code: 'UPDATE_FAILED', message: 'Failed to update preferences' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'UPDATE_FAILED', 'Failed to update preferences', 500);
       }
 
-      res.json({
-        success: true,
-        data: { message: 'Notification preferences updated' },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { message: 'Notification preferences updated' });
     } catch (error) {
       next(error);
     }
@@ -447,11 +315,7 @@ export class UserController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       // Delete from public.users table first (handles related data via cascade/triggers)
@@ -471,11 +335,7 @@ export class UserController {
         throw authError;
       }
 
-      res.json({
-        success: true,
-        data: { message: 'User account deleted successfully' },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { message: 'User account deleted successfully' });
     } catch (error) {
       next(error);
     }

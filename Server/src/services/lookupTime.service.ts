@@ -4,6 +4,7 @@ import { notificationService } from './notification.service';
 import { logger } from '../utils/logger';
 import { h3Utils } from '../utils/h3.utils';
 import { smartRouteService, PoolMemberRoute } from './smartRoute.service';
+import { toPoolMemberRoutes } from '../utils/poolRoutes';
 import { config } from '../config/env';
 
 // Timer configuration - single source of truth
@@ -250,13 +251,7 @@ export class LookupTimeService {
           .in('id', rideIds);
 
         if (rides && rides.length > 0) {
-          const memberRoutes: PoolMemberRoute[] = rides.map((ride: any) => ({
-            userId: ride.user_id,
-            pickup: { latitude: ride.pickup_lat, longitude: ride.pickup_lng },
-            dropoff: { latitude: ride.dropoff_lat, longitude: ride.dropoff_lng },
-            pickupAddress: ride.pickup_address,
-            dropoffAddress: ride.dropoff_address,
-          }));
+          const memberRoutes: PoolMemberRoute[] = toPoolMemberRoutes(rides);
 
           await smartRouteService.calculateCombinedRoute(
             memberRoutes,
@@ -347,13 +342,7 @@ export class LookupTimeService {
           .in('id', rideIds);
 
         if (rides && rides.length > 0) {
-          const memberRoutes: PoolMemberRoute[] = rides.map((ride: any) => ({
-            userId: ride.user_id,
-            pickup: { latitude: ride.pickup_lat, longitude: ride.pickup_lng },
-            dropoff: { latitude: ride.dropoff_lat, longitude: ride.dropoff_lng },
-            pickupAddress: ride.pickup_address,
-            dropoffAddress: ride.dropoff_address,
-          }));
+          const memberRoutes: PoolMemberRoute[] = toPoolMemberRoutes(rides);
 
           // Calculate and cache the route (no driver location yet)
           const route = await smartRouteService.calculateCombinedRoute(

@@ -10,6 +10,8 @@ import { fareService } from '../services/fare.service';
 import { rideEstimationService, PoolMemberLocation } from '../services/rideEstimation.service';
 import { VehicleType } from '../types';
 
+import { createdResponse, errorResponse, successResponse, unauthorizedResponse } from '../utils/response';
+
 const MAX_PRIYO_SATHI = 5;
 
 export class PriyoSathiController {
@@ -82,21 +84,13 @@ export class PriyoSathiController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { companion_id } = req.body;
 
       if (companion_id === userId) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'INVALID_COMPANION', message: 'Cannot add yourself as a companion' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'INVALID_COMPANION', 'Cannot add yourself as a companion', 400);
       }
 
       const { data: companion, error: companionError } = await supabaseAdmin
@@ -106,11 +100,7 @@ export class PriyoSathiController {
         .single();
 
       if (companionError || !companion) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'COMPANION_NOT_FOUND', message: 'User not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'COMPANION_NOT_FOUND', 'User not found', 404);
       }
 
       const { count } = await supabaseAdmin
@@ -120,11 +110,7 @@ export class PriyoSathiController {
         .in('status', ['PENDING', 'ACCEPTED']);
 
       if ((count || 0) >= MAX_PRIYO_SATHI) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'MAX_COMPANIONS_REACHED', message: `Maximum ${MAX_PRIYO_SATHI} companions allowed` },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'MAX_COMPANIONS_REACHED', `Maximum ${MAX_PRIYO_SATHI} companions allowed`, 400);
       }
 
       const { data: existing } = await supabaseAdmin
@@ -136,25 +122,13 @@ export class PriyoSathiController {
 
       if (existing) {
         if (existing.status === 'ACCEPTED') {
-          return res.status(400).json({
-            success: false,
-            error: { code: 'ALREADY_COMPANION', message: 'Already in your Priyo Sathi list' },
-            timestamp: new Date().toISOString(),
-          });
+          return errorResponse(res, 'ALREADY_COMPANION', 'Already in your Priyo Sathi list', 400);
         }
         if (existing.status === 'PENDING') {
-          return res.status(400).json({
-            success: false,
-            error: { code: 'REQUEST_PENDING', message: 'Request already pending' },
-            timestamp: new Date().toISOString(),
-          });
+          return errorResponse(res, 'REQUEST_PENDING', 'Request already pending', 400);
         }
         if (existing.status === 'BLOCKED') {
-          return res.status(400).json({
-            success: false,
-            error: { code: 'BLOCKED', message: 'Cannot add this user' },
-            timestamp: new Date().toISOString(),
-          });
+          return errorResponse(res, 'BLOCKED', 'Cannot add this user', 400);
         }
       }
 
@@ -179,14 +153,10 @@ export class PriyoSathiController {
         metadata: { priyo_sathi_id: priyoSathi.id, requester_id: userId },
       });
 
-      res.status(201).json({
-        success: true,
-        data: {
-          id: priyoSathi.id,
-          status: 'PENDING',
-          message: 'Priyo Sathi request sent',
-        },
-        timestamp: new Date().toISOString(),
+      createdResponse(res, {
+        id: priyoSathi.id,
+        status: 'PENDING',
+        message: 'Priyo Sathi request sent',
       });
     } catch (error) {
       next(error);
@@ -197,11 +167,7 @@ export class PriyoSathiController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { companionId } = req.params;
@@ -216,11 +182,7 @@ export class PriyoSathiController {
         throw error;
       }
 
-      res.json({
-        success: true,
-        data: { message: 'Companion removed from Priyo Sathi list' },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { message: 'Companion removed from Priyo Sathi list' });
     } catch (error) {
       next(error);
     }
@@ -230,11 +192,7 @@ export class PriyoSathiController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { data: companions, error } = await supabaseAdmin
@@ -254,14 +212,10 @@ export class PriyoSathiController {
         throw error;
       }
 
-      res.json({
-        success: true,
-        data: {
-          companions: companions || [],
-          count: companions?.length || 0,
-          max_allowed: MAX_PRIYO_SATHI,
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        companions: companions || [],
+        count: companions?.length || 0,
+        max_allowed: MAX_PRIYO_SATHI,
       });
     } catch (error) {
       next(error);
@@ -272,11 +226,7 @@ export class PriyoSathiController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { data: requests, error } = await supabaseAdmin
@@ -294,11 +244,7 @@ export class PriyoSathiController {
         throw error;
       }
 
-      res.json({
-        success: true,
-        data: { pending_requests: requests || [] },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { pending_requests: requests || [] });
     } catch (error) {
       next(error);
     }
@@ -308,22 +254,14 @@ export class PriyoSathiController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { requestId } = req.params;
       const { action } = req.body;
 
       if (!['accept', 'reject'].includes(action)) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'INVALID_ACTION', message: 'Action must be accept or reject' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'INVALID_ACTION', 'Action must be accept or reject', 400);
       }
 
       const { data: request, error: fetchError } = await supabaseAdmin
@@ -335,11 +273,7 @@ export class PriyoSathiController {
         .single();
 
       if (fetchError || !request) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'REQUEST_NOT_FOUND', message: 'Pending request not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'REQUEST_NOT_FOUND', 'Pending request not found', 404);
       }
 
       const newStatus = action === 'accept' ? 'ACCEPTED' : 'REJECTED';
@@ -377,13 +311,9 @@ export class PriyoSathiController {
         metadata: { status: newStatus },
       });
 
-      res.json({
-        success: true,
-        data: {
-          status: newStatus,
-          message: action === 'accept' ? 'Request accepted' : 'Request rejected',
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        status: newStatus,
+        message: action === 'accept' ? 'Request accepted' : 'Request rejected',
       });
     } catch (error) {
       next(error);
@@ -394,11 +324,7 @@ export class PriyoSathiController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { companionId } = req.params;
@@ -413,11 +339,7 @@ export class PriyoSathiController {
         .single();
 
       if (companionError || !companion) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'NOT_COMPANION', message: 'User is not in your Priyo Sathi list' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NOT_COMPANION', 'User is not in your Priyo Sathi list', 404);
       }
 
       // Prevent reverse invites: if companion already invited this user recently
@@ -459,11 +381,7 @@ export class PriyoSathiController {
           .single();
         const companionName = companionUser?.full_name || companionUser?.phone || 'Your friend';
 
-        return res.status(400).json({
-          success: false,
-          error: { code: 'ALREADY_INVITED_BY_COMPANION', message: `${companionName} already invited you` },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'ALREADY_INVITED_BY_COMPANION', `${companionName} already invited you`, 400);
       }
 
       const { data: ride, error: rideError } = await supabaseAdmin
@@ -474,11 +392,7 @@ export class PriyoSathiController {
         .single();
 
       if (rideError || !ride) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'RIDE_NOT_FOUND', message: 'Ride not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'RIDE_NOT_FOUND', 'Ride not found', 404);
       }
 
       let poolId = ride.pool_id as string | null;
@@ -514,11 +428,7 @@ export class PriyoSathiController {
       }
 
       if (!poolId) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'NO_POOL', message: 'No active pool to invite into' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NO_POOL', 'No active pool to invite into', 400);
       }
 
       const { data: pool, error: poolError } = await supabaseAdmin
@@ -528,27 +438,15 @@ export class PriyoSathiController {
         .single();
 
       if (poolError || !pool) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_NOT_FOUND', 'Pool not found', 404);
       }
 
       if (!['WAITING_FOR_RIDERS', 'WAITING_FOR_DRIVER'].includes(pool.status)) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'POOL_NOT_AVAILABLE', message: 'Pool is no longer accepting riders' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_NOT_AVAILABLE', 'Pool is no longer accepting riders', 400);
       }
 
       if (pool.current_passengers >= pool.max_passengers) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'POOL_FULL', message: 'Pool is full' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_FULL', 'Pool is full', 400);
       }
 
       // Enforce Priyo Sathi visibility rule before sending invite
@@ -560,11 +458,7 @@ export class PriyoSathiController {
       );
 
       if (!eligibility.eligible) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'NOT_ELIGIBLE', message: eligibility.reason || 'Companion not eligible for invite' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NOT_ELIGIBLE', eligibility.reason || 'Companion not eligible for invite', 400);
       }
 
       const { data: user } = await supabaseAdmin
@@ -583,11 +477,7 @@ export class PriyoSathiController {
 
       logger.info(`[PriyoSathi] User ${userId} invited ${companionId} to ride ${ride_id}`);
 
-      res.json({
-        success: true,
-        data: { message: 'Invitation sent to your Priyo Sathi' },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { message: 'Invitation sent to your Priyo Sathi' });
     } catch (error) {
       next(error);
     }
@@ -601,21 +491,13 @@ export class PriyoSathiController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { pickup_lat, pickup_lng, destination_lat, destination_lng } = req.query;
 
       if (!pickup_lat || !pickup_lng || !destination_lat || !destination_lng) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'MISSING_PARAMS', message: 'pickup_lat, pickup_lng, destination_lat, destination_lng are required' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'MISSING_PARAMS', 'pickup_lat, pickup_lng, destination_lat, destination_lng are required', 400);
       }
 
       const userPickup = {
@@ -715,26 +597,22 @@ export class PriyoSathiController {
         }
       }
 
-      res.json({
-        success: true,
-        data: {
-          candidates: result.candidates.map(c => ({
-            companion_id: c.companionId,
-            name: c.companionName,
-            phone: c.companionPhone,
-            rating: c.companionRating,
-            distance_km: c.distanceFromUser > 0 ? c.distanceFromUser.toFixed(2) : null,
-            detour_minutes: c.detourMinutes > 0 ? c.detourMinutes : null,
-            is_on_route: c.isOnRoute,
-            can_auto_match: c.canAutoMatch,
-            match_reason: c.matchReason,
-            has_pending_invite_to: invitesFromMe.has(c.companionId),
-            has_pending_invite_from: invitesToMe.has(c.companionId),
-          })),
-          auto_matchable_count: result.candidates.filter(c => c.canAutoMatch).length,
-          total_companions: result.candidates.length,
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        candidates: result.candidates.map(c => ({
+          companion_id: c.companionId,
+          name: c.companionName,
+          phone: c.companionPhone,
+          rating: c.companionRating,
+          distance_km: c.distanceFromUser > 0 ? c.distanceFromUser.toFixed(2) : null,
+          detour_minutes: c.detourMinutes > 0 ? c.detourMinutes : null,
+          is_on_route: c.isOnRoute,
+          can_auto_match: c.canAutoMatch,
+          match_reason: c.matchReason,
+          has_pending_invite_to: invitesFromMe.has(c.companionId),
+          has_pending_invite_from: invitesToMe.has(c.companionId),
+        })),
+        auto_matchable_count: result.candidates.filter(c => c.canAutoMatch).length,
+        total_companions: result.candidates.length,
       });
     } catch (error) {
       next(error);
@@ -748,11 +626,7 @@ export class PriyoSathiController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { companionId } = req.params;
@@ -787,11 +661,7 @@ export class PriyoSathiController {
         .eq('user_id', companionId)
         .eq('companion_id', userId);
 
-      res.json({
-        success: true,
-        data: { message: 'User blocked from Priyo Sathi' },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { message: 'User blocked from Priyo Sathi' });
     } catch (error) {
       next(error);
     }
@@ -805,11 +675,7 @@ export class PriyoSathiController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { rideId } = req.params;
@@ -836,11 +702,7 @@ export class PriyoSathiController {
         .single();
 
       if (rideError || !ride) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'RIDE_NOT_FOUND', message: 'Ride not found or expired' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'RIDE_NOT_FOUND', 'Ride not found or expired', 404);
       }
 
       // Check if the inviter is a Priyo Sathi of the current user
@@ -852,11 +714,7 @@ export class PriyoSathiController {
         .limit(1);
 
       if (!isFriend || isFriend.length === 0) {
-        return res.status(403).json({
-          success: false,
-          error: { code: 'NOT_FRIENDS', message: 'You are not Priyo Sathi with the inviter' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NOT_FRIENDS', 'You are not Priyo Sathi with the inviter', 403);
       }
 
       // Get the inviter's name
@@ -924,27 +782,23 @@ export class PriyoSathiController {
         }
       }
 
-      res.json({
-        success: true,
-        data: {
-          ride_id: ride.id,
-          inviter_name: inviter?.full_name || inviter?.phone || 'Your friend',
-          destination: {
-            latitude: ride.dropoff_lat,
-            longitude: ride.dropoff_lng,
-            address: ride.dropoff_address,
-          },
-          pickup: {
-            latitude: ride.pickup_lat,
-            longitude: ride.pickup_lng,
-            address: ride.pickup_address,
-          },
-          vehicle_type: ride.vehicle_type,
-          gender_restriction: ride.gender_restriction,
-          ride_status: ride.status,
-          pool: poolInfo,
+      successResponse(res, {
+        ride_id: ride.id,
+        inviter_name: inviter?.full_name || inviter?.phone || 'Your friend',
+        destination: {
+          latitude: ride.dropoff_lat,
+          longitude: ride.dropoff_lng,
+          address: ride.dropoff_address,
         },
-        timestamp: new Date().toISOString(),
+        pickup: {
+          latitude: ride.pickup_lat,
+          longitude: ride.pickup_lng,
+          address: ride.pickup_address,
+        },
+        vehicle_type: ride.vehicle_type,
+        gender_restriction: ride.gender_restriction,
+        ride_status: ride.status,
+        pool: poolInfo,
       });
     } catch (error) {
       next(error);
@@ -959,30 +813,18 @@ export class PriyoSathiController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { rideId } = req.params;
       const { pickup_lat, pickup_lng, pickup_address, dropoff_lat, dropoff_lng, dropoff_address, gender_restriction } = req.body;
 
       if (!pickup_lat || !pickup_lng) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'MISSING_PARAMS', message: 'pickup_lat and pickup_lng are required' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'MISSING_PARAMS', 'pickup_lat and pickup_lng are required', 400);
       }
 
       if (!dropoff_lat || !dropoff_lng) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'MISSING_PARAMS', message: 'dropoff_lat and dropoff_lng are required' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'MISSING_PARAMS', 'dropoff_lat and dropoff_lng are required', 400);
       }
 
       // Fetch the friend's ride
@@ -1003,21 +845,13 @@ export class PriyoSathiController {
         .single();
 
       if (rideError || !friendRide) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'RIDE_NOT_FOUND', message: 'Ride not found or expired' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'RIDE_NOT_FOUND', 'Ride not found or expired', 404);
       }
 
       let poolId = await this.resolveInvitePoolId(userId, rideId, friendRide);
 
       if (!poolId) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'NO_POOL', message: 'This ride does not have a pool to join' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NO_POOL', 'This ride does not have a pool to join', 400);
       }
 
       // Verify friendship
@@ -1029,11 +863,7 @@ export class PriyoSathiController {
         .limit(1);
 
       if (!isFriend || isFriend.length === 0) {
-        return res.status(403).json({
-          success: false,
-          error: { code: 'NOT_FRIENDS', message: 'You are not Priyo Sathi with the inviter' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NOT_FRIENDS', 'You are not Priyo Sathi with the inviter', 403);
       }
 
       // Check pool status
@@ -1044,35 +874,19 @@ export class PriyoSathiController {
         .single();
 
       if (poolError || !pool) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_NOT_FOUND', 'Pool not found', 404);
       }
 
       if (pool.creator_user_id !== friendRide.user_id) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'POOL_MISMATCH', message: 'Invite pool does not match inviter' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_MISMATCH', 'Invite pool does not match inviter', 400);
       }
 
       if (!['WAITING_FOR_RIDERS', 'WAITING_FOR_DRIVER'].includes(pool.status)) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'POOL_NOT_AVAILABLE', message: 'Pool is no longer accepting riders' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_NOT_AVAILABLE', 'Pool is no longer accepting riders', 400);
       }
 
       if (pool.current_passengers >= pool.max_passengers) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'POOL_FULL', message: 'Pool is full' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_FULL', 'Pool is full', 400);
       }
 
       // Validate compatibility using the same logic as normal pool joins
@@ -1150,11 +964,7 @@ export class PriyoSathiController {
         await supabaseAdmin.from('rides').delete().eq('id', newRide.id);
         
         if (joinError.message?.includes('POOL_FULL')) {
-          return res.status(400).json({
-            success: false,
-            error: { code: 'POOL_FULL', message: 'Pool is full' },
-            timestamp: new Date().toISOString(),
-          });
+          return errorResponse(res, 'POOL_FULL', 'Pool is full', 400);
         }
         throw joinError;
       }
@@ -1244,14 +1054,10 @@ export class PriyoSathiController {
 
       logger.info(`[PriyoSathi] User ${userId} accepted ride invite and joined pool ${friendRide.pool_id}`);
 
-      res.json({
-        success: true,
-        data: {
-          ride_id: newRide.id,
-          pool_id: poolId,
-          message: 'Successfully joined your friend\'s pool!',
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        ride_id: newRide.id,
+        pool_id: poolId,
+        message: 'Successfully joined your friend\'s pool!',
       });
     } catch (error) {
       next(error);

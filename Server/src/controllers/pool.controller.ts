@@ -18,6 +18,9 @@ import { calculateDistance, estimateTravelTime } from '../utils/helper';
 import { unifiedCacheService } from '../services/unifiedCache.service';
 import crypto from 'crypto';
 import { logger } from '../utils/logger';
+import { toPoolMemberRoutes } from '../utils/poolRoutes';
+
+import { createdResponse, errorResponse, successResponse, unauthorizedResponse } from '../utils/response';
 
 /**
  * Extracts a user-friendly location name from an address string.
@@ -85,21 +88,13 @@ export class PoolController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, vehicle_type, gender_restriction } = req.query;
 
       if (!pickup_lat || !pickup_lng || !dropoff_lat || !dropoff_lng || !vehicle_type) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'MISSING_PARAMS', message: 'Missing required parameters' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'MISSING_PARAMS', 'Missing required parameters', 400);
       }
 
       const pickupLat = parseFloat(pickup_lat as string);
@@ -136,17 +131,13 @@ export class PoolController {
 
       logger.info(`[Pool Search] Found ${searchResult.matches.length} matches, hasMatches=${searchResult.hasMatches}`);
 
-      res.json({
-        success: true,
-        data: {
-          pools: searchResult.matches.slice(0, 10),
-          alternatives: searchResult.alternatives,
-          analytics: searchResult.analytics,
-          metadata: searchResult.metadata,
-          has_matches: searchResult.hasMatches,
-          total_found: searchResult.totalPoolsFound,
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        pools: searchResult.matches.slice(0, 10),
+        alternatives: searchResult.alternatives,
+        analytics: searchResult.analytics,
+        metadata: searchResult.metadata,
+        has_matches: searchResult.hasMatches,
+        total_found: searchResult.totalPoolsFound,
       });
     } catch (error) {
       next(error);
@@ -157,11 +148,7 @@ export class PoolController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const cooldownStatus = await penaltyService.isUserInCooldown(userId);
@@ -291,19 +278,15 @@ export class PoolController {
       // Do NOT auto-notify Priyo Sathi companions here.
       // Priyo Sathi invites should only be sent explicitly by the user.
 
-      res.status(201).json({
-        success: true,
-        data: {
-          pool,
-          ride: creatorRide,
-          search_timing: {
-            initial_seconds: SEARCH_TIMING.INITIAL_SECONDS,
-            extended_seconds: SEARCH_TIMING.EXTENDED_SECONDS,
-            total_seconds: SEARCH_TIMING.TOTAL_SECONDS,
-            expires_at: new Date(Date.now() + SEARCH_TIMING.TOTAL_SECONDS * 1000).toISOString(),
-          },
+      createdResponse(res, {
+        pool,
+        ride: creatorRide,
+        search_timing: {
+          initial_seconds: SEARCH_TIMING.INITIAL_SECONDS,
+          extended_seconds: SEARCH_TIMING.EXTENDED_SECONDS,
+          total_seconds: SEARCH_TIMING.TOTAL_SECONDS,
+          expires_at: new Date(Date.now() + SEARCH_TIMING.TOTAL_SECONDS * 1000).toISOString(),
         },
-        timestamp: new Date().toISOString(),
       });
     } catch (error) {
       next(error);
@@ -314,11 +297,7 @@ export class PoolController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { poolId } = req.params;
@@ -345,23 +324,12 @@ export class PoolController {
         .single();
 
       if (rideError || !ride) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'RIDE_NOT_FOUND', message: 'Ride not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'RIDE_NOT_FOUND', 'Ride not found', 404);
       }
 
       // Advance riders are auto-assigned; they never pick a pool by hand.
       if (ride.booking_type === 'ADVANCE') {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'ADVANCE_BOOKING_AUTO_ASSIGNED',
-            message: 'Scheduled bookings are matched automatically and cannot join a pool manually',
-          },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'ADVANCE_BOOKING_AUTO_ASSIGNED', 'Scheduled bookings are matched automatically and cannot join a pool manually', 400);
       }
 
       const { data: pool, error: poolError } = await supabaseAdmin
@@ -371,24 +339,13 @@ export class PoolController {
         .single();
 
       if (poolError || !pool) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_NOT_FOUND', 'Pool not found', 404);
       }
 
       // Re-verify the Active Pickup Range before anything else. Discovery
       // results are never trusted, and an unlisted pool id gets no shortcut.
       if (!poolMatchingService.isAdvancePoolJoinableNow(pool as Pool)) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'POOL_NO_LONGER_ACTIVE',
-            message: 'This scheduled pool is not open for joining right now',
-          },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_NO_LONGER_ACTIVE', 'This scheduled pool is not open for joining right now', 400);
       }
 
       const compatibility = poolMatchingService.isRideCompatibleWithPool(ride as Ride, pool as Pool);
@@ -508,16 +465,12 @@ export class PoolController {
         await notificationService.sendPoolFoundNotification(pool.creator_user_id, poolId);
       }
 
-      res.json({
-        success: true,
-        data: {
-          pool_id: poolId,
-          member_id: joinResult.member_id,
-          compatibility_score: compatibility.score,
-          fare_per_person: farePerPerson,
-          current_passengers: joinResult.current_passengers,
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        pool_id: poolId,
+        member_id: joinResult.member_id,
+        compatibility_score: compatibility.score,
+        fare_per_person: farePerPerson,
+        current_passengers: joinResult.current_passengers,
       });
     } catch (error) {
       next(error);
@@ -528,11 +481,7 @@ export class PoolController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { poolId } = req.params;
@@ -559,20 +508,12 @@ export class PoolController {
 
       if (error) {
         logger.warn(`[Pool] Error fetching pool ${poolId}: ${error.message}`);
-        return res.status(404).json({
-          success: false,
-          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_NOT_FOUND', 'Pool not found', 404);
       }
 
       if (!pool) {
         logger.warn(`[Pool] Pool ${poolId} not found in database`);
-        return res.status(404).json({
-          success: false,
-          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_NOT_FOUND', 'Pool not found', 404);
       }
 
       // Filter out members who have left (left_at IS NOT NULL)
@@ -613,13 +554,9 @@ export class PoolController {
         ? lookupTimeService.calculateTimerFromCreatedAt(pool.created_at)
         : null;
 
-      res.json({
-        success: true,
-        data: {
-          pool,
-          search_timing: searchTiming,
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        pool,
+        search_timing: searchTiming,
       });
     } catch (error) {
       next(error);
@@ -630,11 +567,7 @@ export class PoolController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { poolId } = req.params;
@@ -650,18 +583,10 @@ export class PoolController {
 
       if (!result.success) {
         if (result.reason === 'NOT_MEMBER') {
-          return res.status(404).json({
-            success: false,
-            error: { code: 'NOT_IN_POOL', message: result.message },
-            timestamp: new Date().toISOString(),
-          });
+          return errorResponse(res, 'NOT_IN_POOL', result.message, 404);
         }
         if (result.reason === 'RIDE_IN_PROGRESS') {
-          return res.status(400).json({
-            success: false,
-            error: { code: 'RIDE_IN_PROGRESS', message: result.message },
-            timestamp: new Date().toISOString(),
-          });
+          return errorResponse(res, 'RIDE_IN_PROGRESS', result.message, 400);
         }
         return res.status(400).json({
           success: false,
@@ -770,14 +695,10 @@ export class PoolController {
           });
         }
         
-        res.json({
-          success: true,
-          data: { 
-            message: 'Left pool successfully',
-            pool_cancelled: true,
-            reason: activeMembers.length === 0 ? 'You were the only member - pool cancelled' : 'Only 1 member remaining - pool auto-cancelled',
-          },
-          timestamp: new Date().toISOString(),
+        successResponse(res, { 
+          message: 'Left pool successfully',
+          pool_cancelled: true,
+          reason: activeMembers.length === 0 ? 'You were the only member - pool cancelled' : 'Only 1 member remaining - pool auto-cancelled',
         });
         return;
       }
@@ -854,13 +775,7 @@ export class PoolController {
             .in('id', rideIds);
 
           if (rides && rides.length > 0) {
-            const memberRoutes: PoolMemberRoute[] = rides.map((ride: any) => ({
-              userId: ride.user_id,
-              pickup: { latitude: ride.pickup_lat, longitude: ride.pickup_lng },
-              dropoff: { latitude: ride.dropoff_lat, longitude: ride.dropoff_lng },
-              pickupAddress: ride.pickup_address,
-              dropoffAddress: ride.dropoff_address,
-            }));
+            const memberRoutes: PoolMemberRoute[] = toPoolMemberRoutes(rides);
 
             // Calculate and cache the updated route
             await smartRouteService.calculateCombinedRoute(
@@ -876,11 +791,7 @@ export class PoolController {
         }
       }
 
-      res.json({
-        success: true,
-        data: { message: 'Left pool successfully' },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { message: 'Left pool successfully' });
     } catch (error) {
       next(error);
     }
@@ -890,11 +801,7 @@ export class PoolController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { poolId } = req.params;
@@ -906,27 +813,15 @@ export class PoolController {
         .single();
 
       if (poolError || !pool) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_NOT_FOUND', 'Pool not found', 404);
       }
 
       if (pool.creator_user_id !== userId) {
-        return res.status(403).json({
-          success: false,
-          error: { code: 'NOT_CREATOR', message: 'Only pool creator can cancel' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NOT_CREATOR', 'Only pool creator can cancel', 403);
       }
 
       if (!['WAITING_FOR_RIDERS', 'WAITING_FOR_DRIVER'].includes(pool.status)) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'CANNOT_CANCEL', message: 'Pool cannot be cancelled in current status' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'CANNOT_CANCEL', 'Pool cannot be cancelled in current status', 400);
       }
 
       lookupTimeService.cancelLookupTimer(poolId);
@@ -969,11 +864,7 @@ export class PoolController {
       // Clear cached route for cancelled pool
       await smartRouteService.clearPoolRoute(poolId);
 
-      res.json({
-        success: true,
-        data: { message: 'Pool cancelled successfully' },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { message: 'Pool cancelled successfully' });
     } catch (error) {
       next(error);
     }
@@ -987,11 +878,7 @@ export class PoolController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { poolId } = req.params;
@@ -1018,11 +905,7 @@ export class PoolController {
         .single();
 
       if (poolError || !pool) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_NOT_FOUND', 'Pool not found', 404);
       }
 
       // Fetch rides for existing pool members
@@ -1041,21 +924,11 @@ export class PoolController {
           .in('id', rideIds);
 
         if (ridesError || !rides) {
-          return res.status(500).json({
-            success: false,
-            error: { code: 'RIDES_FETCH_ERROR', message: 'Failed to fetch member rides' },
-            timestamp: new Date().toISOString(),
-          });
+          return errorResponse(res, 'RIDES_FETCH_ERROR', 'Failed to fetch member rides', 500);
         }
 
         memberRides = rides;
-        members = rides.map((ride: any) => ({
-          userId: ride.user_id,
-          pickup: { latitude: ride.pickup_lat, longitude: ride.pickup_lng },
-          dropoff: { latitude: ride.dropoff_lat, longitude: ride.dropoff_lng },
-          pickupAddress: ride.pickup_address,
-          dropoffAddress: ride.dropoff_address,
-        }));
+        members = toPoolMemberRoutes(rides);
       }
 
       const currentMember: PoolMemberLocation = {
@@ -1237,35 +1110,31 @@ export class PoolController {
             ]),
       ];
 
-      res.json({
-        success: true,
-        data: {
-          poolId,
-          memberCount: membersWithUser.length,
-          userEstimate: {
-            fare: userFare?.fare ?? breakdown.farePerPerson,
-            savings: userFare?.savings ?? breakdown.savings,
-            durationMinutes: userDurationMinutes,
-            distanceKm: userFare?.distanceKm ?? Math.round(calculateDistance(pickupLat, pickupLng, dropoffLat, dropoffLng) * 10) / 10,
-          },
-          route: {
-            totalDistanceKm: existingRoute?.totalDistanceKm ?? 0,
-            totalDurationMinutes: existingRoute?.totalDurationMinutes ?? 0,
-            farePerPerson: breakdown.farePerPerson,
-            coordinates: existingRoute?.optimizedRoute?.coordinates || [],
-            encoded: existingRoute?.optimizedRoute?.encoded || '',
-          },
-          stops: stopsForMap.map((stop) => ({
-            type: stop.type,
-            userId: stop.userId,
-            address: stop.address,
-            location: stop.location,
-            order: stop.order,
-            estimatedArrival: stop.estimatedArrival,
-            isCurrentUser: stop.userId === userId,
-          })),
+      successResponse(res, {
+        poolId,
+        memberCount: membersWithUser.length,
+        userEstimate: {
+          fare: userFare?.fare ?? breakdown.farePerPerson,
+          savings: userFare?.savings ?? breakdown.savings,
+          durationMinutes: userDurationMinutes,
+          distanceKm: userFare?.distanceKm ?? Math.round(calculateDistance(pickupLat, pickupLng, dropoffLat, dropoffLng) * 10) / 10,
         },
-        timestamp: new Date().toISOString(),
+        route: {
+          totalDistanceKm: existingRoute?.totalDistanceKm ?? 0,
+          totalDurationMinutes: existingRoute?.totalDurationMinutes ?? 0,
+          farePerPerson: breakdown.farePerPerson,
+          coordinates: existingRoute?.optimizedRoute?.coordinates || [],
+          encoded: existingRoute?.optimizedRoute?.encoded || '',
+        },
+        stops: stopsForMap.map((stop) => ({
+          type: stop.type,
+          userId: stop.userId,
+          address: stop.address,
+          location: stop.location,
+          order: stop.order,
+          estimatedArrival: stop.estimatedArrival,
+          isCurrentUser: stop.userId === userId,
+        })),
       });
     } catch (error) {
       next(error);
@@ -1280,11 +1149,7 @@ export class PoolController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { poolId } = req.params;
@@ -1300,22 +1165,14 @@ export class PoolController {
         .single();
 
       if (poolError || !pool) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_NOT_FOUND', 'Pool not found', 404);
       }
 
       // Get all rides for pool members
       const rideIds = pool.pool_members?.map((m: any) => m.ride_id).filter(Boolean) || [];
       
       if (rideIds.length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'NO_MEMBERS', message: 'Pool has no members with rides' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NO_MEMBERS', 'Pool has no members with rides', 400);
       }
 
       const { data: rides, error: ridesError } = await supabaseAdmin
@@ -1324,21 +1181,11 @@ export class PoolController {
         .in('id', rideIds);
 
       if (ridesError || !rides) {
-        return res.status(500).json({
-          success: false,
-          error: { code: 'RIDES_FETCH_ERROR', message: 'Failed to fetch member rides' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'RIDES_FETCH_ERROR', 'Failed to fetch member rides', 500);
       }
 
       // Build member locations
-      const members: PoolMemberLocation[] = rides.map((ride: any) => ({
-        userId: ride.user_id,
-        pickup: { latitude: ride.pickup_lat, longitude: ride.pickup_lng },
-        dropoff: { latitude: ride.dropoff_lat, longitude: ride.dropoff_lng },
-        pickupAddress: ride.pickup_address,
-        dropoffAddress: ride.dropoff_address,
-      }));
+      const members: PoolMemberLocation[] = toPoolMemberRoutes(rides);
 
       // Calculate optimized route
       const optimization = await rideEstimationService.calculateOptimizedPoolRoute(
@@ -1346,28 +1193,24 @@ export class PoolController {
         pool.vehicle_type as VehicleType
       );
 
-      res.json({
-        success: true,
-        data: {
-          poolId,
-          route: {
-            totalDistanceKm: optimization.totalDistanceKm,
-            totalDurationMinutes: optimization.totalDurationMinutes,
-            farePerPerson: optimization.farePerPerson,
-            coordinates: optimization.optimizedRoute.coordinates,
-            encoded: optimization.optimizedRoute.encoded,
-          },
-          stops: optimization.stops.map(stop => ({
-            type: stop.type,
-            userId: stop.userId,
-            address: stop.address,
-            location: stop.location,
-            order: stop.order,
-            estimatedArrival: stop.estimatedArrival,
-          })),
-          legs: optimization.optimizedRoute.legs,
+      successResponse(res, {
+        poolId,
+        route: {
+          totalDistanceKm: optimization.totalDistanceKm,
+          totalDurationMinutes: optimization.totalDurationMinutes,
+          farePerPerson: optimization.farePerPerson,
+          coordinates: optimization.optimizedRoute.coordinates,
+          encoded: optimization.optimizedRoute.encoded,
         },
-        timestamp: new Date().toISOString(),
+        stops: optimization.stops.map(stop => ({
+          type: stop.type,
+          userId: stop.userId,
+          address: stop.address,
+          location: stop.location,
+          order: stop.order,
+          estimatedArrival: stop.estimatedArrival,
+        })),
+        legs: optimization.optimizedRoute.legs,
       });
     } catch (error) {
       next(error);
@@ -1382,11 +1225,7 @@ export class PoolController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { poolId } = req.params;
@@ -1402,27 +1241,19 @@ export class PoolController {
         .single();
 
       if (poolError || !pool) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_NOT_FOUND', 'Pool not found', 404);
       }
 
       // Get all rides for pool members
       const rideIds = pool.pool_members?.map((m: any) => m.ride_id).filter(Boolean) || [];
       
       if (rideIds.length === 0) {
-        return res.json({
-          success: true,
-          data: {
-            poolId,
-            farePerPerson: 0,
-            totalFare: 0,
-            memberCount: 0,
-            message: 'No members in pool',
-          },
-          timestamp: new Date().toISOString(),
+        return successResponse(res, {
+          poolId,
+          farePerPerson: 0,
+          totalFare: 0,
+          memberCount: 0,
+          message: 'No members in pool',
         });
       }
 
@@ -1432,21 +1263,11 @@ export class PoolController {
         .in('id', rideIds);
 
       if (ridesError || !rides) {
-        return res.status(500).json({
-          success: false,
-          error: { code: 'RIDES_FETCH_ERROR', message: 'Failed to fetch member rides' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'RIDES_FETCH_ERROR', 'Failed to fetch member rides', 500);
       }
 
       // Build member locations
-      const members: PoolMemberLocation[] = rides.map((ride: any) => ({
-        userId: ride.user_id,
-        pickup: { latitude: ride.pickup_lat, longitude: ride.pickup_lng },
-        dropoff: { latitude: ride.dropoff_lat, longitude: ride.dropoff_lng },
-        pickupAddress: ride.pickup_address,
-        dropoffAddress: ride.dropoff_address,
-      }));
+      const members: PoolMemberLocation[] = toPoolMemberRoutes(rides);
 
       // Recalculate fare
       const fareResult = await rideEstimationService.recalculatePoolFare(
@@ -1475,18 +1296,14 @@ export class PoolController {
         }
       }
 
-      res.json({
-        success: true,
-        data: {
-          poolId,
-          farePerPerson: fareResult.farePerPerson,
-          totalFare: fareResult.totalFare,
-          memberCount: members.length,
-          breakdown: fareResult.breakdown,
-          memberFares: fareResult.memberFares,
-          message: `Fare recalculated for ${members.length} members`,
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        poolId,
+        farePerPerson: fareResult.farePerPerson,
+        totalFare: fareResult.totalFare,
+        memberCount: members.length,
+        breakdown: fareResult.breakdown,
+        memberFares: fareResult.memberFares,
+        message: `Fare recalculated for ${members.length} members`,
       });
     } catch (error) {
       next(error);
@@ -1502,11 +1319,7 @@ export class PoolController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { poolId } = req.params;
@@ -1519,11 +1332,7 @@ export class PoolController {
         .single();
 
       if (poolError || !pool) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_NOT_FOUND', 'Pool not found', 404);
       }
 
       // Return current search timing - server handles extension automatically
@@ -1531,14 +1340,10 @@ export class PoolController {
         ? lookupTimeService.calculateTimerFromCreatedAt(pool.created_at)
         : null;
 
-      res.json({
-        success: true,
-        data: {
-          message: 'Server handles extended search automatically',
-          current_status: pool.status,
-          search_timing: searchTiming,
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        message: 'Server handles extended search automatically',
+        current_status: pool.status,
+        search_timing: searchTiming,
       });
     } catch (error) {
       next(error);
@@ -1554,11 +1359,7 @@ export class PoolController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { poolId } = req.params;
@@ -1571,11 +1372,7 @@ export class PoolController {
         .single();
 
       if (poolError || !pool) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_NOT_FOUND', 'Pool not found', 404);
       }
 
       // Return current status - server handles completion automatically
@@ -1583,15 +1380,11 @@ export class PoolController {
         ? lookupTimeService.calculateTimerFromCreatedAt(pool.created_at)
         : null;
 
-      res.json({
-        success: true,
-        data: {
-          message: 'Server handles search completion automatically',
-          current_status: pool.status,
-          current_passengers: pool.current_passengers,
-          search_timing: searchTiming,
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        message: 'Server handles search completion automatically',
+        current_status: pool.status,
+        current_passengers: pool.current_passengers,
+        search_timing: searchTiming,
       });
     } catch (error) {
       next(error);
@@ -1608,11 +1401,7 @@ export class PoolController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { poolId } = req.params;
@@ -1629,11 +1418,7 @@ export class PoolController {
         .single();
 
       if (poolError || !pool) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_NOT_FOUND', 'Pool not found', 404);
       }
 
       // Check if user is a member of the pool
@@ -1642,11 +1427,7 @@ export class PoolController {
       const isDriver = pool.driver_id === userId;
 
       if (!isMember && !isDriver) {
-        return res.status(403).json({
-          success: false,
-          error: { code: 'NOT_MEMBER', message: 'You are not a member of this pool' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NOT_MEMBER', 'You are not a member of this pool', 403);
       }
 
       // Combined route is only available when pool is waiting for driver or beyond
@@ -1667,11 +1448,7 @@ export class PoolController {
       const rideIds = activeMembers.map((m: any) => m.ride_id).filter(Boolean);
 
       if (rideIds.length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'NO_MEMBERS', message: 'Pool has no active members with rides' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NO_MEMBERS', 'Pool has no active members with rides', 400);
       }
 
       const { data: rides, error: ridesError } = await supabaseAdmin
@@ -1680,21 +1457,11 @@ export class PoolController {
         .in('id', rideIds);
 
       if (ridesError || !rides || rides.length === 0) {
-        return res.status(500).json({
-          success: false,
-          error: { code: 'RIDES_FETCH_ERROR', message: 'Failed to fetch member rides' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'RIDES_FETCH_ERROR', 'Failed to fetch member rides', 500);
       }
 
       // Build member routes for smart route calculation
-      const memberRoutes: PoolMemberRoute[] = rides.map((ride: any) => ({
-        userId: ride.user_id,
-        pickup: { latitude: ride.pickup_lat, longitude: ride.pickup_lng },
-        dropoff: { latitude: ride.dropoff_lat, longitude: ride.dropoff_lng },
-        pickupAddress: ride.pickup_address,
-        dropoffAddress: ride.dropoff_address,
-      }));
+      const memberRoutes: PoolMemberRoute[] = toPoolMemberRoutes(rides);
 
       if (memberRoutes.length > 4) {
         return res.status(422).json({
@@ -1751,11 +1518,7 @@ export class PoolController {
       );
 
       if (!combinedRoute) {
-        return res.status(500).json({
-          success: false,
-          error: { code: 'ROUTE_CALCULATION_FAILED', message: 'Failed to calculate combined route' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'ROUTE_CALCULATION_FAILED', 'Failed to calculate combined route', 500);
       }
 
       logger.info(
@@ -1765,63 +1528,59 @@ export class PoolController {
         + `fromCache=${combinedRoute.fromCache}`
       );
 
-      res.json({
-        success: true,
-        data: {
-          poolId,
-          poolStatus: pool.status,
-          route: {
-            polyline: combinedRoute.polyline,
-            coordinates: combinedRoute.coordinates,
-            totalDistanceKm: combinedRoute.totalDistanceKm,
-            totalDurationMinutes: combinedRoute.totalDurationMinutes,
-            baseDurationMinutes: combinedRoute.baseDurationMinutes,
-            durationInTraffic: combinedRoute.durationInTraffic,
-            trafficLevel: combinedRoute.trafficLevel,
-            routeSummary: combinedRoute.routeSummary,
-            trafficAware: combinedRoute.trafficAware,
-            trafficCapturedAt: combinedRoute.trafficCapturedAt,
-          },
-          waypoints: combinedRoute.waypoints.map(wp => ({
-            id: wp.id,
-            type: wp.type,
-            userId: wp.userId,
-            location: wp.location,
-            name: extractLocationName(wp.address),
-            address: wp.address,
-            order: wp.order,
-            estimatedArrivalMinutes: wp.estimatedArrivalMinutes,
-          })),
-          legs: combinedRoute.legs.map(leg => ({
-            fromId: leg.from.id,
-            toId: leg.to.id,
-            distanceKm: leg.distanceKm,
-            durationMinutes: leg.durationMinutes,
-            baseDurationMinutes: leg.baseDurationMinutes,
-            instruction: leg.instruction,
-          })),
-          optimization: {
-            score: combinedRoute.optimizationScore,
-            savingsPercent: combinedRoute.savingsVsIndividual,
-            objective: combinedRoute.optimizationObjective,
-            constraintsSatisfied: combinedRoute.constraintsSatisfied,
-            detourViolations: combinedRoute.detourViolations,
-          },
-          meta: {
-            fromCache: combinedRoute.fromCache,
-            calculatedAt: combinedRoute.calculatedAt,
-            memberCount: memberRoutes.length,
-            hasDriverLocation: !!driverLocation,
-            routingProvider: combinedRoute.routingProvider,
-            routeVersion: combinedRoute.routeVersion,
-            trafficAgeSeconds: combinedRoute.trafficCapturedAt
-              ? Math.max(0, Math.round((Date.now() - new Date(combinedRoute.trafficCapturedAt).getTime()) / 1000))
-              : null,
-            degraded: combinedRoute.degraded,
-            pendingDriver: combinedRoute.pendingDriver,
-          },
+      successResponse(res, {
+        poolId,
+        poolStatus: pool.status,
+        route: {
+          polyline: combinedRoute.polyline,
+          coordinates: combinedRoute.coordinates,
+          totalDistanceKm: combinedRoute.totalDistanceKm,
+          totalDurationMinutes: combinedRoute.totalDurationMinutes,
+          baseDurationMinutes: combinedRoute.baseDurationMinutes,
+          durationInTraffic: combinedRoute.durationInTraffic,
+          trafficLevel: combinedRoute.trafficLevel,
+          routeSummary: combinedRoute.routeSummary,
+          trafficAware: combinedRoute.trafficAware,
+          trafficCapturedAt: combinedRoute.trafficCapturedAt,
         },
-        timestamp: new Date().toISOString(),
+        waypoints: combinedRoute.waypoints.map(wp => ({
+          id: wp.id,
+          type: wp.type,
+          userId: wp.userId,
+          location: wp.location,
+          name: extractLocationName(wp.address),
+          address: wp.address,
+          order: wp.order,
+          estimatedArrivalMinutes: wp.estimatedArrivalMinutes,
+        })),
+        legs: combinedRoute.legs.map(leg => ({
+          fromId: leg.from.id,
+          toId: leg.to.id,
+          distanceKm: leg.distanceKm,
+          durationMinutes: leg.durationMinutes,
+          baseDurationMinutes: leg.baseDurationMinutes,
+          instruction: leg.instruction,
+        })),
+        optimization: {
+          score: combinedRoute.optimizationScore,
+          savingsPercent: combinedRoute.savingsVsIndividual,
+          objective: combinedRoute.optimizationObjective,
+          constraintsSatisfied: combinedRoute.constraintsSatisfied,
+          detourViolations: combinedRoute.detourViolations,
+        },
+        meta: {
+          fromCache: combinedRoute.fromCache,
+          calculatedAt: combinedRoute.calculatedAt,
+          memberCount: memberRoutes.length,
+          hasDriverLocation: !!driverLocation,
+          routingProvider: combinedRoute.routingProvider,
+          routeVersion: combinedRoute.routeVersion,
+          trafficAgeSeconds: combinedRoute.trafficCapturedAt
+            ? Math.max(0, Math.round((Date.now() - new Date(combinedRoute.trafficCapturedAt).getTime()) / 1000))
+            : null,
+          degraded: combinedRoute.degraded,
+          pendingDriver: combinedRoute.pendingDriver,
+        },
       });
     } catch (error) {
       if (error instanceof RouteCapacityError) {
@@ -1847,22 +1606,14 @@ export class PoolController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { poolId } = req.params;
       const { driver_lat, driver_lng, current_route_cache_key } = req.body;
 
       if (!driver_lat || !driver_lng) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'MISSING_LOCATION', message: 'Driver location is required' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'MISSING_LOCATION', 'Driver location is required', 400);
       }
 
       // Verify driver is assigned to this pool
@@ -1873,29 +1624,17 @@ export class PoolController {
         .single();
 
       if (poolError || !pool) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_NOT_FOUND', 'Pool not found', 404);
       }
 
       if (pool.driver_id !== userId) {
-        return res.status(403).json({
-          success: false,
-          error: { code: 'NOT_DRIVER', message: 'Only the assigned driver can update the route' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NOT_DRIVER', 'Only the assigned driver can update the route', 403);
       }
 
-      res.json({
-        success: true,
-        data: {
-          needsRecalculation: false,
-          message: 'Route is immutable under the one-shot traffic snapshot policy',
-          policy: 'one_shot',
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        needsRecalculation: false,
+        message: 'Route is immutable under the one-shot traffic snapshot policy',
+        policy: 'one_shot',
       });
     } catch (error) {
       next(error);
@@ -1914,11 +1653,7 @@ export class PoolController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { poolId } = req.params;
@@ -1934,11 +1669,7 @@ export class PoolController {
         .single();
 
       if (poolError || !pool) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_NOT_FOUND', 'Pool not found', 404);
       }
 
       // Check if user is a member of the pool or driver
@@ -1947,22 +1678,14 @@ export class PoolController {
       const isDriver = pool.driver_id === userId;
 
       if (!isMember && !isDriver) {
-        return res.status(403).json({
-          success: false,
-          error: { code: 'NOT_MEMBER', message: 'You are not a member of this pool' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NOT_MEMBER', 'You are not a member of this pool', 403);
       }
 
       // Get all rides for active pool members
       const rideIds = activeMembers.map((m: any) => m.ride_id).filter(Boolean);
 
       if (rideIds.length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'NO_MEMBERS', message: 'Pool has no active members with rides' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NO_MEMBERS', 'Pool has no active members with rides', 400);
       }
 
       const { data: rides, error: ridesError } = await supabaseAdmin
@@ -1971,21 +1694,11 @@ export class PoolController {
         .in('id', rideIds);
 
       if (ridesError || !rides || rides.length === 0) {
-        return res.status(500).json({
-          success: false,
-          error: { code: 'RIDES_FETCH_ERROR', message: 'Failed to fetch member rides' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'RIDES_FETCH_ERROR', 'Failed to fetch member rides', 500);
       }
 
       // Build member routes for smart route calculation
-      const memberRoutes: PoolMemberRoute[] = rides.map((ride: any) => ({
-        userId: ride.user_id,
-        pickup: { latitude: ride.pickup_lat, longitude: ride.pickup_lng },
-        dropoff: { latitude: ride.dropoff_lat, longitude: ride.dropoff_lng },
-        pickupAddress: ride.pickup_address,
-        dropoffAddress: ride.dropoff_address,
-      }));
+      const memberRoutes: PoolMemberRoute[] = toPoolMemberRoutes(rides);
 
       // Get driver location if available
       let driverLocation: Location | undefined;
@@ -2023,11 +1736,7 @@ export class PoolController {
       );
 
       if (!combinedRoute || combinedRoute.waypoints.length === 0) {
-        return res.status(500).json({
-          success: false,
-          error: { code: 'ROUTE_CALCULATION_FAILED', message: 'Failed to calculate optimized route' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'ROUTE_CALCULATION_FAILED', 'Failed to calculate optimized route', 500);
       }
 
       // Extract ordered waypoints from the optimized route (excluding driver start and final destination)
@@ -2107,41 +1816,37 @@ export class PoolController {
 
       logger.info(`[Pool] Generated navigation deep link for pool ${poolId} with ${intermediateWaypoints.length} intermediate waypoints (optimized order)`);
 
-      res.json({
-        success: true,
-        data: {
-          poolId,
-          navigationUrl,
-          platformLinks, // Platform-specific URLs for better navigation experience
-          instructions: 'Tap to open Google Maps with the optimized route for all pickup and dropoff points',
-          origin: {
-            location: origin,
-            type: originWaypoint.type === 'driver' ? 'driver_location' : 'first_pickup',
-            address: originWaypoint.address,
-          },
-          destination: {
-            location: destination,
-            address: destinationWaypoint.address || pool.destination_address,
-          },
-          orderedStops, // Shows the full route sequence in optimal order
-          waypoints: waypointLinks, // Individual location links for each member
-          routeInfo: {
-            totalDistanceKm: combinedRoute.totalDistanceKm || 0,
-            totalDurationMinutes: combinedRoute.durationInTraffic || combinedRoute.totalDurationMinutes || 0,
-            trafficLevel: combinedRoute.trafficLevel || 'moderate',
-            routeSummary: combinedRoute.routeSummary || 'Optimized carpool route',
-          },
-          meta: {
-            waypointCount: intermediateWaypoints.length,
-            totalStops: orderedWaypoints.length,
-            isDriver,
-            isMember,
-            freeNavigation: true,
-            usesOptimizedRoute: true,
-            costSavings: '100% - No API cost, uses Google Maps app',
-          },
+      successResponse(res, {
+        poolId,
+        navigationUrl,
+        platformLinks, // Platform-specific URLs for better navigation experience
+        instructions: 'Tap to open Google Maps with the optimized route for all pickup and dropoff points',
+        origin: {
+          location: origin,
+          type: originWaypoint.type === 'driver' ? 'driver_location' : 'first_pickup',
+          address: originWaypoint.address,
         },
-        timestamp: new Date().toISOString(),
+        destination: {
+          location: destination,
+          address: destinationWaypoint.address || pool.destination_address,
+        },
+        orderedStops, // Shows the full route sequence in optimal order
+        waypoints: waypointLinks, // Individual location links for each member
+        routeInfo: {
+          totalDistanceKm: combinedRoute.totalDistanceKm || 0,
+          totalDurationMinutes: combinedRoute.durationInTraffic || combinedRoute.totalDurationMinutes || 0,
+          trafficLevel: combinedRoute.trafficLevel || 'moderate',
+          routeSummary: combinedRoute.routeSummary || 'Optimized carpool route',
+        },
+        meta: {
+          waypointCount: intermediateWaypoints.length,
+          totalStops: orderedWaypoints.length,
+          isDriver,
+          isMember,
+          freeNavigation: true,
+          usesOptimizedRoute: true,
+          costSavings: '100% - No API cost, uses Google Maps app',
+        },
       });
     } catch (error) {
       next(error);

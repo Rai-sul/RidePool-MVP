@@ -1,5 +1,12 @@
 # Driver App Backend & MapBox Implementation Plan
 
+> **HISTORICAL RECORD — not the current system.**
+> Kept for background only. For how RidePool works today, start at
+> [`__docs__/README.md`](../README.md). See [`README.md`](./README.md)
+> in this folder for what this file is and what replaced it.
+
+---
+
 **Date:** December 2, 2024  
 **Project:** RidePool - Driver App Backend Integration  
 **Architecture:** MVC with Supabase  

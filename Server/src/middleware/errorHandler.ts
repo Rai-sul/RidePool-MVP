@@ -3,6 +3,8 @@ import { logger } from '../utils/logger';
 import { ZodError } from 'zod';
 import type { core } from 'zod';
 
+import { errorResponse } from '../utils/response';
+
 interface AppError extends Error {
   statusCode?: number;
   code?: string;
@@ -54,15 +56,7 @@ export const errorHandler = (
       message: e.message,
     }));
 
-    return res.status(400).json({
-      success: false,
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'Validation failed',
-        details: { errors },
-      },
-      timestamp: new Date().toISOString(),
-    });
+    return errorResponse(res, 'VALIDATION_ERROR', 'Validation failed', 400, { errors });
   }
 
   const statusCode = err.statusCode || (res.statusCode !== 200 ? res.statusCode : 500);

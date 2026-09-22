@@ -6,6 +6,8 @@ import { auditService } from '../services/audit.service';
 import { logger } from '../utils/logger';
 import { z } from 'zod';
 
+import { errorResponse, successResponse, unauthorizedResponse } from '../utils/response';
+
 const ProcessPaymentSchema = z.object({
   ride_id: z.string().uuid(),
   amount: z.number().positive(),
@@ -18,24 +20,12 @@ export class PaymentController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const parseResult = ProcessPaymentSchema.safeParse(req.body);
       if (!parseResult.success) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request data',
-            details: parseResult.error.issues,
-          },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'VALIDATION_ERROR', 'Invalid request data', 400, parseResult.error.issues);
       }
 
       const { ride_id, amount, payment_method, idempotency_key } = parseResult.data;
@@ -58,15 +48,11 @@ export class PaymentController {
 
       if (!paymentResult.success) {
         if (paymentResult.duplicate) {
-          return res.json({
-            success: true,
-            data: {
-              payment_id: paymentResult.payment_id,
-              status: paymentResult.status,
-              message: 'Payment already processed (idempotent)',
-              duplicate: true,
-            },
-            timestamp: new Date().toISOString(),
+          return successResponse(res, {
+            payment_id: paymentResult.payment_id,
+            status: paymentResult.status,
+            message: 'Payment already processed (idempotent)',
+            duplicate: true,
           });
         }
 
@@ -120,16 +106,12 @@ export class PaymentController {
           transaction_id: gatewayTransactionId,
         });
 
-        return res.json({
-          success: true,
-          data: {
-            payment_id: paymentResult.payment_id,
-            status: 'COMPLETED',
-            amount,
-            transaction_id: gatewayTransactionId,
-            message: 'Payment processed successfully',
-          },
-          timestamp: new Date().toISOString(),
+        return successResponse(res, {
+          payment_id: paymentResult.payment_id,
+          status: 'COMPLETED',
+          amount,
+          transaction_id: gatewayTransactionId,
+          message: 'Payment processed successfully',
         });
       } else {
         await supabaseAdmin.rpc('fail_payment', {
@@ -164,11 +146,7 @@ export class PaymentController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const page = parseInt(req.query.page as string) || 1;
@@ -186,18 +164,14 @@ export class PaymentController {
         throw error;
       }
 
-      res.json({
-        success: true,
-        data: {
-          payments,
-          pagination: {
-            page,
-            limit,
-            total: count || 0,
-            total_pages: Math.ceil((count || 0) / limit),
-          },
+      successResponse(res, {
+        payments,
+        pagination: {
+          page,
+          limit,
+          total: count || 0,
+          total_pages: Math.ceil((count || 0) / limit),
         },
-        timestamp: new Date().toISOString(),
       });
     } catch (error) {
       next(error);
@@ -208,11 +182,7 @@ export class PaymentController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { paymentId } = req.params;
@@ -225,18 +195,10 @@ export class PaymentController {
         .single();
 
       if (error || !payment) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'PAYMENT_NOT_FOUND', message: 'Payment not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'PAYMENT_NOT_FOUND', 'Payment not found', 404);
       }
 
-      res.json({
-        success: true,
-        data: { payment },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { payment });
     } catch (error) {
       next(error);
     }
@@ -246,11 +208,7 @@ export class PaymentController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { paymentId } = req.params;
@@ -263,19 +221,11 @@ export class PaymentController {
         .single();
 
       if (paymentError || !payment) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'PAYMENT_NOT_FOUND', message: 'Payment not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'PAYMENT_NOT_FOUND', 'Payment not found', 404);
       }
 
       if (payment.status !== 'COMPLETED') {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'INVALID_STATUS', message: 'Only completed payments can be refunded' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'INVALID_STATUS', 'Only completed payments can be refunded', 400);
       }
 
       if (payment.payment_method === 'WALLET') {
@@ -287,11 +237,7 @@ export class PaymentController {
         );
 
         if (!refundResult.success) {
-          return res.status(400).json({
-            success: false,
-            error: { code: 'REFUND_FAILED', message: refundResult.error },
-            timestamp: new Date().toISOString(),
-          });
+          return errorResponse(res, 'REFUND_FAILED', refundResult.error, 400);
         }
       }
 
@@ -314,14 +260,10 @@ export class PaymentController {
         payment_method: payment.payment_method,
       });
 
-      res.json({
-        success: true,
-        data: {
-          payment_id: paymentId,
-          status: 'REFUNDED',
-          message: 'Payment refunded successfully',
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        payment_id: paymentId,
+        status: 'REFUNDED',
+        message: 'Payment refunded successfully',
       });
     } catch (error) {
       next(error);

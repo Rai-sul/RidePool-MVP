@@ -1,5 +1,12 @@
 # Security Implementation Report
 
+> **HISTORICAL RECORD — not the current system.**
+> Kept for background only. For how RidePool works today, start at
+> [`__docs__/README.md`](../README.md). See [`README.md`](./README.md)
+> in this folder for what this file is and what replaced it.
+
+---
+
 ## Critical Features Security Analysis
 
 ### 1. Race Condition Fixes

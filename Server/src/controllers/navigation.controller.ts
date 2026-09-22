@@ -3,6 +3,8 @@ import { AuthRequest } from '../middleware/auth';
 import { googleMapsService } from '../services/googleMaps.service';
 import { z } from 'zod';
 
+import { errorResponse, successResponse } from '../utils/response';
+
 export class NavigationController {
   async getNavigationDeepLink(req: AuthRequest, res: Response, next: NextFunction) {
     try {
@@ -19,15 +21,7 @@ export class NavigationController {
 
       const parseResult = schema.safeParse(req.body);
       if (!parseResult.success) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request',
-            details: parseResult.error.issues,
-          },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'VALIDATION_ERROR', 'Invalid request', 400, parseResult.error.issues);
       }
 
       const { origin_lat, origin_lng, destination_lat, destination_lng, waypoints } = parseResult.data;
@@ -38,13 +32,9 @@ export class NavigationController {
 
       const deepLink = googleMapsService.generateNavigationDeepLink(origin, destination, waypointLocations);
 
-      res.json({
-        success: true,
-        data: {
-          navigation_url: deepLink,
-          instructions: 'Open this URL to start navigation in Google Maps app. This includes real-time traffic.',
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        navigation_url: deepLink,
+        instructions: 'Open this URL to start navigation in Google Maps app. This includes real-time traffic.',
       });
     } catch (error) {
       next(error);

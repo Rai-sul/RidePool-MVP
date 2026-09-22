@@ -6,6 +6,7 @@ import { advanceWindow } from '../utils/advanceWindow';
 import { logger } from '../utils/logger';
 import { notificationService } from './notification.service';
 import { smartRouteService, PoolMemberRoute } from './smartRoute.service';
+import { toPoolMemberRoutes } from '../utils/poolRoutes';
 import { advanceBookingService } from './advanceBooking.service';
 
 interface PoolMemberRow {
@@ -362,13 +363,7 @@ export class AdvanceDispatchService {
 
       await smartRouteService.clearPoolRoute(poolId);
 
-      const memberRoutes: PoolMemberRoute[] = rides.map((ride: any) => ({
-        userId: ride.user_id,
-        pickup: { latitude: ride.pickup_lat, longitude: ride.pickup_lng },
-        dropoff: { latitude: ride.dropoff_lat, longitude: ride.dropoff_lng },
-        pickupAddress: ride.pickup_address,
-        dropoffAddress: ride.dropoff_address,
-      }));
+      const memberRoutes: PoolMemberRoute[] = toPoolMemberRoutes(rides);
 
       await smartRouteService.calculateCombinedRoute(memberRoutes, { optimizeFor: 'balanced' }, poolId);
     } catch (error) {

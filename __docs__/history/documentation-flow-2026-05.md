@@ -1,5 +1,12 @@
 # RidePool — Complete Documentation & Flow Reference
 
+> **HISTORICAL RECORD — not the current system.**
+> Kept for background only. For how RidePool works today, start at
+> [`__docs__/README.md`](../README.md). See [`README.md`](./README.md)
+> in this folder for what this file is and what replaced it.
+
+---
+
 **Last Updated**: 2026-05-31  
 **Version**: 1.1  
 **Status**: Active Development (MVP)

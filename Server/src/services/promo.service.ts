@@ -16,12 +16,26 @@ export interface PromoCode {
   is_active: boolean;
 }
 
-export interface PromoValidationResult {
-  valid: boolean;
-  error?: string;
-  promo?: PromoCode;
-  discountAmount?: number;
-}
+/**
+ * Outcome of validating a promo code.
+ *
+ * A discriminated union, so narrowing on `valid` tells the compiler which
+ * fields are present: `error` is guaranteed when the code is rejected, and the
+ * promo plus its computed discount are guaranteed when it is accepted.
+ */
+export type PromoValidationResult =
+  | {
+      valid: true;
+      promo: PromoCode;
+      discountAmount: number;
+      error?: never;
+    }
+  | {
+      valid: false;
+      error: string;
+      promo?: never;
+      discountAmount?: never;
+    };
 
 export class PromoService {
   async validatePromoCode(

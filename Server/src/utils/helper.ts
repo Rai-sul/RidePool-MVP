@@ -230,9 +230,38 @@ export const calculateBearing = (
 
 /**
  * Encode location as query string (for URLs)
+ *
+ * Also the canonical form for cache keys that must pin an EXACT point — six
+ * decimals is ~0.1m, so two encoded points are equal only if they are the same
+ * place. Anything returning road geometry must key on this rather than on a
+ * coarse H3 cell.
  */
 export const encodeLocation = (location: Location): string => {
   return `${location.latitude.toFixed(6)},${location.longitude.toFixed(6)}`;
+};
+
+/** Traffic congestion bands, shared by every routing provider. */
+export type TrafficLevel = 'low' | 'moderate' | 'high';
+
+/**
+ * Classify congestion from the ratio of traffic-aware to free-flow duration.
+ *
+ * Both arguments must use the SAME unit — only their ratio is read. The
+ * thresholds live here so the Directions path, the Routes path and the
+ * geometric fallback can never drift apart.
+ *
+ * @param baseDuration - Free-flow duration (no traffic)
+ * @param trafficDuration - Duration under current traffic
+ */
+export const resolveTrafficLevel = (
+  baseDuration: number,
+  trafficDuration: number
+): TrafficLevel => {
+  if (baseDuration <= 0) return 'low';
+  const ratio = trafficDuration / baseDuration;
+  if (ratio <= 1.1) return 'low';
+  if (ratio <= 1.3) return 'moderate';
+  return 'high';
 };
 
 /**

@@ -8,6 +8,8 @@ import { advanceWindow } from '../utils/advanceWindow';
 import { config } from '../config/env';
 import { logger } from '../utils/logger';
 
+import { createdResponse, successResponse, unauthorizedResponse } from '../utils/response';
+
 /** Error codes the client can act on; everything else is a server fault. */
 const CLIENT_ERROR_CODES = new Set([
   'INVALID_PICKUP_TIME',
@@ -55,11 +57,7 @@ export class AdvanceBookingController {
 
       logger.info(`[Advance] User ${userId} booked ${result.ride_id} into pool ${result.pool_id}`);
 
-      return res.status(201).json({
-        success: true,
-        data: { booking: result, timing: this.timingInfo() },
-        timestamp: new Date().toISOString(),
-      });
+      return createdResponse(res, { booking: result, timing: this.timingInfo() });
     } catch (error) {
       return this.handle(error, res, next);
     }
@@ -75,11 +73,7 @@ export class AdvanceBookingController {
 
       const bookings = await advanceBookingService.listBookings(userId);
 
-      return res.json({
-        success: true,
-        data: { bookings, timing: this.timingInfo() },
-        timestamp: new Date().toISOString(),
-      });
+      return successResponse(res, { bookings, timing: this.timingInfo() });
     } catch (error) {
       return this.handle(error, res, next);
     }
@@ -99,11 +93,7 @@ export class AdvanceBookingController {
         req.body as CreateAdvanceBookingRequest
       );
 
-      return res.json({
-        success: true,
-        data: { booking: result, timing: this.timingInfo() },
-        timestamp: new Date().toISOString(),
-      });
+      return successResponse(res, { booking: result, timing: this.timingInfo() });
     } catch (error) {
       return this.handle(error, res, next);
     }
@@ -119,11 +109,7 @@ export class AdvanceBookingController {
 
       const result = await advanceBookingService.cancelBooking(userId, req.params.rideId);
 
-      return res.json({
-        success: true,
-        data: { cancelled: true, pool_id: result.pool_id },
-        timestamp: new Date().toISOString(),
-      });
+      return successResponse(res, { cancelled: true, pool_id: result.pool_id });
     } catch (error) {
       return this.handle(error, res, next);
     }
@@ -149,14 +135,10 @@ export class AdvanceBookingController {
         await advanceDispatchService.onActiveRangeOpened(poolId);
       }
 
-      return res.json({
-        success: true,
-        data: {
-          confirmed: true,
-          confirmed_count: result.confirmed_count,
-          pool_confirmed: result.active_range_opened,
-        },
-        timestamp: new Date().toISOString(),
+      return successResponse(res, {
+        confirmed: true,
+        confirmed_count: result.confirmed_count,
+        pool_confirmed: result.active_range_opened,
       });
     } catch (error) {
       return this.handle(error, res, next);
@@ -182,11 +164,7 @@ export class AdvanceBookingController {
   }
 
   private unauthorized(res: Response) {
-    return res.status(401).json({
-      success: false,
-      error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-      timestamp: new Date().toISOString(),
-    });
+    return unauthorizedResponse(res, 'Authentication required');
   }
 
   private handle(error: unknown, res: Response, next: NextFunction) {

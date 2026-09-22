@@ -92,19 +92,19 @@ SUPABASE_URL=https://amwieghvhghoregosdsg.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
-# Maps (Choose ONE)
-# Option 1: Google Maps
+# Maps - Google only. Enable BOTH Directions API and Routes API on this key.
+# Without it the server falls back to straight-line estimates (nothing crashes).
 GOOGLE_MAPS_API_KEY=AIzaSy...
-ROUTING_PROVIDER=google
-
-# Option 2: Mapbox (Free tier available)
-MAPBOX_ACCESS_TOKEN=pk.eyJ1...
-ROUTING_PROVIDER=mapbox
 
 # H3 Configuration (defaults are fine)
 H3_RESOLUTION_PICKUP=9
 H3_RESOLUTION_DESTINATION=7
-H3_SEARCH_RADIUS=2
+H3_SEARCH_RADIUS_PICKUP=6
+H3_SEARCH_RADIUS_DESTINATION=2
+
+# Advance booking - leave unset for production defaults.
+# ADVANCE_TIME_UNIT=seconds compresses every window for QA.
+# ADVANCE_TIME_UNIT=seconds
 
 # MVP Mode (no Redis required)
 MVP_MODE=true
@@ -112,9 +112,12 @@ SKIP_REDIS=true
 ```
 
 **Where to get credentials**:
-- **Supabase**: Already configured (see SUPABASE_STATUS.md)
+- **Supabase**: https://app.supabase.com/project/_/settings/api
 - **Google Maps API**: https://console.cloud.google.com/apis/credentials
-- **Mapbox Token**: https://account.mapbox.com/access-tokens/ (FREE tier)
+
+> `MAPBOX_ACCESS_TOKEN` and `ROUTING_PROVIDER` appear in `.env.example` but are
+> **never read** - there is no Mapbox code path. See
+> [../reference/environment.md](../reference/environment.md).
 
 ### Client Environment (.env)
 
@@ -122,8 +125,8 @@ SKIP_REDIS=true
 # Backend API URL
 EXPO_PUBLIC_API_URL=http://localhost:3000/api
 
-# Mapbox (for maps display)
-EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN=pk.eyJ1...
+# Google Maps (for maps display) - restrict this key by app bundle ID
+EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=AIzaSy...
 
 # App Info
 EXPO_PUBLIC_APP_NAME=CarPoolApp

@@ -1,5 +1,12 @@
 # SQL Schema Analysis Report
 
+> **HISTORICAL RECORD — not the current system.**
+> Kept for background only. For how RidePool works today, start at
+> [`__docs__/README.md`](../README.md). See [`README.md`](./README.md)
+> in this folder for what this file is and what replaced it.
+
+---
+
 **File:** `20260121_ridepool_merged_schema.sql`  
 **Analyzed:** 2026-01-21T10:56:03.202Z  
 **Agent:** copilot-engineer

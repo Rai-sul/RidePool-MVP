@@ -3,6 +3,8 @@ import { AuthRequest } from '../middleware/auth';
 import { supabaseAdmin } from '../config/supabase';
 import { z } from 'zod';
 
+import { createdResponse, errorResponse, successResponse, unauthorizedResponse } from '../utils/response';
+
 const CreateSavedPlaceSchema = z.object({
   label: z.string().min(1).max(50),
   address: z.string().min(5).max(500),
@@ -24,11 +26,7 @@ export class SavedPlacesController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { data: places, error } = await supabaseAdmin
@@ -41,13 +39,9 @@ export class SavedPlacesController {
         throw error;
       }
 
-      res.json({
-        success: true,
-        data: {
-          places: places || [],
-          max_places: MAX_SAVED_PLACES,
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        places: places || [],
+        max_places: MAX_SAVED_PLACES,
       });
     } catch (error) {
       next(error);
@@ -58,24 +52,12 @@ export class SavedPlacesController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const parseResult = CreateSavedPlaceSchema.safeParse(req.body);
       if (!parseResult.success) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request data',
-            details: parseResult.error.issues,
-          },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'VALIDATION_ERROR', 'Invalid request data', 400, parseResult.error.issues);
       }
 
       const { count } = await supabaseAdmin
@@ -84,14 +66,7 @@ export class SavedPlacesController {
         .eq('user_id', userId);
 
       if (count && count >= MAX_SAVED_PLACES) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'LIMIT_REACHED',
-            message: `Maximum ${MAX_SAVED_PLACES} saved places allowed`,
-          },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'LIMIT_REACHED', `Maximum ${MAX_SAVED_PLACES} saved places allowed`, 400);
       }
 
       const { label, address, lat, lng } = parseResult.data;
@@ -104,11 +79,7 @@ export class SavedPlacesController {
         .single();
 
       if (existing) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'DUPLICATE_LABEL', message: 'A place with this label already exists' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'DUPLICATE_LABEL', 'A place with this label already exists', 400);
       }
 
       const { data: place, error } = await supabaseAdmin
@@ -127,11 +98,7 @@ export class SavedPlacesController {
         throw error;
       }
 
-      res.status(201).json({
-        success: true,
-        data: { place },
-        timestamp: new Date().toISOString(),
-      });
+      createdResponse(res, { place });
     } catch (error) {
       next(error);
     }
@@ -141,36 +108,20 @@ export class SavedPlacesController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { placeId } = req.params;
 
       const parseResult = UpdateSavedPlaceSchema.safeParse(req.body);
       if (!parseResult.success) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request data',
-            details: parseResult.error.issues,
-          },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'VALIDATION_ERROR', 'Invalid request data', 400, parseResult.error.issues);
       }
 
       const updates = parseResult.data;
 
       if (Object.keys(updates).length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'NO_UPDATES', message: 'No valid fields to update' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NO_UPDATES', 'No valid fields to update', 400);
       }
 
       if (updates.label) {
@@ -183,11 +134,7 @@ export class SavedPlacesController {
           .single();
 
         if (existing) {
-          return res.status(400).json({
-            success: false,
-            error: { code: 'DUPLICATE_LABEL', message: 'A place with this label already exists' },
-            timestamp: new Date().toISOString(),
-          });
+          return errorResponse(res, 'DUPLICATE_LABEL', 'A place with this label already exists', 400);
         }
       }
 
@@ -203,11 +150,7 @@ export class SavedPlacesController {
         throw error;
       }
 
-      res.json({
-        success: true,
-        data: { place },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { place });
     } catch (error) {
       next(error);
     }
@@ -217,11 +160,7 @@ export class SavedPlacesController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { placeId } = req.params;
@@ -236,11 +175,7 @@ export class SavedPlacesController {
         throw error;
       }
 
-      res.json({
-        success: true,
-        data: { message: 'Place deleted successfully' },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { message: 'Place deleted successfully' });
     } catch (error) {
       next(error);
     }
@@ -250,11 +185,7 @@ export class SavedPlacesController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { placeId } = req.params;
@@ -267,18 +198,10 @@ export class SavedPlacesController {
         .single();
 
       if (error || !place) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'NOT_FOUND', message: 'Place not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NOT_FOUND', 'Place not found', 404);
       }
 
-      res.json({
-        success: true,
-        data: { place },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { place });
     } catch (error) {
       next(error);
     }

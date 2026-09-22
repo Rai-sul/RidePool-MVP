@@ -12,7 +12,8 @@ export interface ApiErrorResponse {
   error: {
     code: string;
     message: string;
-    details?: Record<string, unknown>;
+    /** Free-form diagnostics — commonly a Zod `issues` array. */
+    details?: unknown;
   };
   timestamp: string;
 }
@@ -42,19 +43,26 @@ export const createdResponse = <T>(
   return successResponse(res, data, message, 201);
 };
 
+/**
+ * Canonical error envelope: `{ success, error: { code, message, details? }, timestamp }`.
+ *
+ * Every error response in the app goes through here so the shape — and the key
+ * order clients rely on — is defined in exactly one place. `details` is omitted
+ * entirely when falsy, matching `JSON.stringify`'s handling of `undefined`.
+ */
 export const errorResponse = (
   res: Response,
   code: string,
   message: string,
   statusCode: number = 400,
-  details?: Record<string, unknown>
+  details?: unknown
 ): Response => {
   const response: ApiErrorResponse = {
     success: false,
     error: {
       code,
       message,
-      ...(details && { details }),
+      ...(details ? { details } : {}),
     },
     timestamp: new Date().toISOString(),
   };
@@ -85,7 +93,7 @@ export const forbiddenResponse = (
 export const validationErrorResponse = (
   res: Response,
   message: string,
-  details?: Record<string, unknown>
+  details?: unknown
 ): Response => {
   return errorResponse(res, 'VALIDATION_ERROR', message, 400, details);
 };

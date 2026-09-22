@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { logger } from '../utils/logger';
 import { notificationService } from '../services/notification.service';
 
+import { createdResponse, errorResponse, successResponse, unauthorizedResponse } from '../utils/response';
+
 const SendMessageSchema = z.object({
   receiver_id: z.string().uuid(),
   message: z.string().min(1).max(1000),
@@ -23,34 +25,18 @@ export class MessagingController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const parseResult = SendMessageSchema.safeParse(req.body);
       if (!parseResult.success) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request data',
-            details: parseResult.error.issues,
-          },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'VALIDATION_ERROR', 'Invalid request data', 400, parseResult.error.issues);
       }
 
       const { receiver_id, message, ride_id, pool_id } = parseResult.data;
 
       if (receiver_id === userId) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'SELF_MESSAGE', message: 'Cannot send message to yourself' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'SELF_MESSAGE', 'Cannot send message to yourself', 400);
       }
 
       let conversationId = await this.findOrCreateConversation(userId, receiver_id, ride_id, pool_id);
@@ -86,14 +72,10 @@ export class MessagingController {
         metadata: { conversation_id: conversationId, message_id: newMessage.id },
       });
 
-      res.status(201).json({
-        success: true,
-        data: {
-          message_id: newMessage.id,
-          conversation_id: conversationId,
-          sent_at: newMessage.created_at,
-        },
-        timestamp: new Date().toISOString(),
+      createdResponse(res, {
+        message_id: newMessage.id,
+        conversation_id: conversationId,
+        sent_at: newMessage.created_at,
       });
     } catch (error) {
       next(error);
@@ -104,11 +86,7 @@ export class MessagingController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const queryResult = GetMessagesQuerySchema.safeParse(req.query);
@@ -128,13 +106,9 @@ export class MessagingController {
       const conversationIds = (participations || []).map((p) => p.conversation_id);
 
       if (conversationIds.length === 0) {
-        return res.json({
-          success: true,
-          data: {
-            conversations: [],
-            pagination: { page, limit, total: 0, total_pages: 0 },
-          },
-          timestamp: new Date().toISOString(),
+        return successResponse(res, {
+          conversations: [],
+          pagination: { page, limit, total: 0, total_pages: 0 },
         });
       }
 
@@ -200,18 +174,14 @@ export class MessagingController {
         };
       }));
 
-      res.json({
-        success: true,
-        data: {
-          conversations: formattedConversations,
-          pagination: {
-            page,
-            limit,
-            total: count || 0,
-            total_pages: Math.ceil((count || 0) / limit),
-          },
+      successResponse(res, {
+        conversations: formattedConversations,
+        pagination: {
+          page,
+          limit,
+          total: count || 0,
+          total_pages: Math.ceil((count || 0) / limit),
         },
-        timestamp: new Date().toISOString(),
       });
     } catch (error) {
       next(error);
@@ -222,11 +192,7 @@ export class MessagingController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { conversationId } = req.params;
@@ -243,11 +209,7 @@ export class MessagingController {
         .single();
 
       if (!participant) {
-        return res.status(403).json({
-          success: false,
-          error: { code: 'NOT_PARTICIPANT', message: 'You are not part of this conversation' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NOT_PARTICIPANT', 'You are not part of this conversation', 403);
       }
 
       const { data: messages, error, count } = await supabaseAdmin
@@ -277,18 +239,14 @@ export class MessagingController {
         created_at: msg.created_at,
       }));
 
-      res.json({
-        success: true,
-        data: {
-          messages: formattedMessages,
-          pagination: {
-            page,
-            limit,
-            total: count || 0,
-            total_pages: Math.ceil((count || 0) / limit),
-          },
+      successResponse(res, {
+        messages: formattedMessages,
+        pagination: {
+          page,
+          limit,
+          total: count || 0,
+          total_pages: Math.ceil((count || 0) / limit),
         },
-        timestamp: new Date().toISOString(),
       });
     } catch (error) {
       next(error);
@@ -299,11 +257,7 @@ export class MessagingController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { messageId } = req.params;
@@ -318,11 +272,7 @@ export class MessagingController {
         throw error;
       }
 
-      res.json({
-        success: true,
-        data: { message: 'Message marked as read' },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { message: 'Message marked as read' });
     } catch (error) {
       next(error);
     }
@@ -332,11 +282,7 @@ export class MessagingController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { conversationId } = req.params;
@@ -352,11 +298,7 @@ export class MessagingController {
         throw error;
       }
 
-      res.json({
-        success: true,
-        data: { message: 'Conversation marked as read' },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { message: 'Conversation marked as read' });
     } catch (error) {
       next(error);
     }
@@ -366,11 +308,7 @@ export class MessagingController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       // Get conversations where user is participant
@@ -380,11 +318,7 @@ export class MessagingController {
         .eq('user_id', userId);
 
       if (!participations || participations.length === 0) {
-        return res.json({
-          success: true,
-          data: { unread_count: 0 },
-          timestamp: new Date().toISOString(),
-        });
+        return successResponse(res, { unread_count: 0 });
       }
 
       // Count messages in those conversations that are newer than last_read_at and not from current user
@@ -404,11 +338,7 @@ export class MessagingController {
         totalUnread += count || 0;
       }
 
-      res.json({
-        success: true,
-        data: { unread_count: totalUnread },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { unread_count: totalUnread });
     } catch (error) {
       next(error);
     }

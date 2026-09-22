@@ -21,12 +21,26 @@ export interface WalletTransaction {
   created_at: string;
 }
 
-export interface TopUpResult {
-  success: boolean;
-  transaction?: WalletTransaction;
-  error?: string;
-  newBalance?: number;
-}
+/**
+ * Outcome of a balance-changing wallet operation.
+ *
+ * A discriminated union, so narrowing on `success` tells the compiler which
+ * fields are present: `error` is guaranteed on failure and absent on success,
+ * which stops callers from rendering an error response with no message.
+ */
+export type TopUpResult =
+  | {
+      success: true;
+      transaction: WalletTransaction;
+      newBalance: number;
+      error?: never;
+    }
+  | {
+      success: false;
+      error: string;
+      transaction?: never;
+      newBalance?: never;
+    };
 
 export class WalletService {
   async getOrCreateWallet(userId: string): Promise<Wallet | null> {

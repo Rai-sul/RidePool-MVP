@@ -441,53 +441,60 @@ export class PoolMatchingService {
       // PASS 3: Google Maps API (Precise Distance)
       // ============================================
       // Purpose: Get exact distance/ETA for top matches only
-      // Speed: ~1 second for 10 calls
-      // Cost: $0.05 per search (10 calls × $0.005)
+      // Speed: ~1 second
+      // Cost: 1 Directions call per search (was 1 per match — see below)
       //
+      // The enrichment route is the RIDER's own pickup -> destination leg, which
+      // is identical for every match in this search. It is therefore fetched
+      // once and shared, instead of issuing one identical billed call per match.
       // Only enrich top matches with Google Maps data if service is available
       if (googleMapsService.isAvailable() && sortedMatches.length > 0) {
         const topMatches = sortedMatches.slice(0, 10); // Top 10 only to minimize API calls
 
-        // Enrich top matches with Google Maps route data
-        await Promise.all(
-          topMatches.map(async (match) => {
-            try {
-              // Get pool details for destination coordinates
-              const pool = await this.getPoolById(match.poolId);
-              if (!pool) {
-                return; // Skip if pool not found
-              }
+        // Get route from user pickup to user destination
+        // This shows the actual route the user will take
+        let route: Awaited<ReturnType<typeof googleMapsService.getRoute>> = null;
+        try {
+          route = await googleMapsService.getRoute(pickup, destination);
+        } catch (error) {
+          console.error(
+            `[PoolMatching] Error getting Google Maps route for search enrichment:`,
+            error
+          );
+          // Fallback: Keep H3-based estimates if Google Maps fails
+          // Matches will still have estimatedDetour from Pass 2
+        }
 
-              // Get route from user pickup to user destination
-              // This shows the actual route the user will take
-              const route = await googleMapsService.getRoute(
-                pickup,
-                destination
-              );
+        if (route) {
+          const routeSteps = route.steps?.map((step) => ({
+            distance: step.distance,
+            duration: step.duration,
+            instruction: step.instruction,
+          }));
 
-              if (route) {
-                // Enrich match with precise Google Maps data
-                match.exactDistance = route.distance; // km
-                match.exactETA = route.duration; // minutes
-                match.routeGeometry = route.geometry; // For map display
-                if (route.steps) {
-                  match.routeSteps = route.steps.map((step) => ({
-                    distance: step.distance,
-                    duration: step.duration,
-                    instruction: step.instruction,
-                  }));
-                }
-              }
-            } catch (error) {
-              console.error(
-                `[PoolMatching] Error getting Google Maps route for pool ${match.poolId}:`,
-                error
-              );
-              // Fallback: Keep H3-based estimates if Google Maps fails
-              // Match will still have estimatedDetour from Pass 2
+          // Confirm the pools still exist before enriching. One batched query
+          // replaces the previous per-match lookup, which issued up to 10
+          // round-trips and then discarded every row it fetched.
+          const livePoolIds = await this.filterExistingPoolIds(
+            topMatches.map((match) => match.poolId)
+          );
+
+          // Enrich top matches with Google Maps route data
+          for (const match of topMatches) {
+            // Skip if pool not found
+            if (!livePoolIds.has(match.poolId)) {
+              continue;
             }
-          })
-        );
+
+            // Enrich match with precise Google Maps data
+            match.exactDistance = route.distance; // km
+            match.exactETA = route.duration; // minutes
+            match.routeGeometry = route.geometry; // For map display
+            if (routeSteps) {
+              match.routeSteps = routeSteps;
+            }
+          }
+        }
       }
 
       return sortedMatches;
@@ -1266,28 +1273,39 @@ export class PoolMatchingService {
   }
 
   /**
-   * Get pool by ID (helper method for Google Maps enrichment)
+   * Narrow a set of pool IDs to those that still exist (helper for Google Maps
+   * enrichment).
    *
-   * @param poolId - Pool ID
-   * @returns Pool object or null if not found
+   * Guards against a pool being deleted between the candidate query and
+   * enrichment. Only the IDs are selected — the rows themselves are never read,
+   * so there is no reason to fetch them.
+   *
+   * On query failure this returns an empty set, matching the previous
+   * per-pool behaviour of treating an errored lookup as "not found".
+   *
+   * @param poolIds - Pool IDs to check
+   * @returns The subset that exists
    */
-  private async getPoolById(poolId: string): Promise<Pool | null> {
+  private async filterExistingPoolIds(poolIds: string[]): Promise<Set<string>> {
+    if (poolIds.length === 0) {
+      return new Set();
+    }
+
     try {
       const { data, error } = await supabase
         .from("pools")
-        .select("*")
-        .eq("id", poolId)
-        .single();
+        .select("id")
+        .in("id", poolIds);
 
       if (error || !data) {
-        console.error(`[PoolMatching] Error fetching pool ${poolId}:`, error);
-        return null;
+        console.error(`[PoolMatching] Error fetching pools for enrichment:`, error);
+        return new Set();
       }
 
-      return data as Pool;
+      return new Set(data.map((pool: { id: string }) => pool.id));
     } catch (error) {
-      console.error(`[PoolMatching] Error in getPoolById:`, error);
-      return null;
+      console.error(`[PoolMatching] Error in filterExistingPoolIds:`, error);
+      return new Set();
     }
   }
 

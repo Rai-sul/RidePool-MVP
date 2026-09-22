@@ -1,50 +1,86 @@
-# Welcome to our CarPoolApp app 👋
+# RidePool Documentation
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Ride-pooling for Dhaka: several riders heading the same way share one vehicle
+and split the fare. Currency is BDT.
 
-## Get started
+**Everything outside [`history/`](./history/) describes the system as it is
+today.** If a page here disagrees with the code, the code wins — please fix the
+page.
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
+## Where do I look for…
 
-2. Start the app
+| I want to… | Read |
+|---|---|
+| Understand the whole system | [architecture/README.md](./architecture/README.md) |
+| Run the project locally | [guides/running-the-project.md](./guides/running-the-project.md) |
+| Add or change an API endpoint | [architecture/server.md](./architecture/server.md) → [reference/api.md](./reference/api.md) |
+| Work on pool search / matching | [architecture/pool-matching.md](./architecture/pool-matching.md) |
+| Work on routing or ETAs | [architecture/combined-route.md](./architecture/combined-route.md) |
+| Reduce Google Maps cost | [architecture/server.md](./architecture/server.md#google-maps-cost-model) |
+| Work on scheduled rides | [architecture/advance-booking.md](./architecture/advance-booking.md) |
+| Change fares, discounts or the wallet | [architecture/fares.md](./architecture/fares.md) |
+| Add a notification | [architecture/notifications.md](./architecture/notifications.md) |
+| Add a table, index or migration | [database/README.md](./database/README.md) |
+| Set an environment variable | [reference/environment.md](./reference/environment.md) |
+| Fix maps not rendering | [guides/maps-and-navigation.md](./guides/maps-and-navigation.md) |
+| Restore a backup or handle an outage | [operations/](./operations/) |
+| Know *why* something was built this way | [history/README.md](./history/README.md) |
 
-   ```bash
-   npx expo start --clear
-   ```
+## Layout
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+__docs__/
+├── architecture/     how the system works  ← start here
+├── database/         schema, atomic functions, migrations
+├── reference/        API endpoints, environment variables
+├── guides/           setup and how-to
+├── operations/       backup and disaster recovery
+├── diagrams/         UML / ERD / dataflow (SVG + LaTeX source)
+└── history/          point-in-time records — NOT current
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## The five invariants
 
-## Learn more
+Break one of these and something silently misbehaves:
 
-To learn more about developing your project with Expo, look at the following resources:
+1. **Capacity** comes from `CONSTANTS.VEHICLE_CAPACITY` — CNG 2, CAR 3.
+   `max_passengers` is never accepted from the client.
+2. **`FEMALE_ONLY`** is granted only when the *stored* profile says
+   `gender = 'FEMALE'`. Use `utils/genderRestriction.ts`; never trust a client
+   flag.
+3. **Advance-booking durations** always derive from `config.advanceBooking` via
+   `utils/advanceWindow.ts`. Never hardcode one.
+4. **Caching** always goes through `unifiedCacheService`. Importing
+   `cacheService` directly disables the cache entirely whenever `MVP_MODE=true`.
+5. **Concurrency** — joining a pool, accepting a pool and moving money happen in
+   atomic Postgres functions, never in application code.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Commands
 
-## Join the community
+Each package installs and runs from its own directory — there is no root
+workspace.
 
-Join our community of developers creating universal apps.
+```sh
+# Server
+cd Server
+npm run dev                      # nodemon + ts-node
+npm test                         # vitest
+npx tsc --noEmit                 # type-check src/
+npx tsc --noEmit -p tsconfig.test.json   # type-check tests too (not in npm test)
+npm run migrate                  # supabase db push
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+# Apps
+cd Client/CarPoolApp             # or Client/DriverApp
+npx expo start --clear
+npm run lint                     # run before UI changes
+
+# Shared types — build before consuming elsewhere
+cd shared && npm run build
+```
+
+## Diagrams
+
+[`diagrams/`](./diagrams/) holds the activity, dataflow, EER, schema, sequence
+and use-case diagrams as `.svg` with `.tex` sources.

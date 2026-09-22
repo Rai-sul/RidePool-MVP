@@ -10,6 +10,8 @@ import { smartRouteService } from '../services/smartRoute.service';
 import { notificationService } from '../services/notification.service';
 import { logger } from '../utils/logger';
 
+import { createdResponse, errorResponse, successResponse, unauthorizedResponse } from '../utils/response';
+
 interface DriverSession {
   id: string;
   driver_id: string;
@@ -27,11 +29,7 @@ export class DriverController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { lat, lng, vehicle_id: providedVehicleId, heading } = req.body;
@@ -43,11 +41,7 @@ export class DriverController {
         .single();
 
       if (userError || !user?.is_driver) {
-        return res.status(403).json({
-          success: false,
-          error: { code: 'NOT_DRIVER', message: 'User is not registered as driver' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NOT_DRIVER', 'User is not registered as driver', 403);
       }
 
       let vehicle;
@@ -75,11 +69,7 @@ export class DriverController {
       }
 
       if (vehicleError || !vehicle) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'VEHICLE_NOT_FOUND', message: 'Active vehicle not found for driver' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'VEHICLE_NOT_FOUND', 'Active vehicle not found for driver', 404);
       }
 
       const vehicle_id = vehicle.id;
@@ -129,14 +119,10 @@ export class DriverController {
             });
         }
 
-        return res.json({
-          success: true,
-          data: {
-            session_id: existingSession.id,
-            status: 'ONLINE',
-            message: 'Already online, location updated',
-          },
-          timestamp: new Date().toISOString(),
+        return successResponse(res, {
+          session_id: existingSession.id,
+          status: 'ONLINE',
+          message: 'Already online, location updated',
         });
       }
 
@@ -194,19 +180,15 @@ export class DriverController {
         }
       }
 
-      res.json({
-        success: true,
-        data: {
-          session_id: session.id,
-          status: 'ONLINE',
-          vehicle: {
-            id: vehicle.id,
-            type: vehicle.vehicle_type,
-            number: vehicle.vehicle_number,
-          },
-          location: { lat, lng },
+      successResponse(res, {
+        session_id: session.id,
+        status: 'ONLINE',
+        vehicle: {
+          id: vehicle.id,
+          type: vehicle.vehicle_type,
+          number: vehicle.vehicle_number,
         },
-        timestamp: new Date().toISOString(),
+        location: { lat, lng },
       });
     } catch (error) {
       next(error);
@@ -217,11 +199,7 @@ export class DriverController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { data: activePool } = await supabaseAdmin
@@ -261,11 +239,7 @@ export class DriverController {
         })
         .eq('driver_id', userId);
 
-      res.json({
-        success: true,
-        data: { status: 'OFFLINE' },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { status: 'OFFLINE' });
     } catch (error) {
       next(error);
     }
@@ -275,11 +249,7 @@ export class DriverController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { data: session, error: sessionError } = await supabaseAdmin
@@ -292,11 +262,7 @@ export class DriverController {
         .single();
 
       if (sessionError || !session) {
-        return res.json({
-          success: true,
-          data: { status: 'OFFLINE', session: null },
-          timestamp: new Date().toISOString(),
-        });
+        return successResponse(res, { status: 'OFFLINE', session: null });
       }
 
       const { data: location } = await supabaseAdmin
@@ -306,16 +272,12 @@ export class DriverController {
         .eq('is_active', true)
         .single();
 
-      res.json({
-        success: true,
-        data: {
-          status: session.status,
-          session_id: session.id,
-          started_at: session.started_at,
-          vehicle: session.vehicles,
-          location: location || null,
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        status: session.status,
+        session_id: session.id,
+        started_at: session.started_at,
+        vehicle: session.vehicles,
+        location: location || null,
       });
     } catch (error) {
       next(error);
@@ -326,11 +288,7 @@ export class DriverController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { lat, lng, heading, speed_kmh } = req.body;
@@ -344,11 +302,7 @@ export class DriverController {
         .single();
 
       if (!vehicleLocation) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'NOT_ONLINE', message: 'Driver not currently online' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NOT_ONLINE', 'Driver not currently online', 404);
       }
 
       const { data: result, error } = await supabaseAdmin.rpc('update_vehicle_location', {
@@ -365,11 +319,7 @@ export class DriverController {
       }
 
       if (!result.success && result.reason === 'STALE_UPDATE') {
-        return res.status(409).json({
-          success: false,
-          error: { code: 'STALE_UPDATE', message: 'Location update is older than current' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'STALE_UPDATE', 'Location update is older than current', 409);
       }
 
       // Update H3 indices (RPC function doesn't compute these)
@@ -405,15 +355,11 @@ export class DriverController {
         routeRecalculated = recalcResult.recalculated;
       }
 
-      res.json({
-        success: true,
-        data: { 
-          lat, 
-          lng, 
-          h3_index: h3IndexRes9,
-          route_recalculated: routeRecalculated,
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, { 
+        lat, 
+        lng, 
+        h3_index: h3IndexRes9,
+        route_recalculated: routeRecalculated,
       });
     } catch (error) {
       next(error);
@@ -424,11 +370,7 @@ export class DriverController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { data: driverLocation } = await supabaseAdmin
@@ -439,11 +381,7 @@ export class DriverController {
         .single();
 
       if (!driverLocation) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'NOT_ONLINE', message: 'Driver must be online to view pools' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NOT_ONLINE', 'Driver must be online to view pools', 400);
       }
 
       logger.info(`[AvailablePools] Driver ${userId} at lat=${driverLocation.lat}, lng=${driverLocation.lng}, vehicle_id=${driverLocation.vehicle_id}`);
@@ -611,13 +549,9 @@ export class DriverController {
       const result = poolsWithDetails.slice(0, 10);
       logger.info(`[AvailablePools] Returning ${result.length} pools to driver ${userId}`);
 
-      res.json({
-        success: true,
-        data: {
-          pools: result,
-          total_available: poolsWithDetails.length,
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        pools: result,
+        total_available: poolsWithDetails.length,
       });
     } catch (error) {
       next(error);
@@ -628,11 +562,7 @@ export class DriverController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { poolId } = req.params;
@@ -664,11 +594,7 @@ export class DriverController {
         .single();
 
       if (!vehicle) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'NOT_ONLINE', message: 'Driver must be online to accept pools' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NOT_ONLINE', 'Driver must be online to accept pools', 400);
       }
 
       const { data: poolToAccept } = await supabaseAdmin
@@ -685,14 +611,7 @@ export class DriverController {
           .single();
 
         if (driverVehicle && poolToAccept.vehicle_type !== driverVehicle.vehicle_type) {
-          return res.status(400).json({
-            success: false,
-            error: {
-              code: 'VEHICLE_TYPE_MISMATCH',
-              message: `Pool requires ${poolToAccept.vehicle_type} but your vehicle is ${driverVehicle.vehicle_type}`,
-            },
-            timestamp: new Date().toISOString(),
-          });
+          return errorResponse(res, 'VEHICLE_TYPE_MISMATCH', `Pool requires ${poolToAccept.vehicle_type} but your vehicle is ${driverVehicle.vehicle_type}`, 400);
         }
       }
 
@@ -704,18 +623,10 @@ export class DriverController {
 
       if (rpcError) {
         if (rpcError.message?.includes('ALREADY_ASSIGNED')) {
-          return res.status(409).json({
-            success: false,
-            error: { code: 'POOL_ALREADY_ASSIGNED', message: 'Pool was already accepted by another driver' },
-            timestamp: new Date().toISOString(),
-          });
+          return errorResponse(res, 'POOL_ALREADY_ASSIGNED', 'Pool was already accepted by another driver', 409);
         }
         if (rpcError.message?.includes('POOL_NOT_FOUND')) {
-          return res.status(404).json({
-            success: false,
-            error: { code: 'POOL_NOT_FOUND', message: 'Pool not found or not available' },
-            timestamp: new Date().toISOString(),
-          });
+          return errorResponse(res, 'POOL_NOT_FOUND', 'Pool not found or not available', 404);
         }
         throw rpcError;
       }
@@ -806,21 +717,17 @@ export class DriverController {
         navigation_url = `https://www.google.com/maps/dir/?api=1&destination=${destCoord}&travelmode=driving`;
       }
 
-      res.json({
-        success: true,
-        data: {
-          pool_id: poolId,
-          status: 'READY_TO_START',
-          passengers,
-          destination: {
-            lat: pool?.destination_lat ? Number(pool.destination_lat) : null,
-            lng: pool?.destination_lng ? Number(pool.destination_lng) : null,
-            address: pool?.destination_address,
-          },
-          nearest_pickup: nearestPickup,
-          navigation_url,
+      successResponse(res, {
+        pool_id: poolId,
+        status: 'READY_TO_START',
+        passengers,
+        destination: {
+          lat: pool?.destination_lat ? Number(pool.destination_lat) : null,
+          lng: pool?.destination_lng ? Number(pool.destination_lng) : null,
+          address: pool?.destination_address,
         },
-        timestamp: new Date().toISOString(),
+        nearest_pickup: nearestPickup,
+        navigation_url,
       });
     } catch (error) {
       next(error);
@@ -831,18 +738,10 @@ export class DriverController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
-      res.json({
-        success: true,
-        data: { message: 'Pool rejected' },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { message: 'Pool rejected' });
     } catch (error) {
       next(error);
     }
@@ -859,11 +758,7 @@ export class DriverController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { poolId } = req.params;
@@ -882,41 +777,22 @@ export class DriverController {
         .single();
 
       if (poolError || !pool) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'POOL_NOT_FOUND', 'Pool not found', 404);
       }
 
       // Verify driver is assigned to this pool
       if (pool.driver_id !== userId) {
-        return res.status(403).json({
-          success: false,
-          error: { code: 'NOT_ASSIGNED', message: 'You are not assigned to this pool' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NOT_ASSIGNED', 'You are not assigned to this pool', 403);
       }
 
       // Can only unassign if pool is READY_TO_START (not yet started)
       // If STARTED, driver must complete the ride
       if (pool.status === 'STARTED') {
-        return res.status(400).json({
-          success: false,
-          error: { 
-            code: 'RIDE_IN_PROGRESS', 
-            message: 'Cannot cancel an in-progress ride. Please complete all drop-offs first.' 
-          },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'RIDE_IN_PROGRESS', 'Cannot cancel an in-progress ride. Please complete all drop-offs first.', 400);
       }
 
       if (!['READY_TO_START', 'WAITING_FOR_DRIVER'].includes(pool.status)) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'INVALID_STATUS', message: 'Pool is not in a cancellable state' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'INVALID_STATUS', 'Pool is not in a cancellable state', 400);
       }
 
       // Clear driver assignment and revert status to WAITING_FOR_DRIVER
@@ -966,14 +842,10 @@ export class DriverController {
 
       logger.info(`[Driver] Driver ${userId} unassigned from pool ${poolId}, status reverted to WAITING_FOR_DRIVER`);
 
-      res.json({
-        success: true,
-        data: { 
-          message: 'Successfully unassigned from pool',
-          pool_id: poolId,
-          new_status: 'WAITING_FOR_DRIVER',
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, { 
+        message: 'Successfully unassigned from pool',
+        pool_id: poolId,
+        new_status: 'WAITING_FOR_DRIVER',
       });
     } catch (error) {
       next(error);
@@ -984,11 +856,7 @@ export class DriverController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { data: pool, error } = await supabaseAdmin
@@ -1019,58 +887,50 @@ export class DriverController {
         .single();
 
       if (error || !pool) {
-        return res.json({
-          success: true,
-          data: { active_pool: null },
-          timestamp: new Date().toISOString(),
-        });
+        return successResponse(res, { active_pool: null });
       }
 
       // Filter out members who have left the pool
       const activeMembers = pool.pool_members?.filter((pm: any) => pm.left_at === null) || [];
 
-      res.json({
-        success: true,
-        data: {
-          active_pool: {
-            id: pool.id,
-            status: pool.status,
-            destination: {
-              lat: Number(pool.destination_lat),
-              lng: Number(pool.destination_lng),
-              address: pool.destination_address,
-            },
-            vehicle: pool.vehicles,
-            vehicle_type: pool.vehicle_type,
-            passengers: activeMembers.map((pm: any) => {
-              const user = pm.users;
-              return {
-                user_id: pm.user_id,
-                ride_id: pm.ride_id,
-                name: user?.full_name || 'Rider',
-                rating: user?.average_rating || 0,
-                pickup: {
-                  lat: pm.rides?.pickup_lat != null ? Number(pm.rides.pickup_lat) : null,
-                  lng: pm.rides?.pickup_lng != null ? Number(pm.rides.pickup_lng) : null,
-                  address: pm.rides?.pickup_address,
-                },
-                dropoff: {
-                  lat: pm.rides?.dropoff_lat != null ? Number(pm.rides.dropoff_lat) : null,
-                  lng: pm.rides?.dropoff_lng != null ? Number(pm.rides.dropoff_lng) : null,
-                  address: pm.rides?.dropoff_address,
-                },
-                status: pm.rides?.status,
-              };
-            }),
-            current_passengers: pool.current_passengers,
-            max_passengers: pool.max_passengers,
-            fare_per_person: pool.fare_per_person,
-            total_earnings: (pool.fare_per_person || 0) * (pool.current_passengers || 0),
-            created_at: pool.created_at,
-            started_at: pool.started_at,
+      successResponse(res, {
+        active_pool: {
+          id: pool.id,
+          status: pool.status,
+          destination: {
+            lat: Number(pool.destination_lat),
+            lng: Number(pool.destination_lng),
+            address: pool.destination_address,
           },
+          vehicle: pool.vehicles,
+          vehicle_type: pool.vehicle_type,
+          passengers: activeMembers.map((pm: any) => {
+            const user = pm.users;
+            return {
+              user_id: pm.user_id,
+              ride_id: pm.ride_id,
+              name: user?.full_name || 'Rider',
+              rating: user?.average_rating || 0,
+              pickup: {
+                lat: pm.rides?.pickup_lat != null ? Number(pm.rides.pickup_lat) : null,
+                lng: pm.rides?.pickup_lng != null ? Number(pm.rides.pickup_lng) : null,
+                address: pm.rides?.pickup_address,
+              },
+              dropoff: {
+                lat: pm.rides?.dropoff_lat != null ? Number(pm.rides.dropoff_lat) : null,
+                lng: pm.rides?.dropoff_lng != null ? Number(pm.rides.dropoff_lng) : null,
+                address: pm.rides?.dropoff_address,
+              },
+              status: pm.rides?.status,
+            };
+          }),
+          current_passengers: pool.current_passengers,
+          max_passengers: pool.max_passengers,
+          fare_per_person: pool.fare_per_person,
+          total_earnings: (pool.fare_per_person || 0) * (pool.current_passengers || 0),
+          created_at: pool.created_at,
+          started_at: pool.started_at,
         },
-        timestamp: new Date().toISOString(),
       });
     } catch (error) {
       next(error);
@@ -1081,11 +941,7 @@ export class DriverController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { data: pool, error: poolError } = await supabaseAdmin
@@ -1096,19 +952,11 @@ export class DriverController {
         .single();
 
       if (poolError || !pool) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'NO_POOL', message: 'No pool ready to start' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NO_POOL', 'No pool ready to start', 404);
       }
 
       if (pool.current_passengers < 2) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'INSUFFICIENT_PASSENGERS', message: 'Minimum 2 passengers required to start' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'INSUFFICIENT_PASSENGERS', 'Minimum 2 passengers required to start', 400);
       }
 
       const now = new Date().toISOString();
@@ -1129,14 +977,10 @@ export class DriverController {
         })
         .eq('pool_id', pool.id);
 
-      res.json({
-        success: true,
-        data: {
-          pool_id: pool.id,
-          status: 'STARTED',
-          started_at: now,
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        pool_id: pool.id,
+        status: 'STARTED',
+        started_at: now,
       });
     } catch (error) {
       next(error);
@@ -1147,11 +991,7 @@ export class DriverController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { passengerId } = req.params;
@@ -1164,11 +1004,7 @@ export class DriverController {
         .single();
 
       if (rideError || !ride) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'RIDE_NOT_FOUND', message: 'Passenger ride not found in your active pool' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'RIDE_NOT_FOUND', 'Passenger ride not found in your active pool', 404);
       }
 
       await supabaseAdmin
@@ -1179,14 +1015,10 @@ export class DriverController {
         })
         .eq('id', ride.id);
 
-      res.json({
-        success: true,
-        data: {
-          passenger_id: passengerId,
-          ride_id: ride.id,
-          status: 'PICKED_UP',
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        passenger_id: passengerId,
+        ride_id: ride.id,
+        status: 'PICKED_UP',
       });
     } catch (error) {
       next(error);
@@ -1197,11 +1029,7 @@ export class DriverController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { passengerId } = req.params;
@@ -1214,11 +1042,7 @@ export class DriverController {
         .single();
 
       if (rideError || !ride) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'RIDE_NOT_FOUND', message: 'Passenger ride not found in your active pool' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'RIDE_NOT_FOUND', 'Passenger ride not found in your active pool', 404);
       }
 
       await supabaseAdmin
@@ -1238,15 +1062,11 @@ export class DriverController {
 
       const allDroppedOff = !remainingRides || remainingRides.length === 0;
 
-      res.json({
-        success: true,
-        data: {
-          passenger_id: passengerId,
-          ride_id: ride.id,
-          status: 'DROPPED_OFF',
-          all_passengers_dropped: allDroppedOff,
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        passenger_id: passengerId,
+        ride_id: ride.id,
+        status: 'DROPPED_OFF',
+        all_passengers_dropped: allDroppedOff,
       });
     } catch (error) {
       next(error);
@@ -1257,11 +1077,7 @@ export class DriverController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { data: pool, error: poolError } = await supabaseAdmin
@@ -1272,11 +1088,7 @@ export class DriverController {
         .single();
 
       if (poolError || !pool) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'NO_ACTIVE_POOL', message: 'No active pool to complete' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'NO_ACTIVE_POOL', 'No active pool to complete', 404);
       }
 
       const { data: incompleteRides } = await supabaseAdmin
@@ -1337,19 +1149,15 @@ export class DriverController {
           payment_status: 'PENDING',
         });
 
-      res.json({
-        success: true,
-        data: {
-          pool_id: pool.id,
-          status: 'COMPLETED',
-          completed_at: now,
-          earnings: {
-            total_fare: totalFare,
-            commission: platformCommission,
-            net_earnings: driverEarnings,
-          },
+      successResponse(res, {
+        pool_id: pool.id,
+        status: 'COMPLETED',
+        completed_at: now,
+        earnings: {
+          total_fare: totalFare,
+          commission: platformCommission,
+          net_earnings: driverEarnings,
         },
-        timestamp: new Date().toISOString(),
       });
     } catch (error) {
       next(error);
@@ -1360,11 +1168,7 @@ export class DriverController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const today = new Date();
@@ -1387,14 +1191,10 @@ export class DriverController {
         net_earnings: earnings?.reduce((sum, e) => sum + (e.net_earnings || 0), 0) || 0,
       };
 
-      res.json({
-        success: true,
-        data: {
-          date: today.toISOString().split('T')[0],
-          summary,
-          trips: earnings || [],
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        date: today.toISOString().split('T')[0],
+        summary,
+        trips: earnings || [],
       });
     } catch (error) {
       next(error);
@@ -1405,11 +1205,7 @@ export class DriverController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { data: earnings, error } = await supabaseAdmin
@@ -1423,11 +1219,7 @@ export class DriverController {
         throw error;
       }
 
-      res.json({
-        success: true,
-        data: { earnings: earnings || [] },
-        timestamp: new Date().toISOString(),
-      });
+      successResponse(res, { earnings: earnings || [] });
     } catch (error) {
       next(error);
     }
@@ -1437,11 +1229,7 @@ export class DriverController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { data: user } = await supabaseAdmin
@@ -1457,15 +1245,11 @@ export class DriverController {
 
       const totalEarnings = allEarnings?.reduce((sum, e) => sum + (e.net_earnings || 0), 0) || 0;
 
-      res.json({
-        success: true,
-        data: {
-          total_trips: user?.total_rides || 0,
-          average_rating: user?.average_rating || 0,
-          total_ratings: user?.total_ratings || 0,
-          total_earnings: totalEarnings,
-        },
-        timestamp: new Date().toISOString(),
+      successResponse(res, {
+        total_trips: user?.total_rides || 0,
+        average_rating: user?.average_rating || 0,
+        total_ratings: user?.total_ratings || 0,
+        total_earnings: totalEarnings,
       });
     } catch (error) {
       next(error);
@@ -1476,11 +1260,7 @@ export class DriverController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const { vehicle_type, vehicle_number, model, color } = req.body;
@@ -1493,11 +1273,7 @@ export class DriverController {
         .single();
 
       if (existingVehicle) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'VEHICLE_EXISTS', message: 'Driver already has an active vehicle' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'VEHICLE_EXISTS', 'Driver already has an active vehicle', 400);
       }
 
       const maxPassengers = CONSTANTS.VEHICLE_CAPACITY[vehicle_type as VehicleType];
@@ -1527,20 +1303,12 @@ export class DriverController {
 
       if (driverUpdateError) {
         logger.error(`Failed to set is_driver for user ${userId}: ${driverUpdateError.message}`);
-        return res.status(500).json({
-          success: false,
-          error: { code: 'UPDATE_FAILED', message: 'Vehicle created but driver status update failed' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'UPDATE_FAILED', 'Vehicle created but driver status update failed', 500);
       }
 
-      res.status(201).json({
-        success: true,
-        data: {
-          vehicle,
-          is_driver: true,
-        },
-        timestamp: new Date().toISOString(),
+      createdResponse(res, {
+        vehicle,
+        is_driver: true,
       });
     } catch (error) {
       next(error);

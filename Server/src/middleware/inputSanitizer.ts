@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '../utils/logger';
 
+import { errorResponse } from '../utils/response';
+
 const DANGEROUS_PATTERNS = [
   /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
   /javascript:/gi,
@@ -113,40 +115,19 @@ export const inputSanitizer = (req: Request, res: Response, next: NextFunction) 
 
   if (req.body && Object.keys(req.body).length > 0) {
     if (checkAndLog('body', req.body)) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: 'INVALID_INPUT',
-          message: 'Request contains invalid or potentially dangerous content',
-        },
-        timestamp: new Date().toISOString(),
-      });
+      return errorResponse(res, 'INVALID_INPUT', 'Request contains invalid or potentially dangerous content', 400);
     }
   }
 
   if (req.query && Object.keys(req.query).length > 0) {
     if (checkAndLog('query', req.query)) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: 'INVALID_INPUT',
-          message: 'Request contains invalid or potentially dangerous content',
-        },
-        timestamp: new Date().toISOString(),
-      });
+      return errorResponse(res, 'INVALID_INPUT', 'Request contains invalid or potentially dangerous content', 400);
     }
   }
 
   if (req.params && Object.keys(req.params).length > 0) {
     if (checkAndLog('params', req.params)) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: 'INVALID_INPUT',
-          message: 'Request contains invalid or potentially dangerous content',
-        },
-        timestamp: new Date().toISOString(),
-      });
+      return errorResponse(res, 'INVALID_INPUT', 'Request contains invalid or potentially dangerous content', 400);
     }
   }
 
@@ -204,14 +185,7 @@ export const limitPayloadSize = (maxSize: number = 10 * 1024) => {
         ip: req.ip,
       });
 
-      return res.status(413).json({
-        success: false,
-        error: {
-          code: 'PAYLOAD_TOO_LARGE',
-          message: `Request body exceeds maximum size of ${Math.round(maxSize / 1024)}KB`,
-        },
-        timestamp: new Date().toISOString(),
-      });
+      return errorResponse(res, 'PAYLOAD_TOO_LARGE', `Request body exceeds maximum size of ${Math.round(maxSize / 1024)}KB`, 413);
     }
 
     next();

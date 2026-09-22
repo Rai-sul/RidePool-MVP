@@ -90,7 +90,9 @@ export class OfflineService {
       actions: [],
     };
 
-    const sortedActions = actions.sort((a, b) => 
+    // Copy before sorting: Array.prototype.sort mutates in place, and the
+    // caller's array must not be reordered as a side effect of syncing.
+    const sortedActions = [...actions].sort((a, b) =>
       new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     );
 

@@ -36,9 +36,22 @@ export class NotificationService {
     }
   }
 
-  async sendPushNotification(userId: string, payload: NotificationPayload, appType?: 'rider' | 'driver'): Promise<void> {
+  /**
+   * Deliver one notification.
+   *
+   * Never throws — a failed notification must not abort the business operation
+   * that triggered it. Callers that need to know the outcome read the returned
+   * flag; fire-and-forget callers can ignore it.
+   *
+   * "Delivered" means the notification row was persisted. A push that cannot
+   * reach a device (no registered token, FCM key unset) is still a success,
+   * because the user will see it in-app.
+   *
+   * @returns true when the notification was persisted, false when it failed
+   */
+  async sendPushNotification(userId: string, payload: NotificationPayload, appType?: 'rider' | 'driver'): Promise<boolean> {
     try {
-      await supabaseAdmin.from('notifications').insert({
+      const { error } = await supabaseAdmin.from('notifications').insert({
         user_id: userId,
         title: payload.title,
         message: payload.message,
@@ -47,6 +60,10 @@ export class NotificationService {
         is_read: false,
       });
 
+      if (error) {
+        throw new Error(error.message);
+      }
+
       if (this.fcmServerKey) {
         await this.sendToFCM(userId, payload, appType);
       } else {
@@ -54,20 +71,27 @@ export class NotificationService {
       }
 
       logger.info(`[Notification] Sent to ${userId}: ${payload.type} (app: ${appType || 'any'})`);
+      return true;
     } catch (error) {
       logger.error(`[Notification] Failed to send to ${userId}:`, error);
+      return false;
     }
   }
 
+  /**
+   * Deliver the same notification to many users.
+   *
+   * Sends sequentially on purpose: a pool can fan out to every nearby driver,
+   * and firing those at once would burst both Supabase and FCM rate limits.
+   */
   async sendBulkNotification(userIds: string[], payload: NotificationPayload, appType?: 'rider' | 'driver'): Promise<{ sent: number; failed: number }> {
     let sent = 0;
     let failed = 0;
 
     for (const userId of userIds) {
-      try {
-        await this.sendPushNotification(userId, payload, appType);
+      if (await this.sendPushNotification(userId, payload, appType)) {
         sent++;
-      } catch {
+      } else {
         failed++;
       }
     }

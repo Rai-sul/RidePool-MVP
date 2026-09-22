@@ -3,6 +3,8 @@ import { AuthRequest } from './auth';
 import { supabaseAdmin } from '../config/supabase';
 import { logger } from '../utils/logger';
 
+import { errorResponse, unauthorizedResponse } from '../utils/response';
+
 export interface ResourceOwnershipCheck {
   table: string;
   idParam: string;
@@ -15,20 +17,12 @@ export const checkResourceOwnership = (config: ResourceOwnershipCheck) => {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-          timestamp: new Date().toISOString(),
-        });
+        return unauthorizedResponse(res, 'Authentication required');
       }
 
       const resourceId = req.params[config.idParam];
       if (!resourceId) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'MISSING_RESOURCE_ID', message: `Missing ${config.idParam} parameter` },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'MISSING_RESOURCE_ID', `Missing ${config.idParam} parameter`, 400);
       }
 
       const { data: resource, error } = await supabaseAdmin
@@ -38,11 +32,7 @@ export const checkResourceOwnership = (config: ResourceOwnershipCheck) => {
         .single();
 
       if (error || !resource) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'RESOURCE_NOT_FOUND', message: 'Resource not found' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'RESOURCE_NOT_FOUND', 'Resource not found', 404);
       }
 
       const ownerId = (resource as Record<string, any>)[config.ownerColumn];
@@ -74,11 +64,7 @@ export const checkResourceOwnership = (config: ResourceOwnershipCheck) => {
           method: req.method,
         });
 
-        return res.status(403).json({
-          success: false,
-          error: { code: 'FORBIDDEN', message: 'You do not have access to this resource' },
-          timestamp: new Date().toISOString(),
-        });
+        return errorResponse(res, 'FORBIDDEN', 'You do not have access to this resource', 403);
       }
 
       next();
@@ -98,19 +84,11 @@ export const checkPoolAccess = async (
     const poolId = req.params.poolId;
 
     if (!userId) {
-      return res.status(401).json({
-        success: false,
-        error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-        timestamp: new Date().toISOString(),
-      });
+      return unauthorizedResponse(res, 'Authentication required');
     }
 
     if (!poolId) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'MISSING_POOL_ID', message: 'Pool ID required' },
-        timestamp: new Date().toISOString(),
-      });
+      return errorResponse(res, 'MISSING_POOL_ID', 'Pool ID required', 400);
     }
 
     const { data: pool, error } = await supabaseAdmin
@@ -123,11 +101,7 @@ export const checkPoolAccess = async (
       .single();
 
     if (error || !pool) {
-      return res.status(404).json({
-        success: false,
-        error: { code: 'POOL_NOT_FOUND', message: 'Pool not found' },
-        timestamp: new Date().toISOString(),
-      });
+      return errorResponse(res, 'POOL_NOT_FOUND', 'Pool not found', 404);
     }
 
     const isCreator = pool.creator_user_id === userId;
@@ -142,11 +116,7 @@ export const checkPoolAccess = async (
         method: req.method,
       });
 
-      return res.status(403).json({
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'You do not have access to this pool' },
-        timestamp: new Date().toISOString(),
-      });
+      return errorResponse(res, 'FORBIDDEN', 'You do not have access to this pool', 403);
     }
 
     (req as any).poolContext = {
@@ -178,11 +148,7 @@ export const checkDriverAccess = async (
     const userId = req.user?.id;
 
     if (!userId) {
-      return res.status(401).json({
-        success: false,
-        error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-        timestamp: new Date().toISOString(),
-      });
+      return unauthorizedResponse(res, 'Authentication required');
     }
 
     const { data: user, error } = await supabaseAdmin
@@ -192,27 +158,15 @@ export const checkDriverAccess = async (
       .single();
 
     if (error || !user) {
-      return res.status(404).json({
-        success: false,
-        error: { code: 'USER_NOT_FOUND', message: 'User not found' },
-        timestamp: new Date().toISOString(),
-      });
+      return errorResponse(res, 'USER_NOT_FOUND', 'User not found', 404);
     }
 
     if (!user.is_driver) {
-      return res.status(403).json({
-        success: false,
-        error: { code: 'NOT_A_DRIVER', message: 'User is not registered as a driver' },
-        timestamp: new Date().toISOString(),
-      });
+      return errorResponse(res, 'NOT_A_DRIVER', 'User is not registered as a driver', 403);
     }
 
     if (!user.driver_verified) {
-      return res.status(403).json({
-        success: false,
-        error: { code: 'DRIVER_NOT_VERIFIED', message: 'Driver verification pending' },
-        timestamp: new Date().toISOString(),
-      });
+      return errorResponse(res, 'DRIVER_NOT_VERIFIED', 'Driver verification pending', 403);
     }
 
     next();

@@ -1,258 +1,89 @@
-# System Architecture
+# Architecture
 
-## Overview
-
-RidePool uses a modular monolith architecture with clear separation of concerns, designed to evolve into microservices as the platform scales.
-
-## High-Level Architecture
-
-```
-                                    ┌─────────────────────┐
-                                    │   Mobile Clients    │
-                                    │ CarPoolApp/DriverApp│
-                                    └──────────┬──────────┘
-                                               │
-                                               ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                           EDGE LAYER                                  │
-│  ┌────────────────┐  ┌────────────────┐  ┌─────────────────────┐     │
-│  │   Cloudflare   │  │     Nginx      │  │   Rate Limiter      │     │
-│  │   (DNS/CDN)    │  │ (Load Balancer)│  │   (per endpoint)    │     │
-│  └────────────────┘  └────────────────┘  └─────────────────────┘     │
-└──────────────────────────────────────────────────────────────────────┘
-                                               │
-                                               ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                        APPLICATION LAYER                              │
-│  ┌─────────────────────────────────────────────────────────────────┐ │
-│  │                    Express.js API Server                         │ │
-│  │  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐    │ │
-│  │  │   Auth    │  │   Ride    │  │   Pool    │  │  Driver   │    │ │
-│  │  │Controller │  │Controller │  │Controller │  │Controller │    │ │
-│  │  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘    │ │
-│  │        │              │              │              │           │ │
-│  │        └──────────────┴──────────────┴──────────────┘           │ │
-│  │                              │                                   │ │
-│  │  ┌───────────────────────────┴───────────────────────────────┐  │ │
-│  │  │                    SERVICE LAYER                           │  │ │
-│  │  │  PoolMatching │ Fare │ Geolocation │ Cache │ Notification │  │ │
-│  │  └───────────────────────────────────────────────────────────┘  │ │
-│  └─────────────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────────────┘
-                                               │
-                    ┌──────────────────────────┼──────────────────────┐
-                    ▼                          ▼                      ▼
-┌──────────────────────┐    ┌──────────────────────┐    ┌────────────────┐
-│      SUPABASE        │    │        REDIS         │    │  Message Queue │
-│  ┌────────────────┐  │    │  ┌────────────────┐  │    │  ┌──────────┐  │
-│  │  PostgreSQL    │  │    │  │ Session Cache  │  │    │  │  BullMQ  │  │
-│  │  (Database)    │  │    │  │ Route Cache    │  │    │  │  Jobs    │  │
-│  ├────────────────┤  │    │  │ Pool Search    │  │    │  └──────────┘  │
-│  │  Auth          │  │    │  └────────────────┘  │    └────────────────┘
-│  │  (Supabase)    │  │    └──────────────────────┘
-│  ├────────────────┤  │
-│  │  RLS Policies  │  │
-│  └────────────────┘  │
-└──────────────────────┘
-```
-
-## Component Descriptions
-
-### Edge Layer
-- **Cloudflare**: DNS management, DDoS protection, global CDN
-- **Nginx**: Load balancing, SSL termination, request routing
-- **Rate Limiter**: Endpoint-specific rate limiting to prevent abuse
-
-### Application Layer
-- **Controllers**: Handle HTTP requests, validate input, format responses
-- **Services**: Contain business logic, interact with data layer
-- **Middleware**: Authentication, logging, error handling, security
-
-### Data Layer
-- **Supabase/PostgreSQL**: Primary data store with Row Level Security
-- **Redis**: Caching layer for performance optimization
-- **BullMQ**: Async job processing for notifications, payments
-
-## Request Flow
-
-```
-1. Client Request
-        │
-        ▼
-2. Nginx (Rate Limit Check)
-        │
-        ▼
-3. Express Middleware
-   ├── Security Headers
-   ├── Input Sanitization
-   ├── Authentication
-   └── Request Logging
-        │
-        ▼
-4. Controller
-   ├── Validate Input (Zod)
-   └── Call Service
-        │
-        ▼
-5. Service Layer
-   ├── Business Logic
-   ├── Check Cache
-   └── Query Database
-        │
-        ▼
-6. Response
-   └── Formatted JSON
-```
-
-## Pool Matching Flow
-
-```
-┌──────────────────┐
-│ Ride Request     │
-│ (pickup, dropoff)│
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│ H3 Index         │
-│ Generation       │
-│ (resolution 7,9) │
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│ Cache Lookup     │───── Hit ───▶ Return Cached
-└────────┬─────────┘
-         │ Miss
-         ▼
-┌──────────────────┐
-│ Database Query   │
-│ (nearby pools)   │
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│ Score Calculation│
-│ - Distance       │
-│ - Route Overlap  │
-│ - Gender Match   │
-│ - Passenger Count│
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│ Return Top 10    │
-│ Matching Pools   │
-└──────────────────┘
-```
-
-Confirmed advance pools appear in this same list while they are inside their
-Active Pickup Range, so instant riders can backfill them without a separate
-browser. See [Advance Booking](./advance-booking.md).
-
-## Advance Booking
-
-Riders can also schedule a ride ahead of time. Scheduled bookings are pooled
-automatically - the rider never picks a pool - and the pool runs a
-confirmation step shortly before pickup before its driver search starts.
-
-Full lifecycle, time windows, endpoints and the Active Pickup Range rules:
-[Advance Booking](./advance-booking.md).
-
-## Security Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      SECURITY LAYERS                             │
-├─────────────────────────────────────────────────────────────────┤
-│ Layer 1: Network                                                 │
-│   - Cloudflare DDoS Protection                                   │
-│   - SSL/TLS Encryption                                           │
-│   - Firewall Rules                                               │
-├─────────────────────────────────────────────────────────────────┤
-│ Layer 2: Application                                             │
-│   - Rate Limiting (per IP, per user)                             │
-│   - Input Validation (Zod schemas)                               │
-│   - CORS Configuration                                           │
-│   - Security Headers (Helmet)                                    │
-├─────────────────────────────────────────────────────────────────┤
-│ Layer 3: Authentication                                          │
-│   - JWT Tokens (Supabase Auth)                                   │
-│   - Role-Based Access Control                                    │
-│   - Session Management                                           │
-├─────────────────────────────────────────────────────────────────┤
-│ Layer 4: Data                                                    │
-│   - Row Level Security (RLS)                                     │
-│   - Parameterized Queries                                        │
-│   - Encryption at Rest                                           │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## Scaling Strategy
-
-### Phase 1: Single Server (0-5K DAU)
-- Single Express instance
-- Supabase managed database
-- Optional Redis caching
-
-### Phase 2: Horizontal Scale (5K-50K DAU)
-- 3 Express instances behind Nginx
-- Redis cluster for sessions
-- Message queue for async jobs
-
-### Phase 3: Full Scale (50K+ DAU)
-- Kubernetes orchestration
-- Database read replicas
-- Multi-region deployment
-- Dedicated message broker
-
-## Technology Stack
-
-| Layer | Technology | Purpose |
-|-------|------------|---------|
-| Mobile | React Native + Expo | Cross-platform apps |
-| API | Express.js + TypeScript | REST API server |
-| Database | PostgreSQL (Supabase) | Primary data store |
-| Cache | Redis (Upstash) | Performance caching |
-| Auth | Supabase Auth | User authentication |
-| Maps | Mapbox/Google Maps | Routing & geocoding |
-| Queue | BullMQ | Background jobs |
-| Monitoring | Prometheus + Grafana | Observability |
-
-## File Organization (MVC Pattern)
-
-```
-Server/src/
-├── controllers/       # C - Controllers (handle requests)
-│   ├── auth.controller.ts
-│   ├── ride.controller.ts
-│   ├── pool.controller.ts
-│   └── driver.controller.ts
-│
-├── services/          # M - Model logic (business rules)
-│   ├── poolMatching.service.ts
-│   ├── fare.service.ts
-│   ├── cache.service.ts
-│   └── notification.service.ts
-│
-├── routes/            # Route definitions
-│   ├── index.ts
-│   ├── auth.routes.ts
-│   └── driver.routes.ts
-│
-├── middleware/        # Request pipeline
-│   ├── auth.ts
-│   ├── validation.ts
-│   └── rateLimiter.ts
-│
-├── types/             # TypeScript interfaces
-│   └── index.ts
-│
-└── utils/             # Utilities
-    ├── h3.utils.ts
-    └── logger.ts
-```
+RidePool is a ride-**pooling** app for Dhaka: several riders heading the same
+way share one vehicle and split the fare.
 
 ---
 
-**Last Updated:** 2026-01-19
+## Packages
+
+A TypeScript monorepo with **no root workspace** — every package is installed
+and run from its own directory.
+
+| Package | Path | Runtime |
+|---|---|---|
+| Server | `Server/` | Node 20, TypeScript (CommonJS), Express 5 |
+| CarPoolApp (rider) | `Client/CarPoolApp/` | Expo 54, React Native 0.81, Expo Router, NativeWind |
+| DriverApp | `Client/DriverApp/` | Expo 54, React Native 0.81, Expo Router, NativeWind |
+| shared | `shared/` | Type-only package `@ridepool/shared-types`, built with `tsc` |
+
+`shared/src/` defines the domain model and API request/response types used by
+both the server and the apps. **Define a new domain entity there first**, then
+`cd shared && npm run build` before consuming it elsewhere.
+
+## Shape
+
+```
+CarPoolApp ─┐
+            ├─→  Express API  ──→  Services  ──→  Supabase (PostgreSQL + RLS + Realtime)
+DriverApp  ─┘         │                │
+                      │                └──→  Google Maps (Directions + Routes)
+                      └──→  Cache (Redis, or in-memory in MVP mode)
+```
+
+- **Routes → Controllers → Services → Supabase.** Controllers never contain
+  business logic; services never touch `req`/`res`.
+- **Auth** is Supabase Auth. `authenticate` validates a Bearer JWT and attaches
+  `req.user`.
+- **Concurrency-sensitive operations** are atomic Postgres functions, not
+  application-level transactions.
+
+## Read next
+
+| Topic | Page |
+|---|---|
+| Boot, request lifecycle, service map, cost model | [server.md](./server.md) |
+| How riders are matched to pools | [pool-matching.md](./pool-matching.md) |
+| Traffic-optimized multi-stop routing | [combined-route.md](./combined-route.md) |
+| Scheduled rides | [advance-booking.md](./advance-booking.md) |
+| Fare formula and wallet | [fares.md](./fares.md) |
+| Push and in-app notifications | [notifications.md](./notifications.md) |
+| Tables, functions, migrations | [../database/README.md](../database/README.md) |
+
+## Clients
+
+Both apps use Expo Router (file-based routing in `app/`), Zustand for global
+state (`store/useAppStore.ts` in CarPoolApp, `src/store/useDriverStore.ts` in
+DriverApp), React Context for auth/theme/notifications, and NativeWind for
+styling. Each domain has a matching `services/*.service.ts` that calls the API.
+
+Maps: the rider app renders `react-native-maps` natively and Leaflet /
+`@react-google-maps/api` on web, selected inside `components/` (`NativeMap.tsx`,
+`WebMap.tsx`, `StaticMapView.tsx`, `GoogleMapView.tsx`). The driver app uses
+`react-native-maps` only. See [../guides/expo-go-maps.md](../guides/expo-go-maps.md)
+for the Expo Go fallback.
+
+## App-wide invariants
+
+- **Vehicle capacity**: CNG 2 passengers, CAR 3. `CONSTANTS.VEHICLE_CAPACITY`
+  is the only source; `max_passengers` is never accepted from the client.
+- **Gender restriction**: `FEMALE_ONLY` is granted only when the stored profile
+  says `gender = 'FEMALE'`. Use `utils/genderRestriction.ts`.
+- **Advance-booking durations** always derive from `config.advanceBooking` via
+  `utils/advanceWindow.ts`. Never hardcode one.
+- **Caching** always goes through `unifiedCacheService`, never `cacheService`
+  directly.
+
+## Validation
+
+Zod — **v4 on the Server, v3 on DriverApp**. The versions differ; do not assume
+the APIs match one-to-one across packages.
+
+## Scaling notes
+
+The server is stateless and horizontally scalable, with two caveats:
+
+- In MVP mode the cache is in-process, so cache hits are not shared between
+  instances. Redis is required for multi-instance deployments.
+- `smartRoute`'s in-flight request de-duplication is per-process, so N instances
+  can each issue one billed route call for the same pool on a cold cache.
