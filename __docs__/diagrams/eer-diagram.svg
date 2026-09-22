@@ -1,0 +1,394 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1740 990" width="1740" height="990" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="1740" height="990" fill="#ffffff"/>
+  <g stroke="#4b5563" stroke-width="1.3" fill="none">
+    <path d="M905,120 L295,120"/>
+    <path d="M905,150 L295,150"/>
+    <path d="M625,315 L295,315"/>
+    <path d="M180,392 L180,450"/>
+    <path d="M625,345 L460,345 L460,450"/>
+    <path d="M625,330 L330,330 L330,660 L400,660 L400,680"/>
+    <path d="M740,362 L740,450"/>
+    <path d="M855,510 L905,510"/>
+    <path d="M740,572 L740,680"/>
+    <path d="M680,362 L680,420 L610,420 L610,655 L680,655 L680,680"/>
+    <path d="M625,730 L575,730"/>
+    <path d="M855,770 L880,770 L880,640 L1020,640 L1020,602"/>
+    <path d="M855,318 L1020,318 L1020,450"/>
+    <path d="M1240,362 L1240,420 L1080,420 L1080,450"/>
+    <path d="M1415,330 L1465,330"/>
+    <path d="M1580,407 L1580,450"/>
+    <path d="M1360,362 L1360,425 L1500,425 L1500,450"/>
+    <path d="M1300,362 L1300,450"/>
+    <path d="M1135,720 L1170,720 L1170,180 L1135,180"/>
+    <path d="M855,720 L905,720"/>
+  </g>
+  <g font-size="11" font-weight="700" fill="#4b5563" text-anchor="middle">
+    <text x="880" y="112">1</text>
+    <text x="312" y="112">N</text>
+    <text x="880" y="165">1</text>
+    <text x="312" y="165">N</text>
+    <text x="608" y="308">1</text>
+    <text x="312" y="308">1</text>
+    <text x="190" y="406">1</text>
+    <text x="190" y="444">N</text>
+    <text x="608" y="338">1</text>
+    <text x="470" y="444">N</text>
+    <text x="608" y="323">1</text>
+    <text x="410" y="674">N</text>
+    <text x="750" y="376">1</text>
+    <text x="750" y="444">N</text>
+    <text x="896" y="502">1</text>
+    <text x="864" y="502">N</text>
+    <text x="750" y="586">1</text>
+    <text x="750" y="674">1</text>
+    <text x="690" y="376">1</text>
+    <text x="690" y="674">N</text>
+    <text x="614" y="722">1</text>
+    <text x="586" y="722">N</text>
+    <text x="864" y="762">N</text>
+    <text x="1030" y="616">1</text>
+    <text x="862" y="311">1</text>
+    <text x="1030" y="444">N</text>
+    <text x="1250" y="376">1</text>
+    <text x="1090" y="444">N</text>
+    <text x="1398" y="323">1</text>
+    <text x="1448" y="323">N</text>
+    <text x="1590" y="421">1</text>
+    <text x="1590" y="444">N</text>
+    <text x="1370" y="376">1</text>
+    <text x="1510" y="444">N</text>
+    <text x="1310" y="376">1</text>
+    <text x="1310" y="444">N</text>
+    <text x="1145" y="712">N</text>
+    <text x="1145" y="196">1</text>
+    <text x="866" y="712">1</text>
+    <text x="894" y="712">N</text>
+  </g>
+  <g stroke="#4b5563" stroke-width="1.3" fill="none">
+    <path d="M1016,217 L1016,245"/>
+    <path d="M1024,217 L1024,245"/>
+    <path d="M1020,271 L1020,285"/>
+    <path d="M740,285 L1300,285"/>
+    <path d="M740,285 L740,308"/>
+    <path d="M1300,285 L1300,308"/>
+  </g>
+  <circle cx="1020" cy="258" r="13" fill="#ffffff" stroke="#4b5563" stroke-width="1.3"/>
+  <text x="1020" y="263" font-size="14" font-weight="700" fill="#111827" text-anchor="middle">o</text>
+  <text x="1042" y="262" font-size="10.5" fill="#6b7280">is_driver</text>
+  <g stroke="#4b5563" stroke-width="1.3" fill="none">
+    <path d="M736,802 L736,830"/>
+    <path d="M744,802 L744,830"/>
+    <path d="M740,856 L740,864"/>
+    <path d="M610,864 L870,864"/>
+    <path d="M610,864 L610,887"/>
+    <path d="M870,864 L870,887"/>
+  </g>
+  <circle cx="740" cy="843" r="13" fill="#ffffff" stroke="#4b5563" stroke-width="1.3"/>
+  <text x="740" y="848" font-size="14" font-weight="700" fill="#111827" text-anchor="middle">d</text>
+  <text x="762" y="847" font-size="10.5" fill="#6b7280">booking_type</text>
+  <g>
+    <rect x="65" y="80" width="230" height="92" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M65,86 a6,6 0 0 1 6,-6 h218 a6,6 0 0 1 6,6 v18 h-230 z" fill="#eff6ff"/>
+    <path d="M65,104 h230" stroke="#2563eb" stroke-width="1.2"/>
+    <text x="180" y="97" font-size="12.5" font-weight="700" fill="#111827" text-anchor="middle">PRIYO_SATHI</text>
+    <text x="73" y="116" font-size="8.5" font-weight="700" fill="#6b7280">PK</text>
+    <text x="95" y="116" font-size="10.5" fill="#111827">id</text>
+    <text x="287" y="116" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="73" y="131" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="95" y="131" font-size="10.5" fill="#111827">user_id</text>
+    <text x="287" y="131" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="73" y="146" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="95" y="146" font-size="10.5" fill="#111827">companion_id</text>
+    <text x="287" y="146" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="95" y="161" font-size="10.5" fill="#111827">status</text>
+    <text x="287" y="161" font-size="9.5" fill="#9ca3af" text-anchor="end">ENUM</text>
+  </g>
+  <g>
+    <rect x="905" y="80" width="230" height="137" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M905,86 a6,6 0 0 1 6,-6 h218 a6,6 0 0 1 6,6 v18 h-230 z" fill="#eff6ff"/>
+    <path d="M905,104 h230" stroke="#2563eb" stroke-width="1.2"/>
+    <text x="1020" y="97" font-size="12.5" font-weight="700" fill="#111827" text-anchor="middle">USER</text>
+    <text x="913" y="116" font-size="8.5" font-weight="700" fill="#6b7280">PK</text>
+    <text x="935" y="116" font-size="10.5" fill="#111827">id</text>
+    <text x="1127" y="116" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="913" y="131" font-size="8.5" font-weight="700" fill="#6b7280">U</text>
+    <text x="935" y="131" font-size="10.5" fill="#111827">phone</text>
+    <text x="1127" y="131" font-size="9.5" fill="#9ca3af" text-anchor="end">VARCHAR(20)</text>
+    <text x="935" y="146" font-size="10.5" fill="#111827">full_name</text>
+    <text x="1127" y="146" font-size="9.5" fill="#9ca3af" text-anchor="end">VARCHAR(100)</text>
+    <text x="935" y="161" font-size="10.5" fill="#111827">gender</text>
+    <text x="1127" y="161" font-size="9.5" fill="#9ca3af" text-anchor="end">ENUM</text>
+    <text x="935" y="176" font-size="10.5" fill="#111827">gender_preference</text>
+    <text x="1127" y="176" font-size="9.5" fill="#9ca3af" text-anchor="end">ENUM</text>
+    <text x="913" y="191" font-size="8.5" font-weight="700" fill="#2563eb">D</text>
+    <text x="935" y="191" font-size="10.5" fill="#111827">is_driver</text>
+    <text x="1127" y="191" font-size="9.5" fill="#9ca3af" text-anchor="end">BOOLEAN</text>
+    <text x="935" y="206" font-size="10.5" fill="#111827">average_rating</text>
+    <text x="1127" y="206" font-size="9.5" fill="#9ca3af" text-anchor="end">DECIMAL(3,2)</text>
+  </g>
+  <g>
+    <rect x="65" y="300" width="230" height="92" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M65,306 a6,6 0 0 1 6,-6 h218 a6,6 0 0 1 6,6 v18 h-230 z" fill="#eff6ff"/>
+    <path d="M65,324 h230" stroke="#2563eb" stroke-width="1.2"/>
+    <text x="180" y="317" font-size="12.5" font-weight="700" fill="#111827" text-anchor="middle">WALLET</text>
+    <text x="73" y="336" font-size="8.5" font-weight="700" fill="#6b7280">PK</text>
+    <text x="95" y="336" font-size="10.5" fill="#111827">id</text>
+    <text x="287" y="336" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="73" y="351" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="95" y="351" font-size="10.5" fill="#111827">user_id</text>
+    <text x="287" y="351" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID  U</text>
+    <text x="95" y="366" font-size="10.5" fill="#111827">balance</text>
+    <text x="287" y="366" font-size="9.5" fill="#9ca3af" text-anchor="end">DECIMAL(10,2)</text>
+    <text x="95" y="381" font-size="10.5" fill="#111827">currency</text>
+    <text x="287" y="381" font-size="9.5" fill="#9ca3af" text-anchor="end">VARCHAR(3)</text>
+  </g>
+  <g>
+    <rect x="625" y="300" width="230" height="62" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M625,306 a6,6 0 0 1 6,-6 h218 a6,6 0 0 1 6,6 v18 h-230 z" fill="#eff6ff"/>
+    <path d="M625,324 h230" stroke="#2563eb" stroke-width="1.2"/>
+    <text x="740" y="317" font-size="12.5" font-weight="700" fill="#111827" text-anchor="middle">RIDER</text>
+    <text x="655" y="336" font-size="10.5" fill="#111827">total_rides</text>
+    <text x="847" y="336" font-size="9.5" fill="#9ca3af" text-anchor="end">INTEGER</text>
+    <text x="655" y="351" font-size="10.5" fill="#111827">penalty_points</text>
+    <text x="847" y="351" font-size="9.5" fill="#9ca3af" text-anchor="end">INTEGER</text>
+  </g>
+  <g>
+    <rect x="1185" y="300" width="230" height="62" rx="6" fill="#ffffff" stroke="#b45309" stroke-width="1.5"/>
+    <path d="M1185,306 a6,6 0 0 1 6,-6 h218 a6,6 0 0 1 6,6 v18 h-230 z" fill="#fffbeb"/>
+    <path d="M1185,324 h230" stroke="#b45309" stroke-width="1.2"/>
+    <text x="1300" y="317" font-size="12.5" font-weight="700" fill="#111827" text-anchor="middle">DRIVER</text>
+    <text x="1215" y="336" font-size="10.5" fill="#111827">driver_verified</text>
+    <text x="1407" y="336" font-size="9.5" fill="#9ca3af" text-anchor="end">BOOLEAN</text>
+    <text x="1215" y="351" font-size="10.5" fill="#111827">driver_priority_h3</text>
+    <text x="1407" y="351" font-size="9.5" fill="#9ca3af" text-anchor="end">VARCHAR(20)</text>
+  </g>
+  <g>
+    <rect x="1465" y="300" width="230" height="107" rx="6" fill="#ffffff" stroke="#b45309" stroke-width="1.5"/>
+    <path d="M1465,306 a6,6 0 0 1 6,-6 h218 a6,6 0 0 1 6,6 v18 h-230 z" fill="#fffbeb"/>
+    <path d="M1465,324 h230" stroke="#b45309" stroke-width="1.2"/>
+    <text x="1580" y="317" font-size="12.5" font-weight="700" fill="#111827" text-anchor="middle">VEHICLE</text>
+    <text x="1473" y="336" font-size="8.5" font-weight="700" fill="#6b7280">PK</text>
+    <text x="1495" y="336" font-size="10.5" fill="#111827">id</text>
+    <text x="1687" y="336" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="1473" y="351" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="1495" y="351" font-size="10.5" fill="#111827">driver_id</text>
+    <text x="1687" y="351" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="1495" y="366" font-size="10.5" fill="#111827">vehicle_type</text>
+    <text x="1687" y="366" font-size="9.5" fill="#9ca3af" text-anchor="end">CAR | CNG</text>
+    <text x="1473" y="381" font-size="8.5" font-weight="700" fill="#6b7280">U</text>
+    <text x="1495" y="381" font-size="10.5" fill="#111827">vehicle_number</text>
+    <text x="1687" y="381" font-size="9.5" fill="#9ca3af" text-anchor="end">VARCHAR(20)</text>
+    <text x="1495" y="396" font-size="10.5" fill="#111827">max_passengers</text>
+    <text x="1687" y="396" font-size="9.5" fill="#9ca3af" text-anchor="end">INTEGER</text>
+  </g>
+  <g>
+    <rect x="65" y="450" width="230" height="107" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M65,456 a6,6 0 0 1 6,-6 h218 a6,6 0 0 1 6,6 v18 h-230 z" fill="#eff6ff"/>
+    <path d="M65,474 h230" stroke="#2563eb" stroke-width="1.2"/>
+    <text x="180" y="467" font-size="12.5" font-weight="700" fill="#111827" text-anchor="middle">WALLET_TRANSACTION</text>
+    <text x="73" y="486" font-size="8.5" font-weight="700" fill="#6b7280">PK</text>
+    <text x="95" y="486" font-size="10.5" fill="#111827">id</text>
+    <text x="287" y="486" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="73" y="501" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="95" y="501" font-size="10.5" fill="#111827">wallet_id</text>
+    <text x="287" y="501" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="95" y="516" font-size="10.5" fill="#111827">type</text>
+    <text x="287" y="516" font-size="9.5" fill="#9ca3af" text-anchor="end">ENUM</text>
+    <text x="95" y="531" font-size="10.5" fill="#111827">amount</text>
+    <text x="287" y="531" font-size="9.5" fill="#9ca3af" text-anchor="end">DECIMAL(10,2)</text>
+    <text x="95" y="546" font-size="10.5" fill="#111827">balance_after</text>
+    <text x="287" y="546" font-size="9.5" fill="#9ca3af" text-anchor="end">DECIMAL(10,2)</text>
+  </g>
+  <g>
+    <rect x="345" y="450" width="230" height="92" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M345,456 a6,6 0 0 1 6,-6 h218 a6,6 0 0 1 6,6 v18 h-230 z" fill="#eff6ff"/>
+    <path d="M345,474 h230" stroke="#2563eb" stroke-width="1.2"/>
+    <text x="460" y="467" font-size="12.5" font-weight="700" fill="#111827" text-anchor="middle">SAVED_PLACE</text>
+    <text x="353" y="486" font-size="8.5" font-weight="700" fill="#6b7280">PK</text>
+    <text x="375" y="486" font-size="10.5" fill="#111827">id</text>
+    <text x="567" y="486" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="353" y="501" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="375" y="501" font-size="10.5" fill="#111827">user_id</text>
+    <text x="567" y="501" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="375" y="516" font-size="10.5" fill="#111827">label</text>
+    <text x="567" y="516" font-size="9.5" fill="#9ca3af" text-anchor="end">VARCHAR(50)</text>
+    <text x="375" y="531" font-size="10.5" fill="#111827">h3_index</text>
+    <text x="567" y="531" font-size="9.5" fill="#9ca3af" text-anchor="end">VARCHAR(20)</text>
+  </g>
+  <g>
+    <rect x="625" y="450" width="230" height="122" rx="6" fill="#ffffff" stroke="#374151" stroke-width="1.5"/>
+    <path d="M625,456 a6,6 0 0 1 6,-6 h218 a6,6 0 0 1 6,6 v18 h-230 z" fill="#f3f4f6"/>
+    <path d="M625,474 h230" stroke="#374151" stroke-width="1.2"/>
+    <text x="740" y="467" font-size="12.5" font-weight="700" fill="#111827" text-anchor="middle">POOL_MEMBER</text>
+    <text x="633" y="486" font-size="8.5" font-weight="700" fill="#6b7280">PK</text>
+    <text x="655" y="486" font-size="10.5" fill="#111827">id</text>
+    <text x="847" y="486" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="633" y="501" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="655" y="501" font-size="10.5" fill="#111827">pool_id</text>
+    <text x="847" y="501" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID  U1</text>
+    <text x="633" y="516" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="655" y="516" font-size="10.5" fill="#111827">user_id</text>
+    <text x="847" y="516" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID  U1</text>
+    <text x="633" y="531" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="655" y="531" font-size="10.5" fill="#111827">ride_id</text>
+    <text x="847" y="531" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID  U</text>
+    <text x="655" y="546" font-size="10.5" fill="#111827">joined_at</text>
+    <text x="847" y="546" font-size="9.5" fill="#9ca3af" text-anchor="end">TIMESTAMPTZ</text>
+    <text x="655" y="561" font-size="10.5" fill="#111827">confirmed_at</text>
+    <text x="847" y="561" font-size="9.5" fill="#9ca3af" text-anchor="end">TIMESTAMPTZ</text>
+  </g>
+  <g>
+    <rect x="905" y="450" width="230" height="152" rx="6" fill="#ffffff" stroke="#374151" stroke-width="1.5"/>
+    <path d="M905,456 a6,6 0 0 1 6,-6 h218 a6,6 0 0 1 6,6 v18 h-230 z" fill="#f3f4f6"/>
+    <path d="M905,474 h230" stroke="#374151" stroke-width="1.2"/>
+    <text x="1020" y="467" font-size="12.5" font-weight="700" fill="#111827" text-anchor="middle">POOL</text>
+    <text x="913" y="486" font-size="8.5" font-weight="700" fill="#6b7280">PK</text>
+    <text x="935" y="486" font-size="10.5" fill="#111827">id</text>
+    <text x="1127" y="486" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="913" y="501" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="935" y="501" font-size="10.5" fill="#111827">creator_user_id</text>
+    <text x="1127" y="501" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="913" y="516" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="935" y="516" font-size="10.5" fill="#111827">driver_id</text>
+    <text x="1127" y="516" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="935" y="531" font-size="10.5" fill="#111827">status</text>
+    <text x="1127" y="531" font-size="9.5" fill="#9ca3af" text-anchor="end">ENUM</text>
+    <text x="935" y="546" font-size="10.5" fill="#111827">pickup_h3_index</text>
+    <text x="1127" y="546" font-size="9.5" fill="#9ca3af" text-anchor="end">res 9</text>
+    <text x="935" y="561" font-size="10.5" fill="#111827">destination_h3_index</text>
+    <text x="1127" y="561" font-size="9.5" fill="#9ca3af" text-anchor="end">res 7</text>
+    <text x="935" y="576" font-size="10.5" fill="#111827">gender_restriction</text>
+    <text x="1127" y="576" font-size="9.5" fill="#9ca3af" text-anchor="end">ENUM</text>
+    <text x="935" y="591" font-size="10.5" fill="#111827">max_passengers</text>
+    <text x="1127" y="591" font-size="9.5" fill="#9ca3af" text-anchor="end">INTEGER</text>
+  </g>
+  <g>
+    <rect x="1185" y="450" width="230" height="122" rx="6" fill="#ffffff" stroke="#b45309" stroke-width="1.5"/>
+    <path d="M1185,456 a6,6 0 0 1 6,-6 h218 a6,6 0 0 1 6,6 v18 h-230 z" fill="#fffbeb"/>
+    <path d="M1185,474 h230" stroke="#b45309" stroke-width="1.2"/>
+    <text x="1300" y="467" font-size="12.5" font-weight="700" fill="#111827" text-anchor="middle">DRIVER_EARNING</text>
+    <text x="1193" y="486" font-size="8.5" font-weight="700" fill="#6b7280">PK</text>
+    <text x="1215" y="486" font-size="10.5" fill="#111827">id</text>
+    <text x="1407" y="486" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="1193" y="501" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="1215" y="501" font-size="10.5" fill="#111827">driver_id</text>
+    <text x="1407" y="501" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="1193" y="516" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="1215" y="516" font-size="10.5" fill="#111827">ride_id</text>
+    <text x="1407" y="516" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="1193" y="531" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="1215" y="531" font-size="10.5" fill="#111827">pool_id</text>
+    <text x="1407" y="531" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="1215" y="546" font-size="10.5" fill="#111827">net_earnings</text>
+    <text x="1407" y="546" font-size="9.5" fill="#9ca3af" text-anchor="end">DECIMAL(10,2)</text>
+    <text x="1215" y="561" font-size="10.5" fill="#111827">payment_status</text>
+    <text x="1407" y="561" font-size="9.5" fill="#9ca3af" text-anchor="end">ENUM</text>
+  </g>
+  <g>
+    <rect x="1465" y="450" width="230" height="107" rx="6" fill="#ffffff" stroke="#b45309" stroke-width="1.5"/>
+    <path d="M1465,456 a6,6 0 0 1 6,-6 h218 a6,6 0 0 1 6,6 v18 h-230 z" fill="#fffbeb"/>
+    <path d="M1465,474 h230" stroke="#b45309" stroke-width="1.2"/>
+    <text x="1580" y="467" font-size="12.5" font-weight="700" fill="#111827" text-anchor="middle">DRIVER_SESSION</text>
+    <text x="1473" y="486" font-size="8.5" font-weight="700" fill="#6b7280">PK</text>
+    <text x="1495" y="486" font-size="10.5" fill="#111827">id</text>
+    <text x="1687" y="486" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="1473" y="501" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="1495" y="501" font-size="10.5" fill="#111827">driver_id</text>
+    <text x="1687" y="501" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="1473" y="516" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="1495" y="516" font-size="10.5" fill="#111827">vehicle_id</text>
+    <text x="1687" y="516" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="1495" y="531" font-size="10.5" fill="#111827">status</text>
+    <text x="1687" y="531" font-size="9.5" fill="#9ca3af" text-anchor="end">ENUM</text>
+    <text x="1495" y="546" font-size="10.5" fill="#111827">started_at</text>
+    <text x="1687" y="546" font-size="9.5" fill="#9ca3af" text-anchor="end">TIMESTAMPTZ</text>
+  </g>
+  <g>
+    <rect x="345" y="680" width="230" height="122" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M345,686 a6,6 0 0 1 6,-6 h218 a6,6 0 0 1 6,6 v18 h-230 z" fill="#eff6ff"/>
+    <path d="M345,704 h230" stroke="#2563eb" stroke-width="1.2"/>
+    <text x="460" y="697" font-size="12.5" font-weight="700" fill="#111827" text-anchor="middle">PAYMENT</text>
+    <text x="353" y="716" font-size="8.5" font-weight="700" fill="#6b7280">PK</text>
+    <text x="375" y="716" font-size="10.5" fill="#111827">id</text>
+    <text x="567" y="716" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="353" y="731" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="375" y="731" font-size="10.5" fill="#111827">ride_id</text>
+    <text x="567" y="731" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="353" y="746" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="375" y="746" font-size="10.5" fill="#111827">user_id</text>
+    <text x="567" y="746" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="375" y="761" font-size="10.5" fill="#111827">amount</text>
+    <text x="567" y="761" font-size="9.5" fill="#9ca3af" text-anchor="end">DECIMAL(10,2)</text>
+    <text x="375" y="776" font-size="10.5" fill="#111827">payment_method</text>
+    <text x="567" y="776" font-size="9.5" fill="#9ca3af" text-anchor="end">ENUM</text>
+    <text x="375" y="791" font-size="10.5" fill="#111827">status</text>
+    <text x="567" y="791" font-size="9.5" fill="#9ca3af" text-anchor="end">ENUM</text>
+  </g>
+  <g>
+    <rect x="625" y="680" width="230" height="122" rx="6" fill="#ffffff" stroke="#374151" stroke-width="1.5"/>
+    <path d="M625,686 a6,6 0 0 1 6,-6 h218 a6,6 0 0 1 6,6 v18 h-230 z" fill="#f3f4f6"/>
+    <path d="M625,704 h230" stroke="#374151" stroke-width="1.2"/>
+    <text x="740" y="697" font-size="12.5" font-weight="700" fill="#111827" text-anchor="middle">RIDE</text>
+    <text x="633" y="716" font-size="8.5" font-weight="700" fill="#6b7280">PK</text>
+    <text x="655" y="716" font-size="10.5" fill="#111827">id</text>
+    <text x="847" y="716" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="633" y="731" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="655" y="731" font-size="10.5" fill="#111827">user_id</text>
+    <text x="847" y="731" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="633" y="746" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="655" y="746" font-size="10.5" fill="#111827">pool_id</text>
+    <text x="847" y="746" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="655" y="761" font-size="10.5" fill="#111827">status</text>
+    <text x="847" y="761" font-size="9.5" fill="#9ca3af" text-anchor="end">ENUM</text>
+    <text x="655" y="776" font-size="10.5" fill="#111827">fare</text>
+    <text x="847" y="776" font-size="9.5" fill="#9ca3af" text-anchor="end">DECIMAL(10,2)</text>
+    <text x="633" y="791" font-size="8.5" font-weight="700" fill="#374151">D</text>
+    <text x="655" y="791" font-size="10.5" fill="#111827">booking_type</text>
+    <text x="847" y="791" font-size="9.5" fill="#9ca3af" text-anchor="end">ENUM</text>
+  </g>
+  <g>
+    <rect x="905" y="680" width="230" height="107" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M905,686 a6,6 0 0 1 6,-6 h218 a6,6 0 0 1 6,6 v18 h-230 z" fill="#eff6ff"/>
+    <path d="M905,704 h230" stroke="#2563eb" stroke-width="1.2"/>
+    <text x="1020" y="697" font-size="12.5" font-weight="700" fill="#111827" text-anchor="middle">RATING</text>
+    <text x="913" y="716" font-size="8.5" font-weight="700" fill="#6b7280">PK</text>
+    <text x="935" y="716" font-size="10.5" fill="#111827">id</text>
+    <text x="1127" y="716" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="913" y="731" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="935" y="731" font-size="10.5" fill="#111827">ride_id</text>
+    <text x="1127" y="731" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="913" y="746" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="935" y="746" font-size="10.5" fill="#111827">rater_id</text>
+    <text x="1127" y="746" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="913" y="761" font-size="8.5" font-weight="700" fill="#6b7280">FK</text>
+    <text x="935" y="761" font-size="10.5" fill="#111827">rated_id</text>
+    <text x="1127" y="761" font-size="9.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="935" y="776" font-size="10.5" fill="#111827">rating</text>
+    <text x="1127" y="776" font-size="9.5" fill="#9ca3af" text-anchor="end">INTEGER 1-5</text>
+  </g>
+  <g>
+    <rect x="495" y="880" width="230" height="47" rx="6" fill="#ffffff" stroke="#374151" stroke-width="1.5"/>
+    <path d="M495,886 a6,6 0 0 1 6,-6 h218 a6,6 0 0 1 6,6 v18 h-230 z" fill="#f3f4f6"/>
+    <path d="M495,904 h230" stroke="#374151" stroke-width="1.2"/>
+    <text x="610" y="897" font-size="12.5" font-weight="700" fill="#111827" text-anchor="middle">INSTANT_RIDE</text>
+    <text x="525" y="916" font-size="10.5" fill="#111827">scheduled_pickup_at</text>
+    <text x="717" y="916" font-size="9.5" fill="#9ca3af" text-anchor="end">NULL</text>
+  </g>
+  <g>
+    <rect x="755" y="880" width="230" height="47" rx="6" fill="#ffffff" stroke="#374151" stroke-width="1.5"/>
+    <path d="M755,886 a6,6 0 0 1 6,-6 h218 a6,6 0 0 1 6,6 v18 h-230 z" fill="#f3f4f6"/>
+    <path d="M755,904 h230" stroke="#374151" stroke-width="1.2"/>
+    <text x="870" y="897" font-size="12.5" font-weight="700" fill="#111827" text-anchor="middle">ADVANCE_RIDE</text>
+    <text x="785" y="916" font-size="10.5" fill="#111827">scheduled_pickup_at</text>
+    <text x="977" y="916" font-size="9.5" fill="#9ca3af" text-anchor="end">TIMESTAMPTZ</text>
+  </g>
+  <rect x="60" y="826" width="410" height="128" rx="5" fill="#ffffff" stroke="#d1d5db"/>
+  <text x="80" y="850" font-size="11.5" font-weight="700" fill="#111827">Notation</text>
+  <g font-size="10.5" fill="#4b5563">
+    <text x="80"  y="872">PK primary key &#183; FK foreign key &#183; U unique &#183; D discriminator</text>
+    <text x="80"  y="890">1 : N cardinality is marked at each end of a relationship</text>
+    <text x="80"  y="908">double line + circle = total specialization; d disjoint, o overlapping</text>
+    <text x="80"  y="926">blue = rider side &#183; amber = driver side &#183; grey = shared pooling core</text>
+    <text x="80"  y="944">every FK physically references users(id); drawn to the participating subtype</text>
+  </g>
+</svg>

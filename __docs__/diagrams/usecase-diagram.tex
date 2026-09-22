@@ -1,0 +1,153 @@
+% =====================================================================
+%  RidePool -- UML Use Case Diagram
+%  Standalone TikZ figure. Compile with pdflatex/lualatex/xelatex.
+%
+%  To use it inside your report instead, copy everything between
+%  "BEGIN FIGURE" and "END FIGURE" into your document and make sure the
+%  preamble lines marked (*) are present in your own preamble.
+% =====================================================================
+\documentclass[border=4pt]{standalone}
+
+\usepackage[T1]{fontenc}          % (*) needed for \guillemotleft / \guillemotright
+\usepackage{tikz}                 % (*)
+\usetikzlibrary{arrows.meta}      % (*)
+\usepackage{xcolor}               % (*)
+
+% ---- (*) palette: taken from the RidePool design tokens -------------
+\definecolor{riderblue}{HTML}{2563EB}
+\definecolor{riderbg}{HTML}{EFF6FF}
+\definecolor{driveramber}{HTML}{B45309}
+\definecolor{driverbg}{HTML}{FFFBEB}
+\definecolor{inkgrey}{HTML}{374151}
+\definecolor{midgrey}{HTML}{6B7280}
+\definecolor{surfacegrey}{HTML}{F9FAFB}
+\definecolor{greybg}{HTML}{F3F4F6}
+\definecolor{hairline}{HTML}{D1D5DB}
+
+% ---- (*) styles -----------------------------------------------------
+\tikzset{
+  uc/.style     ={ellipse, draw, line width=0.5pt, minimum width=2.95cm,
+                  minimum height=0.82cm, inner sep=1pt, align=center, font=\tiny},
+  rider/.style  ={uc, draw=riderblue,  fill=riderbg},
+  driver/.style ={uc, draw=driveramber,fill=driverbg},
+  shared/.style ={uc, draw=inkgrey,    fill=surfacegrey},
+  sysuc/.style  ={uc, draw=midgrey,    fill=greybg},
+  anchornode/.style={circle, inner sep=0pt, minimum size=1.05cm},
+  assoc/.style  ={draw=inkgrey, line width=0.45pt},
+  incl/.style   ={draw=midgrey, line width=0.45pt, dashed,
+                  dash pattern=on 2pt off 1.4pt, -{Stealth[length=1.7mm,width=1.3mm]}},
+  stick/.style  ={draw=inkgrey, line width=0.6pt},
+  extstick/.style={draw=midgrey, line width=0.6pt},
+}
+\providecommand{\umlst}[1]{\guillemotleft#1\guillemotright}
+
+\begin{document}
+% ============================ BEGIN FIGURE ===========================
+\begin{tikzpicture}
+
+% ---------------- system boundary ----------------
+\draw[draw=black, line width=0.6pt, rounded corners=2pt]
+      (3.19,1.67) rectangle (13.51,11.83);
+\node[anchor=north west, font=\scriptsize\bfseries, inkgrey]
+      at (3.35,11.70) {RidePool System};
+
+% ---------------- rider use cases ----------------
+\node[rider] (join)    at (5.01,10.85) {Search \& Join Pool};
+\node[rider] (advance) at (5.01, 9.87) {Book Advance Ride};
+\node[rider] (female)  at (5.01, 8.88) {Set Female-Only Pool};
+\node[rider] (sathi)   at (5.01, 7.90) {Invite Priyo Sathi};
+\node[rider] (estim)   at (5.01, 4.25) {Estimate Fare \& Route};
+\node[rider] (pay)     at (5.01, 3.26) {Pay Fare};
+\node[rider] (wallet)  at (5.01, 2.28) {Top Up \& Use Wallet};
+
+% ---------------- driver use cases ----------------
+\node[driver] (online)  at (11.69,10.85) {Go Online / Offline};
+\node[driver] (accept)  at (11.69, 9.87) {Accept Pool Offer};
+\node[driver] (pickup)  at (11.69, 8.88) {Pick Up \& Drop Off};
+\node[driver] (finish)  at (11.69, 4.25) {Complete Ride};
+\node[driver] (earn)    at (11.69, 3.26) {View Earnings};
+
+% ---------------- shared use cases ----------------
+\node[shared] (auth)   at (8.35,7.13) {Register / Log In};
+\node[shared] (track)  at (8.35,6.07) {Track Trip \& Chat};
+\node[shared] (rate)   at (8.35,5.01) {Rate Trip \& Driver};
+
+% ---------------- system-internal use cases ----------------
+\node[sysuc] (match)   at (8.35,9.87) {Match Riders\into a Pool};
+\node[sysuc] (fare)    at (8.35,3.26) {Calculate \&\Split Fare};
+
+% ---------------- actors ----------------
+% Rider
+\node[anchornode] (rider) at (1.97,6.19) {};
+\begin{scope}[stick, shift={(1.97,6.19)}]
+  \draw (0,0.42) circle (0.20);
+  \draw (0,0.22) -- (0,-0.42);   \draw (-0.38,-0.02) -- (0.38,-0.02);
+  \draw (0,-0.42) -- (-0.26,-0.86);  \draw (0,-0.42) -- (0.26,-0.86);
+\end{scope}
+\node[font=\scriptsize\bfseries, anchor=north] at (1.97,5.22) {Rider};
+
+% Driver
+\node[anchornode] (driver) at (14.80,6.19) {};
+\begin{scope}[stick, shift={(14.80,6.19)}]
+  \draw (0,0.42) circle (0.20);
+  \draw (0,0.22) -- (0,-0.42);   \draw (-0.38,-0.02) -- (0.38,-0.02);
+  \draw (0,-0.42) -- (-0.26,-0.86);  \draw (0,-0.42) -- (0.26,-0.86);
+\end{scope}
+\node[font=\scriptsize\bfseries, anchor=north] at (14.80,5.22) {Driver};
+
+% Google Maps (secondary actor)
+\node[anchornode, minimum size=0.9cm] (maps) at (8.35,12.45) {};
+\begin{scope}[extstick, shift={(8.35,12.45)}]
+  \draw (0,0.34) circle (0.16);
+  \draw (0,0.18) -- (0,-0.34);   \draw (-0.30,-0.02) -- (0.30,-0.02);
+  \draw (0,-0.34) -- (-0.21,-0.70);  \draw (0,-0.34) -- (0.21,-0.70);
+\end{scope}
+\node[font=\tiny, midgrey, anchor=south] at (8.35,12.90) {\umlst{system} Google Maps Platform};
+
+% Payment Gateway (secondary actor)
+\node[anchornode, minimum size=0.9cm] (gateway) at (1.85,1.45) {};
+\begin{scope}[extstick, shift={(1.85,1.45)}]
+  \draw (0,0.34) circle (0.16);
+  \draw (0,0.18) -- (0,-0.34);   \draw (-0.30,-0.02) -- (0.30,-0.02);
+  \draw (0,-0.34) -- (-0.21,-0.70);  \draw (0,-0.34) -- (0.21,-0.70);
+\end{scope}
+\node[font=\tiny, midgrey, anchor=north, align=center] at (1.85,0.66)
+     {\umlst{system} Payment Gateway\(bKash / SSLCommerz)};
+
+% ---------------- associations ----------------
+\draw[assoc] (rider) -- (join);     \draw[assoc] (rider) -- (advance);
+\draw[assoc] (rider) -- (female);   \draw[assoc] (rider) -- (sathi);
+\draw[assoc] (rider) -- (estim);    \draw[assoc] (rider) -- (pay);
+\draw[assoc] (rider) -- (wallet);   \draw[assoc] (rider) -- (auth);
+\draw[assoc] (rider) -- (track);    \draw[assoc] (rider) -- (rate);
+
+\draw[assoc] (driver) -- (online);  \draw[assoc] (driver) -- (accept);
+\draw[assoc] (driver) -- (pickup);  \draw[assoc] (driver) -- (finish);
+\draw[assoc] (driver) -- (earn);    \draw[assoc] (driver) -- (auth);
+\draw[assoc] (driver) -- (track);   \draw[assoc] (driver) -- (rate);
+
+\draw[assoc] (maps)    -- (match);
+\draw[assoc] (gateway) -- (pay);
+\draw[assoc] (gateway) -- (wallet);
+
+% ---------------- include relationships ----------------
+\draw[incl] (join)   -- (match);
+\draw[incl] (advance)-- (match);
+\draw[incl] (accept) -- (match);
+\draw[incl] (estim)  -- (fare);
+\draw[incl] (pay)    -- (fare);
+
+% ---------------- legend ----------------
+\begin{scope}[shift={(4.55,0.30)}]
+  \draw[draw=hairline, line width=0.4pt, rounded corners=1pt] (0,0) rectangle (5.6,1.00);
+  \draw[assoc] (0.20,0.68) -- (0.90,0.68);
+  \node[font=\tiny, inkgrey, anchor=west] at (1.00,0.68) {association};
+  \draw[incl] (0.20,0.30) -- (0.90,0.30);
+  \node[font=\tiny, inkgrey, anchor=west] at (1.00,0.30) {\umlst{include}};
+  \node[font=\tiny, midgrey, anchor=west] at (2.55,0.68) {blue = rider \quad amber = driver};
+  \node[font=\tiny, midgrey, anchor=west] at (2.55,0.30) {grey = shared / system-internal};
+\end{scope}
+
+\end{tikzpicture}
+% ============================= END FIGURE ============================
+\end{document}

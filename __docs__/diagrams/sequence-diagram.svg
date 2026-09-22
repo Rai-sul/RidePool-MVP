@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1540 1954" width="1540" height="1954" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="solid" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#374151"/></marker>
+    <marker id="open" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10" fill="none" stroke="#374151" stroke-width="1.4"/></marker>
+  </defs>
+  <rect width="1540" height="1954" fill="#ffffff"/>
+  <path d="M24,146 L1516,146" stroke="#e5e7eb" stroke-width="1"/>
+  <path d="M24,542 L1516,542" stroke="#e5e7eb" stroke-width="1"/>
+  <path d="M24,868 L1516,868" stroke="#e5e7eb" stroke-width="1"/>
+  <path d="M24,1258 L1516,1258" stroke="#e5e7eb" stroke-width="1"/>
+  <path d="M24,1554 L1516,1554" stroke="#e5e7eb" stroke-width="1"/>
+  <path d="M120,92 L120,1920" stroke="#9ca3af" stroke-width="1.1" stroke-dasharray="6 5"/>
+  <path d="M390,92 L390,1920" stroke="#9ca3af" stroke-width="1.1" stroke-dasharray="6 5"/>
+  <path d="M660,92 L660,1920" stroke="#9ca3af" stroke-width="1.1" stroke-dasharray="6 5"/>
+  <path d="M930,92 L930,1920" stroke="#9ca3af" stroke-width="1.1" stroke-dasharray="6 5"/>
+  <path d="M1190,92 L1190,1920" stroke="#9ca3af" stroke-width="1.1" stroke-dasharray="6 5"/>
+  <path d="M1420,92 L1420,1920" stroke="#9ca3af" stroke-width="1.1" stroke-dasharray="6 5"/>
+  <rect x="114" y="210" width="12" height="28" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="114" y="520" width="12" height="28" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="114" y="642" width="12" height="28" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="114" y="786" width="12" height="88" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="114" y="1236" width="12" height="28" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="114" y="1434" width="12" height="28" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="114" y="1694" width="12" height="28" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="114" y="1808" width="12" height="104" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="384" y="210" width="12" height="66" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="384" y="482" width="12" height="66" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="384" y="642" width="12" height="1270" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="654" y="362" width="12" height="66" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="654" y="680" width="12" height="66" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="654" y="1008" width="12" height="28" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="654" y="1122" width="12" height="66" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="654" y="1732" width="12" height="142" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="924" y="248" width="12" height="262" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="924" y="1618" width="12" height="66" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="1184" y="286" width="12" height="66" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="1414" y="932" width="12" height="180" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="1414" y="1198" width="12" height="28" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="1414" y="1322" width="12" height="238" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+  <rect x="44" y="588" width="692" height="216" fill="none" stroke="#6b7280" stroke-width="1.2"/>
+  <path d="M44,588 h64 l12,22 h-76 z" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.2"/>
+  <text x="56" y="604" font-size="12" font-weight="700" fill="#111827">alt</text>
+  <text x="130" y="604" font-size="11.5" fill="#4b5563">[ matching pool found ]</text>
+  <path d="M44,736 L736,736" stroke="#6b7280" stroke-width="1.2" stroke-dasharray="7 5"/>
+  <text x="56" y="753" font-size="11.5" fill="#4b5563">[ none within range ]</text>
+  <rect x="44" y="1342" width="1452" height="148" fill="none" stroke="#6b7280" stroke-width="1.2"/>
+  <path d="M44,1342 h64 l12,22 h-76 z" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.2"/>
+  <text x="56" y="1358" font-size="12" font-weight="700" fill="#111827">loop</text>
+  <text x="130" y="1358" font-size="11.5" fill="#4b5563">[ for each passenger, in route order ]</text>
+  <path d="M126,224 L383,224" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="254.5" y="208" font-size="12" fill="#111827" text-anchor="middle">GET /api/pools/search</text>
+  <text x="254.5" y="219" font-size="9.5" fill="#6b7280" text-anchor="middle">{ pickup, dropoff, vehicle_type }</text>
+  <path d="M396,262 L923,262" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="659.5" y="246" font-size="12" fill="#111827" text-anchor="middle">searchPools() · estimateFare()</text>
+  <path d="M936,300 L1183,300" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="1059.5" y="284" font-size="12" fill="#111827" text-anchor="middle">Directions · Distance Matrix</text>
+  <path d="M1184,338 L937,338" stroke="#374151" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#open)"/>
+  <text x="1060.5" y="322" font-size="12" fill="#111827" text-anchor="middle">polyline, distance, ETA</text>
+  <path d="M924,376 L667,376" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="795.5" y="360" font-size="12" fill="#111827" text-anchor="middle">SELECT pools by H3 ring</text>
+  <text x="795.5" y="371" font-size="9.5" fill="#6b7280" text-anchor="middle">pickup res 9 · destination res 7</text>
+  <path d="M666,414 L923,414" stroke="#374151" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#open)"/>
+  <text x="794.5" y="398" font-size="12" fill="#111827" text-anchor="middle">candidate pools</text>
+  <path d="M936,458 L984,458 L984,484 L938,484" fill="none" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="994" y="468" font-size="12" fill="#111827">routeOverlap scoring</text>
+  <text x="994" y="482" font-size="9.5" fill="#6b7280">viability + join score</text>
+  <path d="M924,496 L397,496" stroke="#374151" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#open)"/>
+  <text x="660.5" y="480" font-size="12" fill="#111827" text-anchor="middle">ranked pools · fare_per_person</text>
+  <path d="M384,534 L127,534" stroke="#374151" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#open)"/>
+  <text x="255.5" y="518" font-size="12" fill="#111827" text-anchor="middle">200 [ pools ]</text>
+  <path d="M126,656 L383,656" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="254.5" y="640" font-size="12" fill="#111827" text-anchor="middle">POST /api/pools/:poolId/join</text>
+  <path d="M396,694 L653,694" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="524.5" y="678" font-size="12" fill="#111827" text-anchor="middle">atomic_join_pool(pool, rider, ride)</text>
+  <text x="524.5" y="689" font-size="9.5" fill="#6b7280" text-anchor="middle">row lock · capacity · pickup range · gender · duplicate</text>
+  <path d="M654,732 L397,732" stroke="#374151" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#open)"/>
+  <text x="525.5" y="716" font-size="12" fill="#111827" text-anchor="middle">pool_members row · pool state</text>
+  <path d="M126,800 L383,800" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="254.5" y="784" font-size="12" fill="#111827" text-anchor="middle">POST /api/pools/create</text>
+  <text x="254.5" y="795" font-size="9.5" fill="#6b7280" text-anchor="middle">opens a pool at the rider’s H3 cell</text>
+  <path d="M384,860 L127,860" stroke="#374151" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#open)"/>
+  <text x="255.5" y="844" font-size="12" fill="#111827" text-anchor="middle">200 { pool, fare_per_person }</text>
+  <path d="M1414,946 L397,946" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="905.5" y="930" font-size="12" fill="#111827" text-anchor="middle">POST /api/driver/go-online</text>
+  <text x="905.5" y="941" font-size="9.5" fill="#6b7280" text-anchor="middle">vehicle, location → driver_sessions</text>
+  <path d="M1414,984 L397,984" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="905.5" y="968" font-size="12" fill="#111827" text-anchor="middle">GET /api/driver/available-pools</text>
+  <path d="M396,1022 L653,1022" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="524.5" y="1006" font-size="12" fill="#111827" text-anchor="middle">SELECT pools near driver_h3 (res 8)</text>
+  <path d="M396,1060 L1413,1060" stroke="#374151" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#open)"/>
+  <text x="904.5" y="1044" font-size="12" fill="#111827" text-anchor="middle">200 [ offers ]</text>
+  <path d="M1414,1098 L397,1098" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="905.5" y="1082" font-size="12" fill="#111827" text-anchor="middle">POST /api/driver/pools/:poolId/accept</text>
+  <path d="M396,1136 L653,1136" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="524.5" y="1120" font-size="12" fill="#111827" text-anchor="middle">atomic_accept_pool(pool, driver)</text>
+  <text x="524.5" y="1131" font-size="9.5" fill="#6b7280" text-anchor="middle">SKIP LOCKED — no double assignment</text>
+  <path d="M654,1174 L397,1174" stroke="#374151" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#open)"/>
+  <text x="525.5" y="1158" font-size="12" fill="#111827" text-anchor="middle">assigned · pickup window opened</text>
+  <path d="M396,1212 L1413,1212" stroke="#374151" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#open)"/>
+  <text x="904.5" y="1196" font-size="12" fill="#111827" text-anchor="middle">200 { passengers, route }</text>
+  <path d="M384,1250 L127,1250" stroke="#374151" stroke-width="1.3" marker-end="url(#open)"/>
+  <text x="255.5" y="1234" font-size="12" fill="#111827" text-anchor="middle">push: driver, vehicle, ETA</text>
+  <path d="M1414,1336 L397,1336" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="905.5" y="1320" font-size="12" fill="#111827" text-anchor="middle">POST /api/driver/ride/start</text>
+  <path d="M1414,1410 L397,1410" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="905.5" y="1394" font-size="12" fill="#111827" text-anchor="middle">POST /api/driver/pickup/:passengerId</text>
+  <path d="M384,1448 L127,1448" stroke="#374151" stroke-width="1.3" marker-end="url(#open)"/>
+  <text x="255.5" y="1432" font-size="12" fill="#111827" text-anchor="middle">push: picked up · trip status</text>
+  <path d="M1414,1486 L397,1486" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="905.5" y="1470" font-size="12" fill="#111827" text-anchor="middle">POST /api/driver/dropoff/:passengerId</text>
+  <path d="M1414,1546 L397,1546" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="905.5" y="1530" font-size="12" fill="#111827" text-anchor="middle">POST /api/driver/ride/complete</text>
+  <path d="M396,1632 L923,1632" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="659.5" y="1616" font-size="12" fill="#111827" text-anchor="middle">splitFare(pool, members)</text>
+  <text x="659.5" y="1627" font-size="9.5" fill="#6b7280" text-anchor="middle">base · distance · pool discount · surcharge</text>
+  <path d="M924,1670 L397,1670" stroke="#374151" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#open)"/>
+  <text x="660.5" y="1654" font-size="12" fill="#111827" text-anchor="middle">per-rider share</text>
+  <path d="M126,1708 L383,1708" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="254.5" y="1692" font-size="12" fill="#111827" text-anchor="middle">POST /api/payments/process</text>
+  <text x="254.5" y="1703" font-size="9.5" fill="#6b7280" text-anchor="middle">payment_method = WALLET | CASH | MOBILE_BANKING</text>
+  <path d="M396,1746 L653,1746" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="524.5" y="1730" font-size="12" fill="#111827" text-anchor="middle">atomic_wallet_debit(rider, share)</text>
+  <text x="524.5" y="1741" font-size="9.5" fill="#6b7280" text-anchor="middle">refuses a negative balance, writes the transaction</text>
+  <path d="M654,1784 L397,1784" stroke="#374151" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#open)"/>
+  <text x="525.5" y="1768" font-size="12" fill="#111827" text-anchor="middle">transaction · new balance</text>
+  <path d="M384,1822 L127,1822" stroke="#374151" stroke-width="1.3" stroke-dasharray="7 5" marker-end="url(#open)"/>
+  <text x="255.5" y="1806" font-size="12" fill="#111827" text-anchor="middle">200 receipt</text>
+  <path d="M396,1860 L653,1860" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="524.5" y="1844" font-size="12" fill="#111827" text-anchor="middle">INSERT driver_earnings</text>
+  <path d="M126,1898 L383,1898" stroke="#374151" stroke-width="1.3" marker-end="url(#solid)"/>
+  <text x="254.5" y="1882" font-size="12" fill="#111827" text-anchor="middle">POST /api/ratings</text>
+  <text x="254.5" y="1893" font-size="9.5" fill="#6b7280" text-anchor="middle">the driver rates the riders with the same call</text>
+  <rect x="30" y="134" width="170" height="24" rx="4" fill="#ffffff" stroke="#dbeafe"/>
+  <text x="41" y="151" font-size="13" font-weight="700" fill="#2563eb">1 · Search and match</text>
+  <rect x="30" y="530" width="133" height="24" rx="4" fill="#ffffff" stroke="#dbeafe"/>
+  <text x="41" y="547" font-size="13" font-weight="700" fill="#2563eb">2 · Join a pool</text>
+  <rect x="30" y="856" width="199.60000000000002" height="24" rx="4" fill="#ffffff" stroke="#dbeafe"/>
+  <text x="41" y="873" font-size="13" font-weight="700" fill="#2563eb">3 · Dispatch to a driver</text>
+  <rect x="30" y="1246" width="140.4" height="24" rx="4" fill="#ffffff" stroke="#dbeafe"/>
+  <text x="41" y="1263" font-size="13" font-weight="700" fill="#2563eb">4 · Run the trip</text>
+  <rect x="30" y="1542" width="162.6" height="24" rx="4" fill="#ffffff" stroke="#dbeafe"/>
+  <text x="41" y="1559" font-size="13" font-weight="700" fill="#2563eb">5 · Settle and rate</text>
+  <rect x="25" y="40" width="190" height="52" rx="5" fill="#f9fafb" stroke="#374151" stroke-width="1.5"/>
+  <text x="120" y="62" font-size="13.5" font-weight="700" fill="#111827" text-anchor="middle">Rider</text>
+  <text x="120" y="79" font-size="10.5" fill="#6b7280" text-anchor="middle">CarPoolApp</text>
+  <rect x="295" y="40" width="190" height="52" rx="5" fill="#f9fafb" stroke="#374151" stroke-width="1.5"/>
+  <text x="390" y="62" font-size="13.5" font-weight="700" fill="#111827" text-anchor="middle">RidePool API</text>
+  <text x="390" y="79" font-size="10.5" fill="#6b7280" text-anchor="middle">Express</text>
+  <rect x="565" y="40" width="190" height="52" rx="5" fill="#f9fafb" stroke="#374151" stroke-width="1.5"/>
+  <text x="660" y="62" font-size="13.5" font-weight="700" fill="#111827" text-anchor="middle">Supabase</text>
+  <text x="660" y="79" font-size="10.5" fill="#6b7280" text-anchor="middle">PostgreSQL</text>
+  <rect x="835" y="40" width="190" height="52" rx="5" fill="#f9fafb" stroke="#374151" stroke-width="1.5"/>
+  <text x="930" y="62" font-size="13.5" font-weight="700" fill="#111827" text-anchor="middle">Matching &amp; Fare</text>
+  <text x="930" y="79" font-size="10.5" fill="#6b7280" text-anchor="middle">services</text>
+  <rect x="1095" y="40" width="190" height="52" rx="5" fill="#f9fafb" stroke="#374151" stroke-width="1.5"/>
+  <text x="1190" y="62" font-size="13.5" font-weight="700" fill="#111827" text-anchor="middle">Google Maps</text>
+  <text x="1190" y="79" font-size="10.5" fill="#6b7280" text-anchor="middle">Directions API</text>
+  <rect x="1325" y="40" width="190" height="52" rx="5" fill="#f9fafb" stroke="#374151" stroke-width="1.5"/>
+  <text x="1420" y="62" font-size="13.5" font-weight="700" fill="#111827" text-anchor="middle">Driver</text>
+  <text x="1420" y="79" font-size="10.5" fill="#6b7280" text-anchor="middle">DriverApp</text>
+</svg>

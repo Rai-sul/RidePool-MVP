@@ -1,0 +1,148 @@
+% =====================================================================
+%  RidePool -- UML Activity Diagram (swimlanes: Rider | System | Driver)
+%  The pooled-ride lifecycle, from request to rating.
+%  Standalone TikZ figure. Compile with pdflatex/lualatex/xelatex.
+%
+%  To use it inside your report instead, copy everything between
+%  "BEGIN FIGURE" and "END FIGURE" into your document and make sure the
+%  preamble lines marked (*) are present in your own preamble.
+%
+%  The picture uses pixel-like units (x = -y = 0.013934cm) so the
+%  coordinates match the SVG next to this file one for one.
+% =====================================================================
+\documentclass[border=4pt]{standalone}
+
+\usepackage[T1]{fontenc}          % (*)
+\usepackage{tikz}                 % (*)
+\usetikzlibrary{arrows.meta}      % (*)
+\usepackage{xcolor}               % (*)
+
+% ---- (*) palette: taken from the RidePool design tokens -------------
+\definecolor{riderblue}{HTML}{2563EB}
+\definecolor{riderbg}{HTML}{EFF6FF}
+\definecolor{driveramber}{HTML}{B45309}
+\definecolor{driverbg}{HTML}{FFFBEB}
+\definecolor{inkdark}{HTML}{111827}
+\definecolor{inkgrey}{HTML}{374151}
+\definecolor{midgrey}{HTML}{6B7280}
+\definecolor{surfacegrey}{HTML}{F9FAFB}
+\definecolor{lanegrey}{HTML}{F3F4F6}
+
+% ---- (*) styles -----------------------------------------------------
+\tikzset{
+  act/.style     ={rectangle, rounded corners=3pt, draw, line width=0.5pt,
+                   minimum height=0.67cm, inner sep=1pt, align=center,
+                   font=\tiny, text=inkdark},
+  rideract/.style={act, draw=riderblue,   fill=riderbg},
+  sysact/.style  ={act, draw=inkgrey,     fill=surfacegrey},
+  drvact/.style  ={act, draw=driveramber, fill=driverbg},
+  lane/.style    ={draw=inkgrey, line width=0.55pt},
+  flow/.style    ={draw=inkgrey, line width=0.45pt,
+                   -{Stealth[length=1.6mm,width=1.2mm]}},
+  join/.style    ={draw=inkgrey, line width=0.45pt},
+  guard/.style   ={font=\tiny, text=midgrey, inner sep=1pt},
+}
+% ---- (*) decision diamond: #1 x, #2 y, #3 half-w, #4 half-h, #5 label
+\newcommand{\dec}[5]{%
+  \draw[lane, fill=white] (#1,{#2-#4}) -- ({#1+#3},#2) -- (#1,{#2+#4}) -- ({#1-#3},#2) -- cycle;
+  \node[font=\tiny, text=inkdark, inner sep=0pt] at (#1,#2) {#5};%
+}
+
+\begin{document}
+% ============================ BEGIN FIGURE ===========================
+\begin{tikzpicture}[x=0.013934cm, y=-0.013934cm]
+
+% ---------------- swimlanes ----------------
+\fill[riderbg]  (40,40)  rectangle (420,88);
+\fill[lanegrey] (420,40) rectangle (800,88);
+\fill[driverbg] (800,40) rectangle (1180,88);
+\draw[lane] (40,40) rectangle (1180,1700);
+\draw[lane] (40,88)  -- (1180,88);
+\draw[lane] (420,40) -- (420,1700);
+\draw[lane] (800,40) -- (800,1700);
+\node[font=\scriptsize\bfseries, text=inkdark] at (230,64) {Rider};
+\node[font=\scriptsize\bfseries, text=inkdark] at (610,64) {RidePool System};
+\node[font=\scriptsize\bfseries, text=inkdark] at (990,64) {Driver};
+
+% ---------------- initial / final nodes ----------------
+\fill[inkdark] (230,130) circle (0.167cm);
+\fill[inkdark] (990,130) circle (0.167cm);
+\draw[lane, fill=white] (610,1660) circle (0.195cm);
+\fill[inkdark] (610,1660) circle (0.112cm);
+
+% ---------------- rider actions ----------------
+\node[rideract, minimum width=3.90cm] at (230, 200) {Enter pickup, destination \& time};
+\node[rideract, minimum width=3.90cm] at (230,1140) {See driver, vehicle \& ETA};
+\node[rideract, minimum width=3.76cm] at (230,1440) {Pay fare --- wallet or cash};
+\node[rideract, minimum width=2.37cm] at (230,1590) {Rate driver};
+
+% ---------------- system actions ----------------
+\node[sysact, minimum width=3.34cm] at (610, 285) {Estimate fare \& route};
+\node[sysact, minimum width=3.34cm] at (610, 360) {Search pools by H3 ring};
+\node[sysact, minimum width=2.23cm] at (535, 520) {Join matching pool};
+\node[sysact, minimum width=2.23cm] at (705, 520) {Create new pool};
+\node[sysact, minimum width=2.23cm, minimum height=0.78cm] at (715,645)
+     {Hold in SCHEDULED until\\pickup window opens};
+\node[sysact, minimum width=3.62cm] at (610, 745) {Broadcast offer to nearby drivers};
+\node[sysact, minimum width=2.79cm] at (610, 985) {Extend search window};
+\node[sysact, minimum width=4.18cm] at (610,1065) {Assign driver \& open pickup window};
+\node[sysact, minimum width=3.34cm] at (610,1365) {Calculate \& split fare};
+\node[sysact, minimum width=3.90cm] at (610,1515) {Debit wallet \& credit earnings};
+
+% ---------------- driver actions ----------------
+\node[drvact, minimum width=3.90cm] at (990, 200) {Go online \& share location};
+\node[drvact, minimum width=3.90cm] at (990, 825) {Receive offer \& review route};
+\node[drvact, minimum width=2.51cm] at (990, 985) {Accept pool};
+\node[drvact, minimum width=4.18cm] at (990,1215) {Pick up \& drop off each passenger};
+\node[drvact, minimum width=2.79cm] at (990,1290) {Complete ride};
+\node[drvact, minimum width=2.37cm] at (990,1590) {Rate riders};
+
+% ---------------- decisions ----------------
+\dec{610}{440}{70}{32}{Matching pool?}
+\dec{535}{645}{65}{30}{Advance booking?}
+\dec{990}{905}{65}{30}{Accept?}
+
+% ---------------- control flow ----------------
+\draw[flow] (230,142) -- (230,176);
+\draw[flow] (990,142) -- (990,176);
+\draw[flow] (230,224) -- (230,248) -- (610,248) -- (610,261);
+\draw[flow] (610,309) -- (610,336);
+\draw[flow] (610,384) -- (610,408);
+\draw[flow] (540,440) -- (490,440) -- (490,496);
+\draw[flow] (680,440) -- (740,440) -- (740,496);
+\draw[flow] (535,544) -- (535,615);
+\draw[join] (705,544) -- (705,578) -- (535,578);
+\draw[flow] (600,645) -- (635,645);
+\draw[flow] (535,675) -- (535,710) -- (610,710) -- (610,721);
+\draw[join] (715,673) -- (715,710) -- (610,710);
+\draw[flow] (610,769) -- (610,825) -- (850,825);
+\draw[flow] (990,224) -- (990,801);
+\draw[flow] (990,849) -- (990,875);
+\draw[flow] (990,935) -- (990,961);
+\draw[flow] (925,905) -- (880,905) -- (880,940) -- (610,940) -- (610,961);
+\draw[flow] (510,985) -- (442,985) -- (442,745) -- (480,745);
+\draw[flow] (990,1009) -- (990,1035) -- (610,1035) -- (610,1041);
+\draw[flow] (610,1089) -- (610,1110) -- (230,1110) -- (230,1116);
+\draw[flow] (230,1164) -- (230,1185) -- (990,1185) -- (990,1191);
+\draw[flow] (990,1239) -- (990,1266);
+\draw[flow] (990,1314) -- (990,1330) -- (610,1330) -- (610,1341);
+\draw[flow] (610,1389) -- (610,1405) -- (230,1405) -- (230,1416);
+\draw[flow] (230,1464) -- (230,1480) -- (610,1480) -- (610,1491);
+\draw[flow] (610,1539) -- (610,1556) -- (230,1556) -- (230,1566);
+\draw[flow] (610,1556) -- (990,1556) -- (990,1566);
+\draw[flow] (230,1614) -- (230,1635) -- (610,1635) -- (610,1646);
+\draw[join] (990,1614) -- (990,1635) -- (610,1635);
+
+% ---------------- guards ----------------
+\node[guard, anchor=south east] at (536,432) {[yes]};
+\node[guard, anchor=south west] at (686,432) {[no]};
+\node[guard, anchor=south]      at (617,640) {[yes]};
+\node[guard, anchor=east]       at (528,700) {[no]};
+\node[guard, anchor=west]       at (998,955) {[yes]};
+\node[guard, anchor=south east] at (922,900) {[no]};
+\node[guard, anchor=west, align=left] at (1000,513) {waiting\\for offers};
+\node[guard, anchor=west]       at (448,868) {re-broadcast};
+
+\end{tikzpicture}
+% ============================= END FIGURE ============================
+\end{document}

@@ -1,0 +1,421 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1556 930" width="1556" height="930" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="1556" height="930" fill="#ffffff"/>
+  <rect x="30" y="40" width="288" height="750" rx="6" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="30" y="40" width="288" height="30" rx="6" fill="#2563eb"/>
+  <rect x="30" y="60" width="288" height="10" fill="#2563eb"/>
+  <text x="44" y="60" font-size="13" font-weight="700" fill="#ffffff">identity</text>
+  <text x="44" y="84" font-size="9" fill="#9ca3af">20260921000200_tables_identity</text>
+  <rect x="332" y="40" width="288" height="750" rx="6" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="332" y="40" width="288" height="30" rx="6" fill="#374151"/>
+  <rect x="332" y="60" width="288" height="10" fill="#374151"/>
+  <text x="346" y="60" font-size="13" font-weight="700" fill="#ffffff">ride core</text>
+  <text x="346" y="84" font-size="9" fill="#9ca3af">20260921000300_tables_rides</text>
+  <rect x="634" y="40" width="288" height="750" rx="6" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="634" y="40" width="288" height="30" rx="6" fill="#b45309"/>
+  <rect x="634" y="60" width="288" height="10" fill="#b45309"/>
+  <text x="648" y="60" font-size="13" font-weight="700" fill="#ffffff">money &amp; driver economics</text>
+  <text x="648" y="84" font-size="9" fill="#9ca3af">20260921000400_tables_money</text>
+  <rect x="936" y="40" width="288" height="750" rx="6" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="936" y="40" width="288" height="30" rx="6" fill="#0891b2"/>
+  <rect x="936" y="60" width="288" height="10" fill="#0891b2"/>
+  <text x="950" y="60" font-size="13" font-weight="700" fill="#ffffff">messaging</text>
+  <text x="950" y="84" font-size="9" fill="#9ca3af">20260921000500_tables_messaging</text>
+  <rect x="1238" y="40" width="288" height="750" rx="6" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="1238" y="40" width="288" height="30" rx="6" fill="#059669"/>
+  <rect x="1238" y="60" width="288" height="10" fill="#059669"/>
+  <text x="1252" y="60" font-size="13" font-weight="700" fill="#ffffff">operations</text>
+  <text x="1252" y="84" font-size="9" fill="#9ca3af">20260921000600_tables_ops</text>
+  <rect x="44" y="86" width="260" height="72" rx="4" fill="#ffffff" stroke="#2563eb" stroke-width="1.3"/>
+  <rect x="44" y="86" width="260" height="22" fill="#f9fafb"/>
+  <path d="M44,108 h260" stroke="#2563eb" stroke-width="1"/>
+  <text x="52" y="101" font-size="11.5" font-weight="700" fill="#111827">users</text>
+    <text x="52" y="119" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="74" y="119" font-size="10" fill="#111827">id</text>
+    <text x="296" y="119" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="52" y="133" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="74" y="133" font-size="10" fill="#111827">id</text>
+    <text x="296" y="133" font-size="8.5" fill="#4b5563" text-anchor="end">→ auth.users</text>
+    <text x="74" y="147" font-size="9" fill="#9ca3af" font-style="italic">+ 24 other columns</text>
+  <rect x="44" y="174" width="260" height="72" rx="4" fill="#ffffff" stroke="#2563eb" stroke-width="1.3"/>
+  <rect x="44" y="174" width="260" height="22" fill="#f9fafb"/>
+  <path d="M44,196 h260" stroke="#2563eb" stroke-width="1"/>
+  <text x="52" y="189" font-size="11.5" font-weight="700" fill="#111827">wallets</text>
+    <text x="52" y="207" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="74" y="207" font-size="10" fill="#111827">id</text>
+    <text x="296" y="207" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="52" y="221" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="74" y="221" font-size="10" fill="#111827">user_id</text>
+    <text x="296" y="221" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="74" y="235" font-size="9" fill="#9ca3af" font-style="italic">+ 4 other columns</text>
+  <rect x="44" y="262" width="260" height="72" rx="4" fill="#ffffff" stroke="#2563eb" stroke-width="1.3"/>
+  <rect x="44" y="262" width="260" height="22" fill="#f9fafb"/>
+  <path d="M44,284 h260" stroke="#2563eb" stroke-width="1"/>
+  <text x="52" y="277" font-size="11.5" font-weight="700" fill="#111827">wallet_transactions</text>
+    <text x="52" y="295" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="74" y="295" font-size="10" fill="#111827">id</text>
+    <text x="296" y="295" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="52" y="309" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="74" y="309" font-size="10" fill="#111827">wallet_id</text>
+    <text x="296" y="309" font-size="8.5" fill="#4b5563" text-anchor="end">→ wallets</text>
+    <text x="74" y="323" font-size="9" fill="#9ca3af" font-style="italic">+ 8 other columns</text>
+  <rect x="44" y="350" width="260" height="72" rx="4" fill="#ffffff" stroke="#2563eb" stroke-width="1.3"/>
+  <rect x="44" y="350" width="260" height="22" fill="#f9fafb"/>
+  <path d="M44,372 h260" stroke="#2563eb" stroke-width="1"/>
+  <text x="52" y="365" font-size="11.5" font-weight="700" fill="#111827">saved_places</text>
+    <text x="52" y="383" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="74" y="383" font-size="10" fill="#111827">id</text>
+    <text x="296" y="383" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="52" y="397" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="74" y="397" font-size="10" fill="#111827">user_id</text>
+    <text x="296" y="397" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="74" y="411" font-size="9" fill="#9ca3af" font-style="italic">+ 8 other columns</text>
+  <rect x="44" y="438" width="260" height="86" rx="4" fill="#ffffff" stroke="#2563eb" stroke-width="1.3"/>
+  <rect x="44" y="438" width="260" height="22" fill="#f9fafb"/>
+  <path d="M44,460 h260" stroke="#2563eb" stroke-width="1"/>
+  <text x="52" y="453" font-size="11.5" font-weight="700" fill="#111827">priyo_sathi</text>
+    <text x="52" y="471" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="74" y="471" font-size="10" fill="#111827">id</text>
+    <text x="296" y="471" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="52" y="485" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="74" y="485" font-size="10" fill="#111827">user_id</text>
+    <text x="296" y="485" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="52" y="499" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="74" y="499" font-size="10" fill="#111827">companion_id</text>
+    <text x="296" y="499" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="74" y="513" font-size="9" fill="#9ca3af" font-style="italic">+ 3 other columns</text>
+  <rect x="44" y="540" width="260" height="72" rx="4" fill="#ffffff" stroke="#2563eb" stroke-width="1.3"/>
+  <rect x="44" y="540" width="260" height="22" fill="#f9fafb"/>
+  <path d="M44,562 h260" stroke="#2563eb" stroke-width="1"/>
+  <text x="52" y="555" font-size="11.5" font-weight="700" fill="#111827">device_tokens</text>
+    <text x="52" y="573" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="74" y="573" font-size="10" fill="#111827">id</text>
+    <text x="296" y="573" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="52" y="587" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="74" y="587" font-size="10" fill="#111827">user_id</text>
+    <text x="296" y="587" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="74" y="601" font-size="9" fill="#9ca3af" font-style="italic">+ 6 other columns</text>
+  <rect x="44" y="628" width="260" height="72" rx="4" fill="#ffffff" stroke="#2563eb" stroke-width="1.3"/>
+  <rect x="44" y="628" width="260" height="22" fill="#f9fafb"/>
+  <path d="M44,650 h260" stroke="#2563eb" stroke-width="1"/>
+  <text x="52" y="643" font-size="11.5" font-weight="700" fill="#111827">notification_preferences</text>
+    <text x="52" y="661" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="74" y="661" font-size="10" fill="#111827">id</text>
+    <text x="296" y="661" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="52" y="675" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="74" y="675" font-size="10" fill="#111827">user_id</text>
+    <text x="296" y="675" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="74" y="689" font-size="9" fill="#9ca3af" font-style="italic">+ 8 other columns</text>
+  <rect x="346" y="86" width="260" height="72" rx="4" fill="#ffffff" stroke="#374151" stroke-width="1.3"/>
+  <rect x="346" y="86" width="260" height="22" fill="#f9fafb"/>
+  <path d="M346,108 h260" stroke="#374151" stroke-width="1"/>
+  <text x="354" y="101" font-size="11.5" font-weight="700" fill="#111827">vehicles</text>
+    <text x="354" y="119" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="376" y="119" font-size="10" fill="#111827">id</text>
+    <text x="598" y="119" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="354" y="133" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="376" y="133" font-size="10" fill="#111827">driver_id</text>
+    <text x="598" y="133" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="376" y="147" font-size="9" fill="#9ca3af" font-style="italic">+ 9 other columns</text>
+  <rect x="346" y="174" width="260" height="100" rx="4" fill="#ffffff" stroke="#374151" stroke-width="1.3"/>
+  <rect x="346" y="174" width="260" height="22" fill="#f9fafb"/>
+  <path d="M346,196 h260" stroke="#374151" stroke-width="1"/>
+  <text x="354" y="189" font-size="11.5" font-weight="700" fill="#111827">pools</text>
+    <text x="354" y="207" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="376" y="207" font-size="10" fill="#111827">id</text>
+    <text x="598" y="207" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="354" y="221" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="376" y="221" font-size="10" fill="#111827">creator_user_id</text>
+    <text x="598" y="221" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="354" y="235" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="376" y="235" font-size="10" fill="#111827">driver_id</text>
+    <text x="598" y="235" font-size="8.5" fill="#4b5563" text-anchor="end">→ users · set null</text>
+    <text x="354" y="249" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="376" y="249" font-size="10" fill="#111827">vehicle_id</text>
+    <text x="598" y="249" font-size="8.5" fill="#4b5563" text-anchor="end">→ vehicles · set null</text>
+    <text x="376" y="263" font-size="9" fill="#9ca3af" font-style="italic">+ 37 other columns</text>
+  <rect x="346" y="290" width="260" height="86" rx="4" fill="#ffffff" stroke="#374151" stroke-width="1.3"/>
+  <rect x="346" y="290" width="260" height="22" fill="#f9fafb"/>
+  <path d="M346,312 h260" stroke="#374151" stroke-width="1"/>
+  <text x="354" y="305" font-size="11.5" font-weight="700" fill="#111827">rides</text>
+    <text x="354" y="323" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="376" y="323" font-size="10" fill="#111827">id</text>
+    <text x="598" y="323" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="354" y="337" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="376" y="337" font-size="10" fill="#111827">user_id</text>
+    <text x="598" y="337" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="354" y="351" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="376" y="351" font-size="10" fill="#111827">pool_id</text>
+    <text x="598" y="351" font-size="8.5" fill="#4b5563" text-anchor="end">→ pools · set null</text>
+    <text x="376" y="365" font-size="9" fill="#9ca3af" font-style="italic">+ 36 other columns</text>
+  <rect x="346" y="392" width="260" height="100" rx="4" fill="#ffffff" stroke="#374151" stroke-width="1.3"/>
+  <rect x="346" y="392" width="260" height="22" fill="#f9fafb"/>
+  <path d="M346,414 h260" stroke="#374151" stroke-width="1"/>
+  <text x="354" y="407" font-size="11.5" font-weight="700" fill="#111827">pool_members</text>
+    <text x="354" y="425" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="376" y="425" font-size="10" fill="#111827">id</text>
+    <text x="598" y="425" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="354" y="439" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="376" y="439" font-size="10" fill="#111827">pool_id</text>
+    <text x="598" y="439" font-size="8.5" fill="#4b5563" text-anchor="end">→ pools</text>
+    <text x="354" y="453" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="376" y="453" font-size="10" fill="#111827">user_id</text>
+    <text x="598" y="453" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="354" y="467" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="376" y="467" font-size="10" fill="#111827">ride_id</text>
+    <text x="598" y="467" font-size="8.5" fill="#4b5563" text-anchor="end">→ rides</text>
+    <text x="376" y="481" font-size="9" fill="#9ca3af" font-style="italic">+ 7 other columns</text>
+  <rect x="346" y="508" width="260" height="100" rx="4" fill="#ffffff" stroke="#374151" stroke-width="1.3"/>
+  <rect x="346" y="508" width="260" height="22" fill="#f9fafb"/>
+  <path d="M346,530 h260" stroke="#374151" stroke-width="1"/>
+  <text x="354" y="523" font-size="11.5" font-weight="700" fill="#111827">vehicle_locations</text>
+    <text x="354" y="541" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="376" y="541" font-size="10" fill="#111827">id</text>
+    <text x="598" y="541" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="354" y="555" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="376" y="555" font-size="10" fill="#111827">vehicle_id</text>
+    <text x="598" y="555" font-size="8.5" fill="#4b5563" text-anchor="end">→ vehicles</text>
+    <text x="354" y="569" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="376" y="569" font-size="10" fill="#111827">driver_id</text>
+    <text x="598" y="569" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="354" y="583" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="376" y="583" font-size="10" fill="#111827">pool_id</text>
+    <text x="598" y="583" font-size="8.5" fill="#4b5563" text-anchor="end">→ pools · set null</text>
+    <text x="376" y="597" font-size="9" fill="#9ca3af" font-style="italic">+ 10 other columns</text>
+  <rect x="648" y="86" width="260" height="86" rx="4" fill="#ffffff" stroke="#b45309" stroke-width="1.3"/>
+  <rect x="648" y="86" width="260" height="22" fill="#f9fafb"/>
+  <path d="M648,108 h260" stroke="#b45309" stroke-width="1"/>
+  <text x="656" y="101" font-size="11.5" font-weight="700" fill="#111827">payments</text>
+    <text x="656" y="119" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="678" y="119" font-size="10" fill="#111827">id</text>
+    <text x="900" y="119" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="656" y="133" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="678" y="133" font-size="10" fill="#111827">ride_id</text>
+    <text x="900" y="133" font-size="8.5" fill="#4b5563" text-anchor="end">→ rides</text>
+    <text x="656" y="147" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="678" y="147" font-size="10" fill="#111827">user_id</text>
+    <text x="900" y="147" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="678" y="161" font-size="9" fill="#9ca3af" font-style="italic">+ 8 other columns</text>
+  <rect x="648" y="188" width="260" height="58" rx="4" fill="#ffffff" stroke="#b45309" stroke-width="1.3"/>
+  <rect x="648" y="188" width="260" height="22" fill="#f9fafb"/>
+  <path d="M648,210 h260" stroke="#b45309" stroke-width="1"/>
+  <text x="656" y="203" font-size="11.5" font-weight="700" fill="#111827">promo_codes</text>
+    <text x="656" y="221" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="678" y="221" font-size="10" fill="#111827">id</text>
+    <text x="900" y="221" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="678" y="235" font-size="9" fill="#9ca3af" font-style="italic">+ 12 other columns</text>
+  <rect x="648" y="262" width="260" height="100" rx="4" fill="#ffffff" stroke="#b45309" stroke-width="1.3"/>
+  <rect x="648" y="262" width="260" height="22" fill="#f9fafb"/>
+  <path d="M648,284 h260" stroke="#b45309" stroke-width="1"/>
+  <text x="656" y="277" font-size="11.5" font-weight="700" fill="#111827">user_promo_usage</text>
+    <text x="656" y="295" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="678" y="295" font-size="10" fill="#111827">id</text>
+    <text x="900" y="295" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="656" y="309" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="678" y="309" font-size="10" fill="#111827">user_id</text>
+    <text x="900" y="309" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="656" y="323" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="678" y="323" font-size="10" fill="#111827">promo_code_id</text>
+    <text x="900" y="323" font-size="8.5" fill="#4b5563" text-anchor="end">→ promo_codes</text>
+    <text x="656" y="337" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="678" y="337" font-size="10" fill="#111827">ride_id</text>
+    <text x="900" y="337" font-size="8.5" fill="#4b5563" text-anchor="end">→ rides · no action</text>
+    <text x="678" y="351" font-size="9" fill="#9ca3af" font-style="italic">+ 2 other columns</text>
+  <rect x="648" y="378" width="260" height="86" rx="4" fill="#ffffff" stroke="#b45309" stroke-width="1.3"/>
+  <rect x="648" y="378" width="260" height="22" fill="#f9fafb"/>
+  <path d="M648,400 h260" stroke="#b45309" stroke-width="1"/>
+  <text x="656" y="393" font-size="11.5" font-weight="700" fill="#111827">promise_money_transactions</text>
+    <text x="656" y="411" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="678" y="411" font-size="10" fill="#111827">id</text>
+    <text x="900" y="411" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="656" y="425" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="678" y="425" font-size="10" fill="#111827">user_id</text>
+    <text x="900" y="425" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="656" y="439" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="678" y="439" font-size="10" fill="#111827">ride_id</text>
+    <text x="900" y="439" font-size="8.5" fill="#4b5563" text-anchor="end">→ rides · no action</text>
+    <text x="678" y="453" font-size="9" fill="#9ca3af" font-style="italic">+ 6 other columns</text>
+  <rect x="648" y="480" width="260" height="86" rx="4" fill="#ffffff" stroke="#b45309" stroke-width="1.3"/>
+  <rect x="648" y="480" width="260" height="22" fill="#f9fafb"/>
+  <path d="M648,502 h260" stroke="#b45309" stroke-width="1"/>
+  <text x="656" y="495" font-size="11.5" font-weight="700" fill="#111827">driver_sessions</text>
+    <text x="656" y="513" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="678" y="513" font-size="10" fill="#111827">id</text>
+    <text x="900" y="513" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="656" y="527" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="678" y="527" font-size="10" fill="#111827">driver_id</text>
+    <text x="900" y="527" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="656" y="541" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="678" y="541" font-size="10" fill="#111827">vehicle_id</text>
+    <text x="900" y="541" font-size="8.5" fill="#4b5563" text-anchor="end">→ vehicles · set null</text>
+    <text x="678" y="555" font-size="9" fill="#9ca3af" font-style="italic">+ 8 other columns</text>
+  <rect x="648" y="582" width="260" height="100" rx="4" fill="#ffffff" stroke="#b45309" stroke-width="1.3"/>
+  <rect x="648" y="582" width="260" height="22" fill="#f9fafb"/>
+  <path d="M648,604 h260" stroke="#b45309" stroke-width="1"/>
+  <text x="656" y="597" font-size="11.5" font-weight="700" fill="#111827">driver_earnings</text>
+    <text x="656" y="615" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="678" y="615" font-size="10" fill="#111827">id</text>
+    <text x="900" y="615" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="656" y="629" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="678" y="629" font-size="10" fill="#111827">driver_id</text>
+    <text x="900" y="629" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="656" y="643" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="678" y="643" font-size="10" fill="#111827">ride_id</text>
+    <text x="900" y="643" font-size="8.5" fill="#4b5563" text-anchor="end">→ rides · set null</text>
+    <text x="656" y="657" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="678" y="657" font-size="10" fill="#111827">pool_id</text>
+    <text x="900" y="657" font-size="8.5" fill="#4b5563" text-anchor="end">→ pools · set null</text>
+    <text x="678" y="671" font-size="9" fill="#9ca3af" font-style="italic">+ 10 other columns</text>
+  <rect x="648" y="698" width="260" height="72" rx="4" fill="#ffffff" stroke="#b45309" stroke-width="1.3"/>
+  <rect x="648" y="698" width="260" height="22" fill="#f9fafb"/>
+  <path d="M648,720 h260" stroke="#b45309" stroke-width="1"/>
+  <text x="656" y="713" font-size="11.5" font-weight="700" fill="#111827">driver_daily_stats</text>
+    <text x="656" y="731" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="678" y="731" font-size="10" fill="#111827">id</text>
+    <text x="900" y="731" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="656" y="745" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="678" y="745" font-size="10" fill="#111827">driver_id</text>
+    <text x="900" y="745" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="678" y="759" font-size="9" fill="#9ca3af" font-style="italic">+ 7 other columns</text>
+  <rect x="950" y="86" width="260" height="86" rx="4" fill="#ffffff" stroke="#0891b2" stroke-width="1.3"/>
+  <rect x="950" y="86" width="260" height="22" fill="#f9fafb"/>
+  <path d="M950,108 h260" stroke="#0891b2" stroke-width="1"/>
+  <text x="958" y="101" font-size="11.5" font-weight="700" fill="#111827">conversations</text>
+    <text x="958" y="119" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="980" y="119" font-size="10" fill="#111827">id</text>
+    <text x="1202" y="119" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="958" y="133" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="980" y="133" font-size="10" fill="#111827">pool_id</text>
+    <text x="1202" y="133" font-size="8.5" fill="#4b5563" text-anchor="end">→ pools</text>
+    <text x="958" y="147" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="980" y="147" font-size="10" fill="#111827">last_message_id</text>
+    <text x="1202" y="147" font-size="8.5" fill="#4b5563" text-anchor="end">→ messages · set null</text>
+    <text x="980" y="161" font-size="9" fill="#9ca3af" font-style="italic">+ 3 other columns</text>
+  <rect x="950" y="188" width="260" height="86" rx="4" fill="#ffffff" stroke="#0891b2" stroke-width="1.3"/>
+  <rect x="950" y="188" width="260" height="22" fill="#f9fafb"/>
+  <path d="M950,210 h260" stroke="#0891b2" stroke-width="1"/>
+  <text x="958" y="203" font-size="11.5" font-weight="700" fill="#111827">conversation_participants</text>
+    <text x="958" y="221" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="980" y="221" font-size="10" fill="#111827">id</text>
+    <text x="1202" y="221" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="958" y="235" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="980" y="235" font-size="10" fill="#111827">conversation_id</text>
+    <text x="1202" y="235" font-size="8.5" fill="#4b5563" text-anchor="end">→ conversations</text>
+    <text x="958" y="249" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="980" y="249" font-size="10" fill="#111827">user_id</text>
+    <text x="1202" y="249" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="980" y="263" font-size="9" fill="#9ca3af" font-style="italic">+ 1 other columns</text>
+  <rect x="950" y="290" width="260" height="86" rx="4" fill="#ffffff" stroke="#0891b2" stroke-width="1.3"/>
+  <rect x="950" y="290" width="260" height="22" fill="#f9fafb"/>
+  <path d="M950,312 h260" stroke="#0891b2" stroke-width="1"/>
+  <text x="958" y="305" font-size="11.5" font-weight="700" fill="#111827">messages</text>
+    <text x="958" y="323" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="980" y="323" font-size="10" fill="#111827">id</text>
+    <text x="1202" y="323" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="958" y="337" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="980" y="337" font-size="10" fill="#111827">conversation_id</text>
+    <text x="1202" y="337" font-size="8.5" fill="#4b5563" text-anchor="end">→ conversations</text>
+    <text x="958" y="351" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="980" y="351" font-size="10" fill="#111827">sender_id</text>
+    <text x="1202" y="351" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="980" y="365" font-size="9" fill="#9ca3af" font-style="italic">+ 5 other columns</text>
+  <rect x="950" y="392" width="260" height="72" rx="4" fill="#ffffff" stroke="#0891b2" stroke-width="1.3"/>
+  <rect x="950" y="392" width="260" height="22" fill="#f9fafb"/>
+  <path d="M950,414 h260" stroke="#0891b2" stroke-width="1"/>
+  <text x="958" y="407" font-size="11.5" font-weight="700" fill="#111827">notifications</text>
+    <text x="958" y="425" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="980" y="425" font-size="10" fill="#111827">id</text>
+    <text x="1202" y="425" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="958" y="439" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="980" y="439" font-size="10" fill="#111827">user_id</text>
+    <text x="1202" y="439" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="980" y="453" font-size="9" fill="#9ca3af" font-style="italic">+ 6 other columns</text>
+  <rect x="1252" y="86" width="260" height="100" rx="4" fill="#ffffff" stroke="#059669" stroke-width="1.3"/>
+  <rect x="1252" y="86" width="260" height="22" fill="#f9fafb"/>
+  <path d="M1252,108 h260" stroke="#059669" stroke-width="1"/>
+  <text x="1260" y="101" font-size="11.5" font-weight="700" fill="#111827">ratings</text>
+    <text x="1260" y="119" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="1282" y="119" font-size="10" fill="#111827">id</text>
+    <text x="1504" y="119" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="1260" y="133" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="1282" y="133" font-size="10" fill="#111827">ride_id</text>
+    <text x="1504" y="133" font-size="8.5" fill="#4b5563" text-anchor="end">→ rides</text>
+    <text x="1260" y="147" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="1282" y="147" font-size="10" fill="#111827">rater_id</text>
+    <text x="1504" y="147" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="1260" y="161" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="1282" y="161" font-size="10" fill="#111827">rated_id</text>
+    <text x="1504" y="161" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="1282" y="175" font-size="9" fill="#9ca3af" font-style="italic">+ 4 other columns</text>
+  <rect x="1252" y="202" width="260" height="86" rx="4" fill="#ffffff" stroke="#059669" stroke-width="1.3"/>
+  <rect x="1252" y="202" width="260" height="22" fill="#f9fafb"/>
+  <path d="M1252,224 h260" stroke="#059669" stroke-width="1"/>
+  <text x="1260" y="217" font-size="11.5" font-weight="700" fill="#111827">user_cancellations</text>
+    <text x="1260" y="235" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="1282" y="235" font-size="10" fill="#111827">id</text>
+    <text x="1504" y="235" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="1260" y="249" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="1282" y="249" font-size="10" fill="#111827">user_id</text>
+    <text x="1504" y="249" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="1260" y="263" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="1282" y="263" font-size="10" fill="#111827">ride_id</text>
+    <text x="1504" y="263" font-size="8.5" fill="#4b5563" text-anchor="end">→ rides · set null</text>
+    <text x="1282" y="277" font-size="9" fill="#9ca3af" font-style="italic">+ 5 other columns</text>
+  <rect x="1252" y="304" width="260" height="72" rx="4" fill="#ffffff" stroke="#059669" stroke-width="1.3"/>
+  <rect x="1252" y="304" width="260" height="22" fill="#f9fafb"/>
+  <path d="M1252,326 h260" stroke="#059669" stroke-width="1"/>
+  <text x="1260" y="319" font-size="11.5" font-weight="700" fill="#111827">cooldown_periods</text>
+    <text x="1260" y="337" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="1282" y="337" font-size="10" fill="#111827">id</text>
+    <text x="1504" y="337" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="1260" y="351" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="1282" y="351" font-size="10" fill="#111827">user_id</text>
+    <text x="1504" y="351" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="1282" y="365" font-size="9" fill="#9ca3af" font-style="italic">+ 5 other columns</text>
+  <rect x="1252" y="392" width="260" height="72" rx="4" fill="#ffffff" stroke="#059669" stroke-width="1.3"/>
+  <rect x="1252" y="392" width="260" height="22" fill="#f9fafb"/>
+  <path d="M1252,414 h260" stroke="#059669" stroke-width="1"/>
+  <text x="1260" y="407" font-size="11.5" font-weight="700" fill="#111827">audit_logs</text>
+    <text x="1260" y="425" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="1282" y="425" font-size="10" fill="#111827">id</text>
+    <text x="1504" y="425" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="1260" y="439" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="1282" y="439" font-size="10" fill="#111827">user_id</text>
+    <text x="1504" y="439" font-size="8.5" fill="#4b5563" text-anchor="end">→ users · set null</text>
+    <text x="1282" y="453" font-size="9" fill="#9ca3af" font-style="italic">+ 12 other columns</text>
+  <rect x="1252" y="480" width="260" height="72" rx="4" fill="#ffffff" stroke="#059669" stroke-width="1.3"/>
+  <rect x="1252" y="480" width="260" height="22" fill="#f9fafb"/>
+  <path d="M1252,502 h260" stroke="#059669" stroke-width="1"/>
+  <text x="1260" y="495" font-size="11.5" font-weight="700" fill="#111827">offline_actions</text>
+    <text x="1260" y="513" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="1282" y="513" font-size="10" fill="#111827">id</text>
+    <text x="1504" y="513" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="1260" y="527" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="1282" y="527" font-size="10" fill="#111827">user_id</text>
+    <text x="1504" y="527" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="1282" y="541" font-size="9" fill="#9ca3af" font-style="italic">+ 15 other columns</text>
+  <rect x="1252" y="568" width="260" height="72" rx="4" fill="#ffffff" stroke="#059669" stroke-width="1.3"/>
+  <rect x="1252" y="568" width="260" height="22" fill="#f9fafb"/>
+  <path d="M1252,590 h260" stroke="#059669" stroke-width="1"/>
+  <text x="1260" y="583" font-size="11.5" font-weight="700" fill="#111827">sync_logs</text>
+    <text x="1260" y="601" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="1282" y="601" font-size="10" fill="#111827">id</text>
+    <text x="1504" y="601" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="1260" y="615" font-size="8" font-weight="700" fill="#6b7280">FK</text>
+    <text x="1282" y="615" font-size="10" fill="#111827">user_id</text>
+    <text x="1504" y="615" font-size="8.5" fill="#4b5563" text-anchor="end">→ users</text>
+    <text x="1282" y="629" font-size="9" fill="#9ca3af" font-style="italic">+ 4 other columns</text>
+  <rect x="1252" y="656" width="260" height="58" rx="4" fill="#ffffff" stroke="#059669" stroke-width="1.3"/>
+  <rect x="1252" y="656" width="260" height="22" fill="#f9fafb"/>
+  <path d="M1252,678 h260" stroke="#059669" stroke-width="1"/>
+  <text x="1260" y="671" font-size="11.5" font-weight="700" fill="#111827">app_metadata</text>
+    <text x="1260" y="689" font-size="8" font-weight="700" fill="#6b7280">PK</text>
+    <text x="1282" y="689" font-size="10" fill="#111827">id</text>
+    <text x="1504" y="689" font-size="8.5" fill="#9ca3af" text-anchor="end">UUID</text>
+    <text x="1282" y="703" font-size="9" fill="#9ca3af" font-style="italic">+ 7 other columns</text>
+  <rect x="30" y="812" width="1496" height="96" rx="5" fill="#f9fafb" stroke="#e5e7eb"/>
+  <text x="48" y="836" font-size="11.5" font-weight="700" fill="#111827">Inbound references</text>
+  <text x="188" y="836" font-size="11" fill="#374151">users ← 28  ·  rides ← 7  ·  pools ← 5  ·  vehicles ← 3  ·  conversations ← 2  ·  wallets ← 1  ·  promo_codes ← 1  ·  messages ← 1</text>
+  <text x="48" y="862" font-size="10" fill="#4b5563">Every foreign key is written on the column that holds it. Arrows are not drawn: users is referenced by 28 of the 49 foreign keys,</text>
+  <text x="48" y="878" font-size="10" fill="#4b5563">from 25 of the 30 tables, and those lines would cross every panel. The tail above counts inbound references per referenced table.</text>
+  <text x="48" y="898" font-size="10" fill="#6b7280">PK primary key · FK foreign key · all primary keys are UUID · ON DELETE CASCADE unless the row says otherwise</text>
+</svg>

@@ -1,0 +1,463 @@
+% =====================================================================
+%  RidePool -- EER Diagram (entities, attributes, relationships and the
+%  two specializations). Standalone TikZ figure.
+%
+%  This figure is WIDE. On A4 portrait it needs a landscape page --- see
+%  the note at the bottom of this file.
+%
+%  To use it inside your report, copy everything between "BEGIN FIGURE"
+%  and "END FIGURE" and keep the preamble lines marked (*).
+%
+%  Pixel-like units (x = -y = 0.0137931cm) so the coordinates match the
+%  SVG next to this file one for one.
+% =====================================================================
+\documentclass[border=4pt]{standalone}
+
+\usepackage[T1]{fontenc}          % (*)
+\usepackage{tikz}                 % (*)
+\usepackage{xcolor}               % (*)
+
+% ---- (*) palette: taken from the RidePool design tokens -------------
+\definecolor{riderblue}{HTML}{2563EB}
+\definecolor{riderbg}{HTML}{EFF6FF}
+\definecolor{driveramber}{HTML}{B45309}
+\definecolor{driverbg}{HTML}{FFFBEB}
+\definecolor{coregrey}{HTML}{374151}
+\definecolor{corebg}{HTML}{F3F4F6}
+\definecolor{inkdark}{HTML}{111827}
+\definecolor{linegrey}{HTML}{4B5563}
+\definecolor{midgrey}{HTML}{6B7280}
+\definecolor{faintgrey}{HTML}{9CA3AF}
+\definecolor{hairline}{HTML}{D1D5DB}
+
+% ---- (*) type sizes, matched to the drawing scale -------------------
+\newcommand{\eerhead}{\fontsize{4.9}{5.6}\selectfont\bfseries}
+\newcommand{\eerattr}{\fontsize{4.1}{4.8}\selectfont}
+\newcommand{\eertype}{\fontsize{3.7}{4.4}\selectfont}
+\newcommand{\eerflag}{\fontsize{3.3}{4.0}\selectfont\bfseries}
+\newcommand{\eercard}{\fontsize{4.3}{5.0}\selectfont\bfseries}
+\newcommand{\eerisa}{\fontsize{5.5}{6.2}\selectfont\bfseries}
+\newcommand{\eerlegh}{\fontsize{4.5}{5.2}\selectfont\bfseries}
+\newcommand{\eerleg}{\fontsize{4.1}{5.4}\selectfont}
+
+\tikzset{
+  rel/.style={draw=linegrey, line width=0.4pt},
+  isa/.style={draw=linegrey, line width=0.4pt},
+}
+
+\begin{document}
+% ============================ BEGIN FIGURE ===========================
+\begin{tikzpicture}[x=0.0137931cm, y=-0.0137931cm]
+
+% ---------------- relationships ----------------
+\draw[rel] (905,120) -- (295,120);
+\draw[rel] (905,150) -- (295,150);
+\draw[rel] (625,315) -- (295,315);
+\draw[rel] (180,392) -- (180,450);
+\draw[rel] (625,345) -- (460,345) -- (460,450);
+\draw[rel] (625,330) -- (330,330) -- (330,660) -- (400,660) -- (400,680);
+\draw[rel] (740,362) -- (740,450);
+\draw[rel] (855,510) -- (905,510);
+\draw[rel] (740,572) -- (740,680);
+\draw[rel] (680,362) -- (680,420) -- (610,420) -- (610,655) -- (680,655) -- (680,680);
+\draw[rel] (625,730) -- (575,730);
+\draw[rel] (855,770) -- (880,770) -- (880,640) -- (1020,640) -- (1020,602);
+\draw[rel] (855,318) -- (1020,318) -- (1020,450);
+\draw[rel] (1240,362) -- (1240,420) -- (1080,420) -- (1080,450);
+\draw[rel] (1415,330) -- (1465,330);
+\draw[rel] (1580,407) -- (1580,450);
+\draw[rel] (1360,362) -- (1360,425) -- (1500,425) -- (1500,450);
+\draw[rel] (1300,362) -- (1300,450);
+\draw[rel] (1135,720) -- (1170,720) -- (1170,180) -- (1135,180);
+\draw[rel] (855,720) -- (905,720);
+
+% ---------------- cardinalities ----------------
+\node[anchor=base, font=\eercard, text=linegrey] at (880,112) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (312,112) {N};
+\node[anchor=base, font=\eercard, text=linegrey] at (880,165) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (312,165) {N};
+\node[anchor=base, font=\eercard, text=linegrey] at (608,308) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (312,308) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (190,406) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (190,444) {N};
+\node[anchor=base, font=\eercard, text=linegrey] at (608,338) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (470,444) {N};
+\node[anchor=base, font=\eercard, text=linegrey] at (608,323) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (410,674) {N};
+\node[anchor=base, font=\eercard, text=linegrey] at (750,376) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (750,444) {N};
+\node[anchor=base, font=\eercard, text=linegrey] at (896,502) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (864,502) {N};
+\node[anchor=base, font=\eercard, text=linegrey] at (750,586) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (750,674) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (690,376) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (690,674) {N};
+\node[anchor=base, font=\eercard, text=linegrey] at (614,722) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (586,722) {N};
+\node[anchor=base, font=\eercard, text=linegrey] at (864,762) {N};
+\node[anchor=base, font=\eercard, text=linegrey] at (1030,616) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (862,311) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (1030,444) {N};
+\node[anchor=base, font=\eercard, text=linegrey] at (1250,376) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (1090,444) {N};
+\node[anchor=base, font=\eercard, text=linegrey] at (1398,323) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (1448,323) {N};
+\node[anchor=base, font=\eercard, text=linegrey] at (1590,421) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (1590,444) {N};
+\node[anchor=base, font=\eercard, text=linegrey] at (1370,376) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (1510,444) {N};
+\node[anchor=base, font=\eercard, text=linegrey] at (1310,376) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (1310,444) {N};
+\node[anchor=base, font=\eercard, text=linegrey] at (1145,712) {N};
+\node[anchor=base, font=\eercard, text=linegrey] at (1145,196) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (866,712) {1};
+\node[anchor=base, font=\eercard, text=linegrey] at (894,712) {N};
+
+% ---------------- specializations ----------------
+\draw[isa] (1016,217) -- (1016,245);
+\draw[isa] (1024,217) -- (1024,245);
+\draw[isa] (1020,271) -- (1020,285);
+\draw[isa] (740,285) -- (1300,285);
+\draw[isa] (740,285) -- (740,308);
+\draw[isa] (1300,285) -- (1300,308);
+\draw[isa, fill=white] (1020,258) circle (0.179cm);
+\node[font=\eerisa, text=inkdark, inner sep=0pt] at (1020,258) {o};
+\node[anchor=base west, font=\eerattr, text=midgrey] at (1042,262) {is\_driver};
+\draw[isa] (736,802) -- (736,830);
+\draw[isa] (744,802) -- (744,830);
+\draw[isa] (740,856) -- (740,864);
+\draw[isa] (610,864) -- (870,864);
+\draw[isa] (610,864) -- (610,887);
+\draw[isa] (870,864) -- (870,887);
+\draw[isa, fill=white] (740,843) circle (0.179cm);
+\node[font=\eerisa, text=inkdark, inner sep=0pt] at (740,843) {d};
+\node[anchor=base west, font=\eerattr, text=midgrey] at (762,847) {booking\_type};
+
+% ---------------- entities ----------------
+% PRIYO_SATHI
+\fill[white] (65,80) rectangle (295,172);
+\fill[riderbg] (65,80) rectangle (295,104);
+\draw[draw=riderblue, line width=0.45pt] (65,80) rectangle (295,172);
+\draw[draw=riderblue, line width=0.35pt] (65,104) -- (295,104);
+\node[anchor=base, font=\eerhead, text=inkdark] at (180,97) {PRIYO\_SATHI};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (73,116) {PK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (95,116) {id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (287,116) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (73,131) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (95,131) {user\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (287,131) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (73,146) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (95,146) {companion\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (287,146) {UUID};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (95,161) {status};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (287,161) {ENUM};
+% USER
+\fill[white] (905,80) rectangle (1135,217);
+\fill[riderbg] (905,80) rectangle (1135,104);
+\draw[draw=riderblue, line width=0.45pt] (905,80) rectangle (1135,217);
+\draw[draw=riderblue, line width=0.35pt] (905,104) -- (1135,104);
+\node[anchor=base, font=\eerhead, text=inkdark] at (1020,97) {USER};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (913,116) {PK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,116) {id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,116) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (913,131) {U};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,131) {phone};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,131) {VARCHAR(20)};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,146) {full\_name};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,146) {VARCHAR(100)};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,161) {gender};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,161) {ENUM};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,176) {gender\_preference};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,176) {ENUM};
+\node[anchor=base west, font=\eerflag, text=riderblue] at (913,191) {D};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,191) {is\_driver};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,191) {BOOLEAN};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,206) {average\_rating};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,206) {DECIMAL(3,2)};
+% WALLET
+\fill[white] (65,300) rectangle (295,392);
+\fill[riderbg] (65,300) rectangle (295,324);
+\draw[draw=riderblue, line width=0.45pt] (65,300) rectangle (295,392);
+\draw[draw=riderblue, line width=0.35pt] (65,324) -- (295,324);
+\node[anchor=base, font=\eerhead, text=inkdark] at (180,317) {WALLET};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (73,336) {PK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (95,336) {id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (287,336) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (73,351) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (95,351) {user\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (287,351) {UUID  U};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (95,366) {balance};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (287,366) {DECIMAL(10,2)};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (95,381) {currency};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (287,381) {VARCHAR(3)};
+% RIDER
+\fill[white] (625,300) rectangle (855,362);
+\fill[riderbg] (625,300) rectangle (855,324);
+\draw[draw=riderblue, line width=0.45pt] (625,300) rectangle (855,362);
+\draw[draw=riderblue, line width=0.35pt] (625,324) -- (855,324);
+\node[anchor=base, font=\eerhead, text=inkdark] at (740,317) {RIDER};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (655,336) {total\_rides};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (847,336) {INTEGER};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (655,351) {penalty\_points};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (847,351) {INTEGER};
+% DRIVER
+\fill[white] (1185,300) rectangle (1415,362);
+\fill[driverbg] (1185,300) rectangle (1415,324);
+\draw[draw=driveramber, line width=0.45pt] (1185,300) rectangle (1415,362);
+\draw[draw=driveramber, line width=0.35pt] (1185,324) -- (1415,324);
+\node[anchor=base, font=\eerhead, text=inkdark] at (1300,317) {DRIVER};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (1215,336) {driver\_verified};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1407,336) {BOOLEAN};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (1215,351) {driver\_priority\_h3};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1407,351) {VARCHAR(20)};
+% VEHICLE
+\fill[white] (1465,300) rectangle (1695,407);
+\fill[driverbg] (1465,300) rectangle (1695,324);
+\draw[draw=driveramber, line width=0.45pt] (1465,300) rectangle (1695,407);
+\draw[draw=driveramber, line width=0.35pt] (1465,324) -- (1695,324);
+\node[anchor=base, font=\eerhead, text=inkdark] at (1580,317) {VEHICLE};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (1473,336) {PK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (1495,336) {id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1687,336) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (1473,351) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (1495,351) {driver\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1687,351) {UUID};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (1495,366) {vehicle\_type};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1687,366) {CAR $|$ CNG};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (1473,381) {U};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (1495,381) {vehicle\_number};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1687,381) {VARCHAR(20)};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (1495,396) {max\_passengers};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1687,396) {INTEGER};
+% WALLET_TRANSACTION
+\fill[white] (65,450) rectangle (295,557);
+\fill[riderbg] (65,450) rectangle (295,474);
+\draw[draw=riderblue, line width=0.45pt] (65,450) rectangle (295,557);
+\draw[draw=riderblue, line width=0.35pt] (65,474) -- (295,474);
+\node[anchor=base, font=\eerhead, text=inkdark] at (180,467) {WALLET\_TRANSACTION};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (73,486) {PK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (95,486) {id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (287,486) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (73,501) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (95,501) {wallet\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (287,501) {UUID};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (95,516) {type};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (287,516) {ENUM};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (95,531) {amount};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (287,531) {DECIMAL(10,2)};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (95,546) {balance\_after};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (287,546) {DECIMAL(10,2)};
+% SAVED_PLACE
+\fill[white] (345,450) rectangle (575,542);
+\fill[riderbg] (345,450) rectangle (575,474);
+\draw[draw=riderblue, line width=0.45pt] (345,450) rectangle (575,542);
+\draw[draw=riderblue, line width=0.35pt] (345,474) -- (575,474);
+\node[anchor=base, font=\eerhead, text=inkdark] at (460,467) {SAVED\_PLACE};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (353,486) {PK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (375,486) {id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (567,486) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (353,501) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (375,501) {user\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (567,501) {UUID};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (375,516) {label};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (567,516) {VARCHAR(50)};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (375,531) {h3\_index};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (567,531) {VARCHAR(20)};
+% POOL_MEMBER
+\fill[white] (625,450) rectangle (855,572);
+\fill[corebg] (625,450) rectangle (855,474);
+\draw[draw=coregrey, line width=0.45pt] (625,450) rectangle (855,572);
+\draw[draw=coregrey, line width=0.35pt] (625,474) -- (855,474);
+\node[anchor=base, font=\eerhead, text=inkdark] at (740,467) {POOL\_MEMBER};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (633,486) {PK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (655,486) {id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (847,486) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (633,501) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (655,501) {pool\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (847,501) {UUID  U1};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (633,516) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (655,516) {user\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (847,516) {UUID  U1};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (633,531) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (655,531) {ride\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (847,531) {UUID  U};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (655,546) {joined\_at};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (847,546) {TIMESTAMPTZ};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (655,561) {confirmed\_at};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (847,561) {TIMESTAMPTZ};
+% POOL
+\fill[white] (905,450) rectangle (1135,602);
+\fill[corebg] (905,450) rectangle (1135,474);
+\draw[draw=coregrey, line width=0.45pt] (905,450) rectangle (1135,602);
+\draw[draw=coregrey, line width=0.35pt] (905,474) -- (1135,474);
+\node[anchor=base, font=\eerhead, text=inkdark] at (1020,467) {POOL};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (913,486) {PK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,486) {id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,486) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (913,501) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,501) {creator\_user\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,501) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (913,516) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,516) {driver\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,516) {UUID};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,531) {status};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,531) {ENUM};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,546) {pickup\_h3\_index};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,546) {res 9};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,561) {destination\_h3\_index};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,561) {res 7};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,576) {gender\_restriction};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,576) {ENUM};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,591) {max\_passengers};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,591) {INTEGER};
+% DRIVER_EARNING
+\fill[white] (1185,450) rectangle (1415,572);
+\fill[driverbg] (1185,450) rectangle (1415,474);
+\draw[draw=driveramber, line width=0.45pt] (1185,450) rectangle (1415,572);
+\draw[draw=driveramber, line width=0.35pt] (1185,474) -- (1415,474);
+\node[anchor=base, font=\eerhead, text=inkdark] at (1300,467) {DRIVER\_EARNING};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (1193,486) {PK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (1215,486) {id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1407,486) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (1193,501) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (1215,501) {driver\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1407,501) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (1193,516) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (1215,516) {ride\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1407,516) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (1193,531) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (1215,531) {pool\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1407,531) {UUID};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (1215,546) {net\_earnings};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1407,546) {DECIMAL(10,2)};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (1215,561) {payment\_status};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1407,561) {ENUM};
+% DRIVER_SESSION
+\fill[white] (1465,450) rectangle (1695,557);
+\fill[driverbg] (1465,450) rectangle (1695,474);
+\draw[draw=driveramber, line width=0.45pt] (1465,450) rectangle (1695,557);
+\draw[draw=driveramber, line width=0.35pt] (1465,474) -- (1695,474);
+\node[anchor=base, font=\eerhead, text=inkdark] at (1580,467) {DRIVER\_SESSION};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (1473,486) {PK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (1495,486) {id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1687,486) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (1473,501) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (1495,501) {driver\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1687,501) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (1473,516) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (1495,516) {vehicle\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1687,516) {UUID};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (1495,531) {status};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1687,531) {ENUM};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (1495,546) {started\_at};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1687,546) {TIMESTAMPTZ};
+% PAYMENT
+\fill[white] (345,680) rectangle (575,802);
+\fill[riderbg] (345,680) rectangle (575,704);
+\draw[draw=riderblue, line width=0.45pt] (345,680) rectangle (575,802);
+\draw[draw=riderblue, line width=0.35pt] (345,704) -- (575,704);
+\node[anchor=base, font=\eerhead, text=inkdark] at (460,697) {PAYMENT};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (353,716) {PK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (375,716) {id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (567,716) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (353,731) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (375,731) {ride\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (567,731) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (353,746) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (375,746) {user\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (567,746) {UUID};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (375,761) {amount};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (567,761) {DECIMAL(10,2)};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (375,776) {payment\_method};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (567,776) {ENUM};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (375,791) {status};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (567,791) {ENUM};
+% RIDE
+\fill[white] (625,680) rectangle (855,802);
+\fill[corebg] (625,680) rectangle (855,704);
+\draw[draw=coregrey, line width=0.45pt] (625,680) rectangle (855,802);
+\draw[draw=coregrey, line width=0.35pt] (625,704) -- (855,704);
+\node[anchor=base, font=\eerhead, text=inkdark] at (740,697) {RIDE};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (633,716) {PK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (655,716) {id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (847,716) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (633,731) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (655,731) {user\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (847,731) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (633,746) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (655,746) {pool\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (847,746) {UUID};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (655,761) {status};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (847,761) {ENUM};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (655,776) {fare};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (847,776) {DECIMAL(10,2)};
+\node[anchor=base west, font=\eerflag, text=coregrey] at (633,791) {D};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (655,791) {booking\_type};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (847,791) {ENUM};
+% RATING
+\fill[white] (905,680) rectangle (1135,787);
+\fill[riderbg] (905,680) rectangle (1135,704);
+\draw[draw=riderblue, line width=0.45pt] (905,680) rectangle (1135,787);
+\draw[draw=riderblue, line width=0.35pt] (905,704) -- (1135,704);
+\node[anchor=base, font=\eerhead, text=inkdark] at (1020,697) {RATING};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (913,716) {PK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,716) {id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,716) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (913,731) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,731) {ride\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,731) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (913,746) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,746) {rater\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,746) {UUID};
+\node[anchor=base west, font=\eerflag, text=midgrey] at (913,761) {FK};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,761) {rated\_id};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,761) {UUID};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (935,776) {rating};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (1127,776) {INTEGER 1-5};
+% INSTANT_RIDE
+\fill[white] (495,880) rectangle (725,927);
+\fill[corebg] (495,880) rectangle (725,904);
+\draw[draw=coregrey, line width=0.45pt] (495,880) rectangle (725,927);
+\draw[draw=coregrey, line width=0.35pt] (495,904) -- (725,904);
+\node[anchor=base, font=\eerhead, text=inkdark] at (610,897) {INSTANT\_RIDE};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (525,916) {scheduled\_pickup\_at};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (717,916) {NULL};
+% ADVANCE_RIDE
+\fill[white] (755,880) rectangle (985,927);
+\fill[corebg] (755,880) rectangle (985,904);
+\draw[draw=coregrey, line width=0.45pt] (755,880) rectangle (985,927);
+\draw[draw=coregrey, line width=0.35pt] (755,904) -- (985,904);
+\node[anchor=base, font=\eerhead, text=inkdark] at (870,897) {ADVANCE\_RIDE};
+\node[anchor=base west, font=\eerattr, text=inkdark] at (785,916) {scheduled\_pickup\_at};
+\node[anchor=base east, font=\eertype, text=faintgrey] at (977,916) {TIMESTAMPTZ};
+
+% ---------------- legend ----------------
+\draw[draw=hairline, line width=0.35pt, fill=white] (60,826) rectangle (470,954);
+\node[anchor=base west, font=\eerlegh, text=inkdark] at (80,850) {Notation};
+\node[anchor=base west, font=\eerleg, text=linegrey] at (80,872) {PK primary key $\cdot$ FK foreign key $\cdot$ U unique $\cdot$ D discriminator};
+\node[anchor=base west, font=\eerleg, text=linegrey] at (80,890) {1 : N cardinality is marked at each end of a relationship};
+\node[anchor=base west, font=\eerleg, text=linegrey] at (80,908) {double line + circle = total specialization; d disjoint, o overlapping};
+\node[anchor=base west, font=\eerleg, text=linegrey] at (80,926) {blue = rider side $\cdot$ amber = driver side $\cdot$ grey = shared pooling core};
+\node[anchor=base west, font=\eerleg, text=linegrey] at (80,944) {every FK physically references users(id); drawn to the participating subtype};
+
+\end{tikzpicture}
+% ============================= END FIGURE ============================
+\end{document}
+
+% =====================================================================
+%  PLACING IT IN THE REPORT
+%
+%  Natural size is about 24 x 13.7 cm, so it does not fit a portrait A4
+%  text block at a legible size. Use a landscape page:
+%
+%    \usepackage{rotating}          % preamble
+%    \begin{sidewaysfigure}
+%      \centering
+%      \resizebox{!}{0.92\textwidth}{\input{eer-diagram-body}}
+%      \caption{EER diagram of the RidePool database.}
+%      \label{fig:eer}
+%    \end{sidewaysfigure}
+%
+%  (inside sidewaysfigure the page width runs along \textwidth, which is
+%  why the height is what gets set.)
+% =====================================================================

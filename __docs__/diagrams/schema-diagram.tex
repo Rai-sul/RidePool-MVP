@@ -1,0 +1,531 @@
+% =====================================================================
+%  RidePool -- relational schema diagram: all 30 tables, every key,
+%  grouped by the migration file that creates them.
+%  Standalone TikZ figure. This one is WIDE -- see the footer.
+%  Pixel-like units (x = -y = 0.0115cm) match the SVG beside this file.
+% =====================================================================
+\documentclass[border=4pt]{standalone}
+
+\usepackage[T1]{fontenc}          % (*)
+\usepackage{tikz}                 % (*)
+\usepackage{xcolor}               % (*)
+
+\definecolor{grp0}{HTML}{2563EB}
+\definecolor{grp1}{HTML}{374151}
+\definecolor{grp2}{HTML}{B45309}
+\definecolor{grp3}{HTML}{0891B2}
+\definecolor{grp4}{HTML}{059669}
+\definecolor{inkdark}{HTML}{111827}
+\definecolor{linegrey}{HTML}{4B5563}
+\definecolor{midgrey}{HTML}{6B7280}
+\definecolor{faintgrey}{HTML}{9CA3AF}
+\definecolor{hairline}{HTML}{E5E7EB}
+\definecolor{sunken}{HTML}{F9FAFB}
+
+\newcommand{\schtab}{\fontsize{4.6}{5.4}\selectfont\bfseries}
+\newcommand{\schcol}{\fontsize{4.0}{4.8}\selectfont}
+\newcommand{\schref}{\fontsize{3.4}{4.2}\selectfont}
+\newcommand{\schflag}{\fontsize{3.2}{4.0}\selectfont\bfseries}
+\newcommand{\schmore}{\fontsize{3.6}{4.4}\selectfont\itshape}
+\newcommand{\schpan}{\fontsize{5.2}{6.0}\selectfont\bfseries}
+\newcommand{\schfile}{\fontsize{3.6}{4.4}\selectfont}
+\newcommand{\schnote}{\fontsize{4.0}{5.0}\selectfont}
+\newcommand{\schnoteb}{\fontsize{4.6}{5.4}\selectfont\bfseries}
+
+\begin{document}
+% ============================ BEGIN FIGURE ===========================
+\begin{tikzpicture}[x=0.0115cm, y=-0.0115cm]
+
+% ---------------- group panels ----------------
+\draw[draw=hairline, line width=0.3pt] (30,40) rectangle (318,790);
+\fill[grp0] (30,40) rectangle (318,70);
+\node[anchor=base west, font=\schpan, text=white] at (44,60) {identity};
+\node[anchor=base west, font=\schfile, text=faintgrey] at (44,84) {20260921000200\_tables\_identity};
+\draw[draw=hairline, line width=0.3pt] (332,40) rectangle (620,790);
+\fill[grp1] (332,40) rectangle (620,70);
+\node[anchor=base west, font=\schpan, text=white] at (346,60) {ride core};
+\node[anchor=base west, font=\schfile, text=faintgrey] at (346,84) {20260921000300\_tables\_rides};
+\draw[draw=hairline, line width=0.3pt] (634,40) rectangle (922,790);
+\fill[grp2] (634,40) rectangle (922,70);
+\node[anchor=base west, font=\schpan, text=white] at (648,60) {money \& driver economics};
+\node[anchor=base west, font=\schfile, text=faintgrey] at (648,84) {20260921000400\_tables\_money};
+\draw[draw=hairline, line width=0.3pt] (936,40) rectangle (1224,790);
+\fill[grp3] (936,40) rectangle (1224,70);
+\node[anchor=base west, font=\schpan, text=white] at (950,60) {messaging};
+\node[anchor=base west, font=\schfile, text=faintgrey] at (950,84) {20260921000500\_tables\_messaging};
+\draw[draw=hairline, line width=0.3pt] (1238,40) rectangle (1526,790);
+\fill[grp4] (1238,40) rectangle (1526,70);
+\node[anchor=base west, font=\schpan, text=white] at (1252,60) {operations};
+\node[anchor=base west, font=\schfile, text=faintgrey] at (1252,84) {20260921000600\_tables\_ops};
+
+% ---------------- tables ----------------
+% users
+\fill[white] (44,86) rectangle (304,158);
+\fill[sunken] (44,86) rectangle (304,108);
+\draw[draw=grp0, line width=0.35pt] (44,86) rectangle (304,158);
+\draw[draw=grp0, line width=0.25pt] (44,108) -- (304,108);
+\node[anchor=base west, font=\schtab, text=inkdark] at (52,101) {users};
+\node[anchor=base west, font=\schflag, text=midgrey] at (52,119) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (74,119) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (296,119) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (52,133) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (74,133) {id};
+\node[anchor=base east, font=\schref, text=linegrey] at (296,133) {$\rightarrow$ auth.users};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (74,147) {+ 24 other columns};
+% wallets
+\fill[white] (44,174) rectangle (304,246);
+\fill[sunken] (44,174) rectangle (304,196);
+\draw[draw=grp0, line width=0.35pt] (44,174) rectangle (304,246);
+\draw[draw=grp0, line width=0.25pt] (44,196) -- (304,196);
+\node[anchor=base west, font=\schtab, text=inkdark] at (52,189) {wallets};
+\node[anchor=base west, font=\schflag, text=midgrey] at (52,207) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (74,207) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (296,207) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (52,221) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (74,221) {user\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (296,221) {$\rightarrow$ users};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (74,235) {+ 4 other columns};
+% wallet_transactions
+\fill[white] (44,262) rectangle (304,334);
+\fill[sunken] (44,262) rectangle (304,284);
+\draw[draw=grp0, line width=0.35pt] (44,262) rectangle (304,334);
+\draw[draw=grp0, line width=0.25pt] (44,284) -- (304,284);
+\node[anchor=base west, font=\schtab, text=inkdark] at (52,277) {wallet\_transactions};
+\node[anchor=base west, font=\schflag, text=midgrey] at (52,295) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (74,295) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (296,295) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (52,309) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (74,309) {wallet\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (296,309) {$\rightarrow$ wallets};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (74,323) {+ 8 other columns};
+% saved_places
+\fill[white] (44,350) rectangle (304,422);
+\fill[sunken] (44,350) rectangle (304,372);
+\draw[draw=grp0, line width=0.35pt] (44,350) rectangle (304,422);
+\draw[draw=grp0, line width=0.25pt] (44,372) -- (304,372);
+\node[anchor=base west, font=\schtab, text=inkdark] at (52,365) {saved\_places};
+\node[anchor=base west, font=\schflag, text=midgrey] at (52,383) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (74,383) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (296,383) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (52,397) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (74,397) {user\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (296,397) {$\rightarrow$ users};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (74,411) {+ 8 other columns};
+% priyo_sathi
+\fill[white] (44,438) rectangle (304,524);
+\fill[sunken] (44,438) rectangle (304,460);
+\draw[draw=grp0, line width=0.35pt] (44,438) rectangle (304,524);
+\draw[draw=grp0, line width=0.25pt] (44,460) -- (304,460);
+\node[anchor=base west, font=\schtab, text=inkdark] at (52,453) {priyo\_sathi};
+\node[anchor=base west, font=\schflag, text=midgrey] at (52,471) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (74,471) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (296,471) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (52,485) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (74,485) {user\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (296,485) {$\rightarrow$ users};
+\node[anchor=base west, font=\schflag, text=midgrey] at (52,499) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (74,499) {companion\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (296,499) {$\rightarrow$ users};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (74,513) {+ 3 other columns};
+% device_tokens
+\fill[white] (44,540) rectangle (304,612);
+\fill[sunken] (44,540) rectangle (304,562);
+\draw[draw=grp0, line width=0.35pt] (44,540) rectangle (304,612);
+\draw[draw=grp0, line width=0.25pt] (44,562) -- (304,562);
+\node[anchor=base west, font=\schtab, text=inkdark] at (52,555) {device\_tokens};
+\node[anchor=base west, font=\schflag, text=midgrey] at (52,573) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (74,573) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (296,573) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (52,587) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (74,587) {user\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (296,587) {$\rightarrow$ users};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (74,601) {+ 6 other columns};
+% notification_preferences
+\fill[white] (44,628) rectangle (304,700);
+\fill[sunken] (44,628) rectangle (304,650);
+\draw[draw=grp0, line width=0.35pt] (44,628) rectangle (304,700);
+\draw[draw=grp0, line width=0.25pt] (44,650) -- (304,650);
+\node[anchor=base west, font=\schtab, text=inkdark] at (52,643) {notification\_preferences};
+\node[anchor=base west, font=\schflag, text=midgrey] at (52,661) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (74,661) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (296,661) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (52,675) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (74,675) {user\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (296,675) {$\rightarrow$ users};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (74,689) {+ 8 other columns};
+% vehicles
+\fill[white] (346,86) rectangle (606,158);
+\fill[sunken] (346,86) rectangle (606,108);
+\draw[draw=grp1, line width=0.35pt] (346,86) rectangle (606,158);
+\draw[draw=grp1, line width=0.25pt] (346,108) -- (606,108);
+\node[anchor=base west, font=\schtab, text=inkdark] at (354,101) {vehicles};
+\node[anchor=base west, font=\schflag, text=midgrey] at (354,119) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (376,119) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (598,119) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (354,133) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (376,133) {driver\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (598,133) {$\rightarrow$ users};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (376,147) {+ 9 other columns};
+% pools
+\fill[white] (346,174) rectangle (606,274);
+\fill[sunken] (346,174) rectangle (606,196);
+\draw[draw=grp1, line width=0.35pt] (346,174) rectangle (606,274);
+\draw[draw=grp1, line width=0.25pt] (346,196) -- (606,196);
+\node[anchor=base west, font=\schtab, text=inkdark] at (354,189) {pools};
+\node[anchor=base west, font=\schflag, text=midgrey] at (354,207) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (376,207) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (598,207) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (354,221) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (376,221) {creator\_user\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (598,221) {$\rightarrow$ users};
+\node[anchor=base west, font=\schflag, text=midgrey] at (354,235) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (376,235) {driver\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (598,235) {$\rightarrow$ users $\cdot$ set null};
+\node[anchor=base west, font=\schflag, text=midgrey] at (354,249) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (376,249) {vehicle\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (598,249) {$\rightarrow$ vehicles $\cdot$ set null};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (376,263) {+ 37 other columns};
+% rides
+\fill[white] (346,290) rectangle (606,376);
+\fill[sunken] (346,290) rectangle (606,312);
+\draw[draw=grp1, line width=0.35pt] (346,290) rectangle (606,376);
+\draw[draw=grp1, line width=0.25pt] (346,312) -- (606,312);
+\node[anchor=base west, font=\schtab, text=inkdark] at (354,305) {rides};
+\node[anchor=base west, font=\schflag, text=midgrey] at (354,323) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (376,323) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (598,323) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (354,337) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (376,337) {user\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (598,337) {$\rightarrow$ users};
+\node[anchor=base west, font=\schflag, text=midgrey] at (354,351) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (376,351) {pool\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (598,351) {$\rightarrow$ pools $\cdot$ set null};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (376,365) {+ 36 other columns};
+% pool_members
+\fill[white] (346,392) rectangle (606,492);
+\fill[sunken] (346,392) rectangle (606,414);
+\draw[draw=grp1, line width=0.35pt] (346,392) rectangle (606,492);
+\draw[draw=grp1, line width=0.25pt] (346,414) -- (606,414);
+\node[anchor=base west, font=\schtab, text=inkdark] at (354,407) {pool\_members};
+\node[anchor=base west, font=\schflag, text=midgrey] at (354,425) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (376,425) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (598,425) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (354,439) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (376,439) {pool\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (598,439) {$\rightarrow$ pools};
+\node[anchor=base west, font=\schflag, text=midgrey] at (354,453) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (376,453) {user\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (598,453) {$\rightarrow$ users};
+\node[anchor=base west, font=\schflag, text=midgrey] at (354,467) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (376,467) {ride\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (598,467) {$\rightarrow$ rides};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (376,481) {+ 7 other columns};
+% vehicle_locations
+\fill[white] (346,508) rectangle (606,608);
+\fill[sunken] (346,508) rectangle (606,530);
+\draw[draw=grp1, line width=0.35pt] (346,508) rectangle (606,608);
+\draw[draw=grp1, line width=0.25pt] (346,530) -- (606,530);
+\node[anchor=base west, font=\schtab, text=inkdark] at (354,523) {vehicle\_locations};
+\node[anchor=base west, font=\schflag, text=midgrey] at (354,541) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (376,541) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (598,541) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (354,555) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (376,555) {vehicle\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (598,555) {$\rightarrow$ vehicles};
+\node[anchor=base west, font=\schflag, text=midgrey] at (354,569) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (376,569) {driver\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (598,569) {$\rightarrow$ users};
+\node[anchor=base west, font=\schflag, text=midgrey] at (354,583) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (376,583) {pool\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (598,583) {$\rightarrow$ pools $\cdot$ set null};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (376,597) {+ 10 other columns};
+% payments
+\fill[white] (648,86) rectangle (908,172);
+\fill[sunken] (648,86) rectangle (908,108);
+\draw[draw=grp2, line width=0.35pt] (648,86) rectangle (908,172);
+\draw[draw=grp2, line width=0.25pt] (648,108) -- (908,108);
+\node[anchor=base west, font=\schtab, text=inkdark] at (656,101) {payments};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,119) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,119) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (900,119) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,133) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,133) {ride\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (900,133) {$\rightarrow$ rides};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,147) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,147) {user\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (900,147) {$\rightarrow$ users};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (678,161) {+ 8 other columns};
+% promo_codes
+\fill[white] (648,188) rectangle (908,246);
+\fill[sunken] (648,188) rectangle (908,210);
+\draw[draw=grp2, line width=0.35pt] (648,188) rectangle (908,246);
+\draw[draw=grp2, line width=0.25pt] (648,210) -- (908,210);
+\node[anchor=base west, font=\schtab, text=inkdark] at (656,203) {promo\_codes};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,221) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,221) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (900,221) {UUID};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (678,235) {+ 12 other columns};
+% user_promo_usage
+\fill[white] (648,262) rectangle (908,362);
+\fill[sunken] (648,262) rectangle (908,284);
+\draw[draw=grp2, line width=0.35pt] (648,262) rectangle (908,362);
+\draw[draw=grp2, line width=0.25pt] (648,284) -- (908,284);
+\node[anchor=base west, font=\schtab, text=inkdark] at (656,277) {user\_promo\_usage};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,295) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,295) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (900,295) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,309) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,309) {user\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (900,309) {$\rightarrow$ users};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,323) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,323) {promo\_code\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (900,323) {$\rightarrow$ promo\_codes};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,337) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,337) {ride\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (900,337) {$\rightarrow$ rides $\cdot$ no action};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (678,351) {+ 2 other columns};
+% promise_money_transactions
+\fill[white] (648,378) rectangle (908,464);
+\fill[sunken] (648,378) rectangle (908,400);
+\draw[draw=grp2, line width=0.35pt] (648,378) rectangle (908,464);
+\draw[draw=grp2, line width=0.25pt] (648,400) -- (908,400);
+\node[anchor=base west, font=\schtab, text=inkdark] at (656,393) {promise\_money\_transactions};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,411) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,411) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (900,411) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,425) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,425) {user\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (900,425) {$\rightarrow$ users};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,439) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,439) {ride\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (900,439) {$\rightarrow$ rides $\cdot$ no action};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (678,453) {+ 6 other columns};
+% driver_sessions
+\fill[white] (648,480) rectangle (908,566);
+\fill[sunken] (648,480) rectangle (908,502);
+\draw[draw=grp2, line width=0.35pt] (648,480) rectangle (908,566);
+\draw[draw=grp2, line width=0.25pt] (648,502) -- (908,502);
+\node[anchor=base west, font=\schtab, text=inkdark] at (656,495) {driver\_sessions};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,513) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,513) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (900,513) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,527) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,527) {driver\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (900,527) {$\rightarrow$ users};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,541) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,541) {vehicle\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (900,541) {$\rightarrow$ vehicles $\cdot$ set null};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (678,555) {+ 8 other columns};
+% driver_earnings
+\fill[white] (648,582) rectangle (908,682);
+\fill[sunken] (648,582) rectangle (908,604);
+\draw[draw=grp2, line width=0.35pt] (648,582) rectangle (908,682);
+\draw[draw=grp2, line width=0.25pt] (648,604) -- (908,604);
+\node[anchor=base west, font=\schtab, text=inkdark] at (656,597) {driver\_earnings};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,615) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,615) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (900,615) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,629) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,629) {driver\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (900,629) {$\rightarrow$ users};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,643) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,643) {ride\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (900,643) {$\rightarrow$ rides $\cdot$ set null};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,657) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,657) {pool\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (900,657) {$\rightarrow$ pools $\cdot$ set null};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (678,671) {+ 10 other columns};
+% driver_daily_stats
+\fill[white] (648,698) rectangle (908,770);
+\fill[sunken] (648,698) rectangle (908,720);
+\draw[draw=grp2, line width=0.35pt] (648,698) rectangle (908,770);
+\draw[draw=grp2, line width=0.25pt] (648,720) -- (908,720);
+\node[anchor=base west, font=\schtab, text=inkdark] at (656,713) {driver\_daily\_stats};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,731) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,731) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (900,731) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (656,745) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (678,745) {driver\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (900,745) {$\rightarrow$ users};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (678,759) {+ 7 other columns};
+% conversations
+\fill[white] (950,86) rectangle (1210,172);
+\fill[sunken] (950,86) rectangle (1210,108);
+\draw[draw=grp3, line width=0.35pt] (950,86) rectangle (1210,172);
+\draw[draw=grp3, line width=0.25pt] (950,108) -- (1210,108);
+\node[anchor=base west, font=\schtab, text=inkdark] at (958,101) {conversations};
+\node[anchor=base west, font=\schflag, text=midgrey] at (958,119) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (980,119) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (1202,119) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (958,133) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (980,133) {pool\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (1202,133) {$\rightarrow$ pools};
+\node[anchor=base west, font=\schflag, text=midgrey] at (958,147) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (980,147) {last\_message\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (1202,147) {$\rightarrow$ messages $\cdot$ set null};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (980,161) {+ 3 other columns};
+% conversation_participants
+\fill[white] (950,188) rectangle (1210,274);
+\fill[sunken] (950,188) rectangle (1210,210);
+\draw[draw=grp3, line width=0.35pt] (950,188) rectangle (1210,274);
+\draw[draw=grp3, line width=0.25pt] (950,210) -- (1210,210);
+\node[anchor=base west, font=\schtab, text=inkdark] at (958,203) {conversation\_participants};
+\node[anchor=base west, font=\schflag, text=midgrey] at (958,221) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (980,221) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (1202,221) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (958,235) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (980,235) {conversation\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (1202,235) {$\rightarrow$ conversations};
+\node[anchor=base west, font=\schflag, text=midgrey] at (958,249) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (980,249) {user\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (1202,249) {$\rightarrow$ users};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (980,263) {+ 1 other columns};
+% messages
+\fill[white] (950,290) rectangle (1210,376);
+\fill[sunken] (950,290) rectangle (1210,312);
+\draw[draw=grp3, line width=0.35pt] (950,290) rectangle (1210,376);
+\draw[draw=grp3, line width=0.25pt] (950,312) -- (1210,312);
+\node[anchor=base west, font=\schtab, text=inkdark] at (958,305) {messages};
+\node[anchor=base west, font=\schflag, text=midgrey] at (958,323) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (980,323) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (1202,323) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (958,337) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (980,337) {conversation\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (1202,337) {$\rightarrow$ conversations};
+\node[anchor=base west, font=\schflag, text=midgrey] at (958,351) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (980,351) {sender\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (1202,351) {$\rightarrow$ users};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (980,365) {+ 5 other columns};
+% notifications
+\fill[white] (950,392) rectangle (1210,464);
+\fill[sunken] (950,392) rectangle (1210,414);
+\draw[draw=grp3, line width=0.35pt] (950,392) rectangle (1210,464);
+\draw[draw=grp3, line width=0.25pt] (950,414) -- (1210,414);
+\node[anchor=base west, font=\schtab, text=inkdark] at (958,407) {notifications};
+\node[anchor=base west, font=\schflag, text=midgrey] at (958,425) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (980,425) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (1202,425) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (958,439) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (980,439) {user\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (1202,439) {$\rightarrow$ users};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (980,453) {+ 6 other columns};
+% ratings
+\fill[white] (1252,86) rectangle (1512,186);
+\fill[sunken] (1252,86) rectangle (1512,108);
+\draw[draw=grp4, line width=0.35pt] (1252,86) rectangle (1512,186);
+\draw[draw=grp4, line width=0.25pt] (1252,108) -- (1512,108);
+\node[anchor=base west, font=\schtab, text=inkdark] at (1260,101) {ratings};
+\node[anchor=base west, font=\schflag, text=midgrey] at (1260,119) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (1282,119) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (1504,119) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (1260,133) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (1282,133) {ride\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (1504,133) {$\rightarrow$ rides};
+\node[anchor=base west, font=\schflag, text=midgrey] at (1260,147) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (1282,147) {rater\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (1504,147) {$\rightarrow$ users};
+\node[anchor=base west, font=\schflag, text=midgrey] at (1260,161) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (1282,161) {rated\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (1504,161) {$\rightarrow$ users};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (1282,175) {+ 4 other columns};
+% user_cancellations
+\fill[white] (1252,202) rectangle (1512,288);
+\fill[sunken] (1252,202) rectangle (1512,224);
+\draw[draw=grp4, line width=0.35pt] (1252,202) rectangle (1512,288);
+\draw[draw=grp4, line width=0.25pt] (1252,224) -- (1512,224);
+\node[anchor=base west, font=\schtab, text=inkdark] at (1260,217) {user\_cancellations};
+\node[anchor=base west, font=\schflag, text=midgrey] at (1260,235) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (1282,235) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (1504,235) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (1260,249) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (1282,249) {user\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (1504,249) {$\rightarrow$ users};
+\node[anchor=base west, font=\schflag, text=midgrey] at (1260,263) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (1282,263) {ride\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (1504,263) {$\rightarrow$ rides $\cdot$ set null};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (1282,277) {+ 5 other columns};
+% cooldown_periods
+\fill[white] (1252,304) rectangle (1512,376);
+\fill[sunken] (1252,304) rectangle (1512,326);
+\draw[draw=grp4, line width=0.35pt] (1252,304) rectangle (1512,376);
+\draw[draw=grp4, line width=0.25pt] (1252,326) -- (1512,326);
+\node[anchor=base west, font=\schtab, text=inkdark] at (1260,319) {cooldown\_periods};
+\node[anchor=base west, font=\schflag, text=midgrey] at (1260,337) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (1282,337) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (1504,337) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (1260,351) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (1282,351) {user\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (1504,351) {$\rightarrow$ users};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (1282,365) {+ 5 other columns};
+% audit_logs
+\fill[white] (1252,392) rectangle (1512,464);
+\fill[sunken] (1252,392) rectangle (1512,414);
+\draw[draw=grp4, line width=0.35pt] (1252,392) rectangle (1512,464);
+\draw[draw=grp4, line width=0.25pt] (1252,414) -- (1512,414);
+\node[anchor=base west, font=\schtab, text=inkdark] at (1260,407) {audit\_logs};
+\node[anchor=base west, font=\schflag, text=midgrey] at (1260,425) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (1282,425) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (1504,425) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (1260,439) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (1282,439) {user\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (1504,439) {$\rightarrow$ users $\cdot$ set null};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (1282,453) {+ 12 other columns};
+% offline_actions
+\fill[white] (1252,480) rectangle (1512,552);
+\fill[sunken] (1252,480) rectangle (1512,502);
+\draw[draw=grp4, line width=0.35pt] (1252,480) rectangle (1512,552);
+\draw[draw=grp4, line width=0.25pt] (1252,502) -- (1512,502);
+\node[anchor=base west, font=\schtab, text=inkdark] at (1260,495) {offline\_actions};
+\node[anchor=base west, font=\schflag, text=midgrey] at (1260,513) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (1282,513) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (1504,513) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (1260,527) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (1282,527) {user\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (1504,527) {$\rightarrow$ users};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (1282,541) {+ 15 other columns};
+% sync_logs
+\fill[white] (1252,568) rectangle (1512,640);
+\fill[sunken] (1252,568) rectangle (1512,590);
+\draw[draw=grp4, line width=0.35pt] (1252,568) rectangle (1512,640);
+\draw[draw=grp4, line width=0.25pt] (1252,590) -- (1512,590);
+\node[anchor=base west, font=\schtab, text=inkdark] at (1260,583) {sync\_logs};
+\node[anchor=base west, font=\schflag, text=midgrey] at (1260,601) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (1282,601) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (1504,601) {UUID};
+\node[anchor=base west, font=\schflag, text=midgrey] at (1260,615) {FK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (1282,615) {user\_id};
+\node[anchor=base east, font=\schref, text=linegrey] at (1504,615) {$\rightarrow$ users};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (1282,629) {+ 4 other columns};
+% app_metadata
+\fill[white] (1252,656) rectangle (1512,714);
+\fill[sunken] (1252,656) rectangle (1512,678);
+\draw[draw=grp4, line width=0.35pt] (1252,656) rectangle (1512,714);
+\draw[draw=grp4, line width=0.25pt] (1252,678) -- (1512,678);
+\node[anchor=base west, font=\schtab, text=inkdark] at (1260,671) {app\_metadata};
+\node[anchor=base west, font=\schflag, text=midgrey] at (1260,689) {PK};
+\node[anchor=base west, font=\schcol, text=inkdark] at (1282,689) {id};
+\node[anchor=base east, font=\schref, text=faintgrey] at (1504,689) {UUID};
+\node[anchor=base west, font=\schmore, text=faintgrey] at (1282,703) {+ 7 other columns};
+
+% ---------------- footer ----------------
+\draw[draw=hairline, line width=0.3pt, fill=sunken] (30,812) rectangle (1526,908);
+\node[anchor=base west, font=\schnoteb, text=inkdark] at (48,836) {Inbound references};
+\node[anchor=base west, font=\schnote, text=linegrey] at (188,836) {users $\leftarrow$ 28  $\cdot$  rides $\leftarrow$ 7  $\cdot$  pools $\leftarrow$ 5  $\cdot$  vehicles $\leftarrow$ 3  $\cdot$  conversations $\leftarrow$ 2  $\cdot$  wallets $\leftarrow$ 1  $\cdot$  promo\_codes $\leftarrow$ 1  $\cdot$  messages $\leftarrow$ 1};
+\node[anchor=base west, font=\schnote, text=linegrey] at (48,862) {Every foreign key is written on the column that holds it. Arrows are not drawn: users is referenced by 28 of the 49 foreign keys,};
+\node[anchor=base west, font=\schnote, text=linegrey] at (48,878) {from 25 of the 30 tables, and those lines would cross every panel. The tail above counts inbound references per referenced table.};
+\node[anchor=base west, font=\schnote, text=midgrey] at (48,898) {PK primary key $\cdot$ FK foreign key $\cdot$ all primary keys are UUID $\cdot$ ON DELETE CASCADE unless the row says otherwise};
+
+\end{tikzpicture}
+% ============================= END FIGURE ============================
+\end{document}
+
+% =====================================================================
+%  PLACING IT IN THE REPORT
+%  Natural size is about 17.9 x 10.7 cm. It fits a portrait text block,
+%  but the column text is small; a landscape page reads better:
+%    \usepackage{rotating}
+%    \begin{sidewaysfigure}\centering
+%      \resizebox{!}{0.92\textwidth}{\input{schema-diagram-body}}
+%      \caption{Relational schema of the RidePool database.}
+%    \end{sidewaysfigure}
+% =====================================================================
