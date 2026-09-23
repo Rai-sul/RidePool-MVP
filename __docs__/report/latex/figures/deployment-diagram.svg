@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 790" width="1200" height="790" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#374151"/>
+    </marker>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563EB"/>
+    </marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#047857"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="790" fill="#FFFFFF"/>
+
+  <!-- column labels -->
+  <g font-size="13" font-weight="700" fill="#6B7280" letter-spacing="1">
+    <text x="40" y="38">BUILD &amp; DELIVERY</text>
+    <text x="380" y="38">SERVER HOST</text>
+    <text x="860" y="38">CLOUD SERVICES</text>
+  </g>
+
+  <!-- ============ build & delivery ============ -->
+  <g text-anchor="middle">
+    <rect x="40" y="55" width="280" height="90" rx="10" fill="#F9FAFB" stroke="#374151" stroke-width="1.4"/>
+    <text x="180" y="84" font-size="16" font-weight="700" fill="#111827">Developer laptop</text>
+    <text x="180" y="107" font-size="12.5" fill="#374151">VS Code · Node.js · Expo CLI</text>
+    <text x="180" y="127" font-size="12.5" fill="#374151">Supabase CLI (migrations)</text>
+
+    <rect x="40" y="190" width="280" height="110" rx="10" fill="#F9FAFB" stroke="#374151" stroke-width="1.4"/>
+    <text x="180" y="219" font-size="16" font-weight="700" fill="#111827">GitHub</text>
+    <text x="180" y="242" font-size="12.5" fill="#374151">Source code repository</text>
+    <text x="180" y="262" font-size="12.5" fill="#374151">Actions: CI · CodeQL · security scan</text>
+    <text x="180" y="282" font-size="12.5" fill="#374151">Expo preview builds</text>
+
+    <rect x="40" y="345" width="280" height="90" rx="10" fill="#F9FAFB" stroke="#374151" stroke-width="1.4"/>
+    <text x="180" y="374" font-size="16" font-weight="700" fill="#111827">Expo EAS Build</text>
+    <text x="180" y="397" font-size="12.5" fill="#374151">development · preview · production</text>
+    <text x="180" y="417" font-size="12.5" fill="#374151">Android APK · iOS build</text>
+
+    <rect x="40" y="485" width="280" height="225" rx="10" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <text x="180" y="512" font-size="16" font-weight="700" fill="#111827">Users' phones</text>
+    <rect x="60" y="528" width="240" height="72" rx="8" fill="#EFF6FF" stroke="#2563EB" stroke-width="1.4"/>
+    <text x="180" y="556" font-size="14.5" font-weight="700" fill="#1E3A8A">CarPoolApp (rider)</text>
+    <text x="180" y="578" font-size="12" fill="#374151">com.ridepool.carpoolapp</text>
+    <rect x="60" y="614" width="240" height="72" rx="8" fill="#FFFBEB" stroke="#B45309" stroke-width="1.4"/>
+    <text x="180" y="642" font-size="14.5" font-weight="700" fill="#78350F">DriverApp (driver)</text>
+    <text x="180" y="664" font-size="12" fill="#374151">com.ridepool.driverapp</text>
+  </g>
+  <line x1="180" y1="145" x2="180" y2="188" stroke="#374151" stroke-width="1.6" marker-end="url(#a)"/>
+  <text x="190" y="171" font-size="12" fill="#374151">git push</text>
+  <line x1="180" y1="300" x2="180" y2="343" stroke="#374151" stroke-width="1.6" marker-end="url(#a)"/>
+  <text x="190" y="326" font-size="12" fill="#374151">app source</text>
+  <line x1="180" y1="435" x2="180" y2="483" stroke="#374151" stroke-width="1.6" marker-end="url(#a)"/>
+  <text x="190" y="463" font-size="12" fill="#374151">install APK / build</text>
+
+  <!-- ============ server host ============ -->
+  <rect x="380" y="55" width="420" height="440" rx="10" fill="#F9FAFB" stroke="#374151" stroke-width="1.6"/>
+  <text x="400" y="82" font-size="15" font-weight="700" fill="#111827">Docker Compose (production)</text>
+
+  <g text-anchor="middle">
+    <rect x="410" y="100" width="360" height="72" rx="8" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <text x="590" y="127" font-size="15" font-weight="700" fill="#111827">Nginx</text>
+    <text x="590" y="150" font-size="12.5" fill="#374151">:80 → :443 HTTPS · TLS 1.2/1.3 · least_conn · gzip</text>
+
+    <rect x="410" y="225" width="110" height="92" rx="8" fill="#EFF6FF" stroke="#2563EB" stroke-width="1.4"/>
+    <text x="465" y="253" font-size="14" font-weight="700" fill="#1E3A8A">app #1</text>
+    <text x="465" y="274" font-size="12" fill="#374151">Node 20</text>
+    <text x="465" y="293" font-size="12" fill="#374151">:3000</text>
+    <rect x="535" y="225" width="110" height="92" rx="8" fill="#EFF6FF" stroke="#2563EB" stroke-width="1.4"/>
+    <text x="590" y="253" font-size="14" font-weight="700" fill="#1E3A8A">app #2</text>
+    <text x="590" y="274" font-size="12" fill="#374151">Node 20</text>
+    <text x="590" y="293" font-size="12" fill="#374151">:3000</text>
+    <rect x="660" y="225" width="110" height="92" rx="8" fill="#EFF6FF" stroke="#2563EB" stroke-width="1.4"/>
+    <text x="715" y="253" font-size="14" font-weight="700" fill="#1E3A8A">app #3</text>
+    <text x="715" y="274" font-size="12" fill="#374151">Node 20</text>
+    <text x="715" y="293" font-size="12" fill="#374151">:3000</text>
+    <text x="590" y="336" font-size="11.5" fill="#6B7280">health check /health/live every 30 s · 0.5 CPU / 512 MB each</text>
+
+    <rect x="410" y="370" width="360" height="62" rx="8" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <text x="590" y="396" font-size="15" font-weight="700" fill="#111827">Redis 7</text>
+    <text x="590" y="418" font-size="12.5" fill="#374151">shared cache · 256 MB · LRU eviction</text>
+
+    <text x="590" y="468" font-size="12" fill="#6B7280">MVP option: one api container · in-memory cache · no Nginx / Redis</text>
+  </g>
+  <g stroke="#374151" stroke-width="1.5">
+    <line x1="465" y1="172" x2="465" y2="223" marker-end="url(#a)"/>
+    <line x1="590" y1="172" x2="590" y2="223" marker-end="url(#a)"/>
+    <line x1="715" y1="172" x2="715" y2="223" marker-end="url(#a)"/>
+    <line x1="465" y1="345" x2="465" y2="368" marker-end="url(#a)"/>
+    <line x1="715" y1="345" x2="715" y2="368" marker-end="url(#a)"/>
+  </g>
+
+  <!-- phones -> nginx -->
+  <path d="M320,560 L350,560 L350,136 L408,136" fill="none" stroke="#374151" stroke-width="1.6" marker-start="url(#a)" marker-end="url(#a)"/>
+  <text x="344" y="520" font-size="12" fill="#374151" transform="rotate(-90 344 520)">HTTPS · REST · JWT</text>
+
+  <!-- ============ cloud services ============ -->
+  <g text-anchor="middle">
+    <rect x="860" y="55" width="300" height="150" rx="10" fill="#ECFDF5" stroke="#047857" stroke-width="1.6"/>
+    <text x="1010" y="84" font-size="16" font-weight="700" fill="#064E3B">Supabase</text>
+    <text x="1010" y="108" font-size="12.5" fill="#374151">PostgreSQL + PostGIS (14 migrations)</text>
+    <text x="1010" y="129" font-size="12.5" fill="#374151">Auth (JWT) · Row Level Security</text>
+    <text x="1010" y="150" font-size="12.5" fill="#374151">Realtime (8 tables)</text>
+    <text x="1010" y="171" font-size="12.5" fill="#374151">Daily managed backups</text>
+
+    <rect x="860" y="245" width="300" height="100" rx="10" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <text x="1010" y="274" font-size="16" font-weight="700" fill="#111827">Google Maps Platform</text>
+    <text x="1010" y="297" font-size="12.5" fill="#374151">Routes API · Directions API</text>
+    <text x="1010" y="318" font-size="12.5" fill="#374151">Places · Geocoding · Static Maps</text>
+
+    <rect x="860" y="385" width="300" height="90" rx="10" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <text x="1010" y="414" font-size="16" font-weight="700" fill="#111827">Firebase Cloud Messaging</text>
+    <text x="1010" y="437" font-size="12.5" fill="#374151">Push notifications</text>
+    <text x="1010" y="456" font-size="12" fill="#6B7280">(optional; stored in-app without it)</text>
+  </g>
+
+  <!-- server -> cloud -->
+  <g stroke="#374151" stroke-width="1.5" fill="none">
+    <path d="M800,150 L858,150" marker-end="url(#a)" marker-start="url(#a)"/>
+    <path d="M800,295 L858,295" marker-end="url(#a)" marker-start="url(#a)"/>
+    <path d="M800,430 L858,430" marker-end="url(#a)"/>
+  </g>
+  <g font-size="11.5" fill="#374151">
+    <text x="806" y="142">SQL/RPC</text>
+    <text x="806" y="288">routes</text>
+    <text x="806" y="423">push</text>
+  </g>
+
+  <!-- realtime: supabase -> phones -->
+  <path d="M1160,130 L1180,130 L1180,760 L120,760 L120,712" fill="none" stroke="#2563EB" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ab)"/>
+  <text x="650" y="752" text-anchor="middle" font-size="12.5" fill="#1D4ED8">Supabase Realtime (WebSocket): live pool, chat and driver-location updates</text>
+
+  <!-- push: fcm -> phones -->
+  <path d="M1010,475 L1010,700 L322,700" fill="none" stroke="#047857" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ag)"/>
+  <text x="650" y="692" text-anchor="middle" font-size="12.5" fill="#047857">push notifications</text>
+
+</svg>

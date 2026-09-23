@@ -1,0 +1,611 @@
+% ============================================================
+% Chapter 5 -- Project Implementation
+% Needs in the preamble: graphicx, booktabs, tabularx, float, array,
+% hyperref, and the L / C column types (see main.tex).
+% ============================================================
+\chapter{Project Implementation}
+\label{ch:implementation}
+
+This chapter explains how RidePool was actually built and how it is run. It
+first recaps the architecture and shows how each part was implemented in code,
+then explains how the technology stack is deployed, and finally describes how
+to set up the development environment and run the whole system.
+
+% ------------------------------------------------------------
+\section{Overall Architecture Recap}
+\label{sec:arch-recap}
+
+RidePool has three running parts --- the \textbf{rider app (CarPoolApp)}, the
+\textbf{driver app (DriverApp)} and the \textbf{server} --- connected to a
+\textbf{Supabase} database and a few outside services
+(Figure~\ref{fig:architecture} in Chapter~\ref{ch:project-analysis}). The apps
+send requests to the server's REST API; the server checks each request, runs
+the business logic and stores the result in the database; live changes flow
+back to the apps through Supabase Realtime.
+
+\subsection{Project Structure}
+\label{subsec:structure}
+
+The code is kept in one Git repository with four separate packages. There is
+\textbf{no root workspace}: each package has its own \texttt{package.json} and
+is installed and run from its own folder.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.92\textwidth}
+\small
+\begin{verbatim}
+RidePool-MVP/
+|-- Server/                  Node.js + Express + TypeScript API
+|   |-- src/
+|   |   |-- routes/          16 route files (one per API module)
+|   |   |-- controllers/     17 controllers
+|   |   |-- services/        24 services (matching, fare, wallet, ...)
+|   |   |-- middleware/      8 middleware (auth, rate limit, ...)
+|   |   |-- config/          environment and constants
+|   |   `-- utils/           H3 helpers, gender rule, time windows
+|   |-- supabase/migrations/ 14 SQL migration files
+|   |-- tests/               15 test files (Vitest)
+|   |-- nginx/               reverse-proxy configuration
+|   `-- Dockerfile, docker-compose.yml, docker-compose.mvp.yml
+|-- Client/
+|   |-- CarPoolApp/          rider app (Expo, 33 screens, 64 components)
+|   `-- DriverApp/           driver app (Expo, 11 screens, 73 components)
+|-- shared/                  common TypeScript data model
+`-- __docs__/                architecture, database, guides, diagrams
+\end{verbatim}
+\end{minipage}
+\caption{Folder structure of the RidePool repository}
+\label{fig:structure}
+\end{figure}
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Size of each package}
+  \label{tab:package-size}
+  \begin{tabularx}{\textwidth}{@{}p{2.4cm}Lp{4.2cm}@{}}
+    \toprule
+    \textbf{Package} & \textbf{Main contents} & \textbf{Language / framework} \\
+    \midrule
+    Server     & 16 routes, 17 controllers, 24 services, 8 middleware, 7 utilities, 14 migrations, 15 test files & TypeScript, Express 5, Node.js 20 \\
+    CarPoolApp & 33 screen files, 64 components, 13 hooks, 9 API service files & TypeScript, React Native 0.81, Expo 54 \\
+    DriverApp  & 11 screen files, 73 components, 4 API service files, 1 Zustand store & TypeScript, React Native 0.81, Expo 54 \\
+    shared     & Type definitions for rides, pools, users, drivers, payments and messaging & TypeScript \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Server Implementation}
+\label{subsec:server-impl}
+
+The server starts in \texttt{src/app.ts}. Every request passes through the same
+chain of middleware \textbf{before} it reaches a controller
+(Table~\ref{tab:pipeline}).
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Server request pipeline (in order)}
+  \label{tab:pipeline}
+  \begin{tabularx}{\textwidth}{@{}cp{4.4cm}L@{}}
+    \toprule
+    \textbf{Step} & \textbf{Middleware} & \textbf{What it does} \\
+    \midrule
+    1  & Security headers (Helmet) & Adds safe HTTP headers to every response \\
+    2  & Compression & Compresses responses to save mobile data \\
+    3  & CORS & Allows only approved origins in production \\
+    4  & Body parser & Reads JSON bodies, limited to \textbf{10 KB} per request \\
+    5  & Request logging & Morgan writes every request to the Winston logger \\
+    6  & Input sanitizer & Removes null bytes and unsafe characters from input \\
+    7  & Health routes & \texttt{/health/live}, \texttt{/health/ready}, \texttt{/health/detailed}, \texttt{/health/cache} (not rate-limited) \\
+    8  & Rate limiters & General limit on \texttt{/api}, stricter limits on login, pool search and payment/wallet \\
+    9  & Routes $\rightarrow$ Controllers $\rightarrow$ Services & Authentication, validation (Zod) and business logic \\
+    10 & Error handler & Turns any error into the standard error response \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+When the server starts it (1) connects the cache --- in-memory in MVP mode or
+Redis in production, (2) starts the \textbf{advance-booking scheduler}, which
+checks scheduled pools every 15 seconds, (3) starts listening on port 3000,
+and (4) registers a \textbf{graceful shutdown} handler so that open requests
+and the scheduler finish cleanly when the server stops.
+
+\paragraph{Core algorithm: pool matching.}
+The most important service is \texttt{poolMatching.service.ts}. It works in
+three passes:
+
+\begin{enumerate}
+  \item \textbf{Candidate search (database):} find open pools whose pickup H3
+        cell lies inside the rider's pickup ring (up to 6 rings $\approx$ 2.1
+        km), that still have a free seat and are still inside their search
+        window. If none are found, the ring is widened and the search retried.
+  \item \textbf{Scoring (in memory):} each candidate gets a score out of 100
+        (Table~\ref{tab:match-score}). Pools scoring below \textbf{30} are
+        dropped, and the rest are sorted by score and then by lower detour.
+  \item \textbf{Enrichment (Google Maps):} only the \textbf{top 10} pools get
+        exact distance, ETA and route geometry, using one shared route
+        request.
+\end{enumerate}
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Pool matching score}
+  \label{tab:match-score}
+  \begin{tabularx}{\textwidth}{@{}p{4.2cm}cL@{}}
+    \toprule
+    \textbf{Part of the score} & \textbf{Maximum points} & \textbf{How it is calculated} \\
+    \midrule
+    Route overlap            & 35 & Share of the rider's route that overlaps the pool's route \\
+    Pickup distance          & 25 & Closer pickup gives more points \\
+    Passenger fill           & 20 & Fuller pools get more points, so pools fill up faster \\
+    Destination proximity    & 10 & Closer destination gives more points \\
+    Same pickup hexagon      & 5  & Bonus when both pickups are in the same H3 cell \\
+    Same destination hexagon & 5  & Bonus when both destinations are in the same H3 cell \\
+    \midrule
+    \textbf{Total}           & \textbf{100} & Pools below 30 points are not shown \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\paragraph{Fare calculation.}
+\texttt{fare.service.ts} uses fixed rates: a base of Tk 50 (CAR) or Tk 30
+(CNG), Tk 15 per km and Tk 2 per minute. A pool discount of 25\% (2 riders) or
+35\% (3 riders) is taken off, the total is split between the riders, and a
+Tk 10 platform fee is added to each rider's charge.
+
+\paragraph{Cancellation penalty.}
+In \texttt{penalty.service.ts}, a cancellation made more than 30 seconds after
+booking counts as deliberate. Three deliberate cancellations within 5 minutes
+put the rider in a \textbf{7-minute cooldown}.
+
+\subsection{Mobile App Implementation}
+\label{subsec:app-impl}
+
+Both apps are built with \textbf{Expo} and \textbf{React Native}, so the same
+TypeScript code runs on Android, iOS and (for the rider app) the web
+(Table~\ref{tab:app-blocks}).
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Building blocks of the mobile apps}
+  \label{tab:app-blocks}
+  \begin{tabularx}{\textwidth}{@{}p{3cm}LL@{}}
+    \toprule
+    \textbf{Building block} & \textbf{CarPoolApp (rider)} & \textbf{DriverApp (driver)} \\
+    \midrule
+    Screens and navigation & Expo Router, files in \texttt{app/} & Expo Router, files in \texttt{app/} \\
+    Global state & \texttt{AuthContext}, \texttt{GlobalContext}, \texttt{NotificationContext} & Zustand store \texttt{useDriverStore} (saved to the phone) \\
+    API calls & 9 service files (\texttt{pool}, \texttt{ride}, \texttt{payment}, \texttt{advanceBooking}, \dots) & 4 service files (\texttt{auth}, \texttt{driver}, \texttt{location}, \texttt{notification}) \\
+    Live updates & Hooks \texttt{usePoolRealtime}, \texttt{useDriverLocationRealtime}, \texttt{useChatRealtime} & Hook \texttt{usePoolRealtime} \\
+    Styling & NativeWind (Tailwind CSS) & NativeWind (Tailwind CSS) \\
+    Maps & \texttt{react-native-maps}; Leaflet on web; static map in Expo Go & \texttt{react-native-maps} \\
+    Location & \texttt{expo-location} for the rider's position & \texttt{expo-location}, sends GPS every 5 s or 10 m \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+The rider app also calls Google Maps directly for \textbf{place search}
+(Places Autocomplete and Text Search), \textbf{address lookup} (Geocoding) and
+for drawing a route line on its map. All other map work --- matching, fares and
+pickup order --- is done by the server.
+
+\subsection{Database Implementation}
+\label{subsec:db-impl}
+
+The database is \textbf{PostgreSQL on Supabase}. It is built entirely from SQL
+\textbf{migration files}, which run in a fixed order so the same database can
+be created again from scratch at any time (Table~\ref{tab:migrations}).
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Database migration files}
+  \label{tab:migrations}
+  \begin{tabularx}{\textwidth}{@{}cp{4.6cm}L@{}}
+    \toprule
+    \textbf{Order} & \textbf{Migration} & \textbf{What it creates} \\
+    \midrule
+    1   & \texttt{extensions} & PostGIS (location data) and pgcrypto (IDs) \\
+    2--6 & \texttt{tables\_identity}, \texttt{tables\_rides}, \texttt{tables\_money}, \texttt{tables\_messaging}, \texttt{tables\_ops} & The 30 tables, grouped as in the schema diagram \\
+    7   & \texttt{foreign\_keys} & All links between tables (49 foreign keys) \\
+    8   & \texttt{indexes} & 73 indexes for fast searches (for example by H3 cell and status) \\
+    9   & \texttt{functions} & 16 database functions, including the atomic ones \\
+    10  & \texttt{triggers} & 14 triggers that keep \texttt{updated\_at} current, fill the PostGIS location columns, update users' average rating, create referral codes and record cancellation times \\
+    11  & \texttt{row\_level\_security} & Row Level Security on 29 tables with 43 access policies \\
+    12  & \texttt{grants} & Permissions for the database roles \\
+    13  & \texttt{realtime} & Publishes 8 tables to Supabase Realtime \\
+    14  & \texttt{seed\_app\_metadata} & Initial app settings \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Main database functions}
+  \label{tab:db-functions}
+  \begin{tabularx}{\textwidth}{@{}p{5.6cm}L@{}}
+    \toprule
+    \textbf{Function} & \textbf{Purpose} \\
+    \midrule
+    \texttt{atomic\_join\_pool} & Adds a rider to a pool with a row lock; checks capacity, pickup range, gender and duplicates \\
+    \texttt{atomic\_accept\_pool} & Gives a pool to exactly one driver (\texttt{SKIP LOCKED}) \\
+    \texttt{atomic\_leave\_pool} & Removes a rider and frees the seat safely \\
+    \texttt{atomic\_assign\_advance\_booking} & Places a scheduled ride into a suitable advance pool \\
+    \texttt{atomic\_confirm\_advance\_member} & Records a rider's confirmation and opens the pickup range at 2 confirmations \\
+    \texttt{atomic\_wallet\_debit} / \texttt{atomic\_wallet\_credit} & Moves wallet money and writes the transaction in one step \\
+    \texttt{atomic\_process\_payment}, \texttt{complete\_payment}, \texttt{fail\_payment} & Payment status changes \\
+    \texttt{vehicle\_capacity} & Returns 2 for CNG and 3 for CAR --- the single source of capacity \\
+    \texttt{update\_vehicle\_location} & Saves a driver's live position \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+The \textbf{8 tables published to Realtime} are \texttt{pools},
+\texttt{pool\_members}, \texttt{rides}, \texttt{vehicle\_locations},
+\texttt{conversations}, \texttt{conversation\_participants},
+\texttt{messages} and \texttt{notifications}. These are exactly the tables
+whose changes the apps need to see live.
+
+% ------------------------------------------------------------
+\section{Technology Stack Deployment}
+\label{sec:deployment}
+
+\subsection{Deployment Options}
+\label{subsec:deploy-options}
+
+RidePool can be deployed in two ways, chosen with environment variables. Both
+use the same code (Table~\ref{tab:deploy-options}).
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Deployment options}
+  \label{tab:deploy-options}
+  \begin{tabularx}{\textwidth}{@{}p{3.2cm}LL@{}}
+    \toprule
+    & \textbf{MVP deployment} & \textbf{Production deployment} \\
+    \midrule
+    Compose file & \texttt{docker-compose.mvp.yml} & \texttt{docker-compose.yml} \\
+    Server instances & 1 & 3 replicas \\
+    Cache & In-memory (\texttt{MVP\_MODE=true}) & Redis 7 (shared by all instances) \\
+    Reverse proxy & None & Nginx with HTTPS \\
+    Resources per server & 0.5 CPU, 512 MB RAM (limit) & 0.5 CPU, 512 MB RAM (limit) each \\
+    Best for & Pilot and testing, up to about 1,000 daily users & Growth stage with more users \\
+    Main limitation & Cache is lost on restart and not shared & More services to run and monitor \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figures/deployment-diagram.png}
+  \caption{Deployment of the RidePool stack}
+  \label{fig:deployment}
+\end{figure}
+
+Figure~\ref{fig:deployment} shows where each part runs. The server, Redis and
+Nginx run in Docker containers on one host. The database, authentication and
+realtime service are hosted by Supabase in the cloud. Google Maps and Firebase
+Cloud Messaging are used as outside services. The mobile apps are built with
+Expo Application Services (EAS) and installed on users' phones.
+
+\subsection{Containerisation with Docker}
+\label{subsec:docker}
+
+The server is packaged as a Docker image using a \textbf{two-stage
+Dockerfile}:
+
+\begin{enumerate}
+  \item \textbf{Build stage} (\texttt{node:20-alpine}): installs all packages
+        and compiles TypeScript to JavaScript (\texttt{npm run build}).
+  \item \textbf{Production stage} (\texttt{node:20-alpine}): installs only the
+        packages needed to run, copies the compiled \texttt{dist/} folder, and
+        runs the server as a \textbf{non-root user} (\texttt{nodejs}).
+        \texttt{tini} is used as the start process so the server shuts down
+        cleanly.
+\end{enumerate}
+
+The image has a built-in \textbf{health check} that calls
+\texttt{/health/live} every 30 seconds; if it fails three times, Docker marks
+the container as unhealthy so the problem can be seen and fixed. Logs are
+rotated (at most 3 files of 10 MB each) so the disk does not fill up.
+
+\subsection{Reverse Proxy and Load Balancing}
+\label{subsec:nginx}
+
+In production, \textbf{Nginx} sits in front of the server containers:
+
+\begin{itemize}
+  \item \textbf{HTTPS only:} Requests on port 80 are redirected to port 443.
+        Only TLS 1.2 and 1.3 are allowed.
+  \item \textbf{Load balancing:} Requests go to the server instance with the
+        fewest active connections (\texttt{least\_conn}); an instance that
+        fails 3 times is taken out for 30 seconds.
+  \item \textbf{Compression:} JSON and other text responses are compressed
+        with gzip.
+  \item \textbf{Extra rate limiting:} Nginx limits each IP address to 10
+        requests per second for the API and 1 per second for login, on top of
+        the server's own limits.
+  \item \textbf{Health checks:} \texttt{/health} requests are passed through
+        without logging, so monitoring does not fill the logs.
+\end{itemize}
+
+\subsection{Cloud and External Services}
+\label{subsec:cloud-services}
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Hosted and external services}
+  \label{tab:cloud-services}
+  \begin{tabularx}{\textwidth}{@{}p{3.2cm}LL@{}}
+    \toprule
+    \textbf{Service} & \textbf{Provider} & \textbf{Used for} \\
+    \midrule
+    Database, Auth, Realtime, backups & Supabase (PostgreSQL + PostGIS) & All stored data, login tokens, live updates, daily backups \\
+    Routes and travel times & Google Maps Platform --- Routes API (\texttt{computeRoutes}, \texttt{computeRouteMatrix}) and Directions API & Matching, fares, pickup order and ETA (server) \\
+    Place search and addresses & Google Places (Autocomplete, Text Search, Details) and Geocoding APIs & Searching for pickup and destination (rider app) \\
+    Map display & Maps SDK for Android/iOS, Static Maps API & Interactive maps; static map image in Expo Go \\
+    Push notifications & Firebase Cloud Messaging (FCM) & Sending notifications to phones \\
+    Code hosting and CI & GitHub and GitHub Actions & Version control and automated checks \\
+    App builds & Expo Application Services (EAS) & Building Android APKs and iOS builds \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Mobile App Builds and Distribution}
+\label{subsec:eas}
+
+Both apps are built with \textbf{EAS Build} using three build profiles
+(Table~\ref{tab:eas-profiles}).
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{EAS build profiles}
+  \label{tab:eas-profiles}
+  \begin{tabularx}{\textwidth}{@{}p{2.6cm}LL@{}}
+    \toprule
+    \textbf{Profile} & \textbf{Output} & \textbf{Use} \\
+    \midrule
+    \texttt{development} & Development build (Android debug, iOS debug) & Daily development with full native maps \\
+    \texttt{preview} & Android APK, iOS simulator build (internal distribution) & Sharing test builds with the team and testers \\
+    \texttt{production} & Android APK, iOS release build & Final release to users \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+The apps have their own identities: \texttt{com.ridepool.carpoolapp} for the
+rider app and \texttt{com.ridepool.driverapp} for the driver app. During quick
+testing the apps can also run inside \textbf{Expo Go}; because Expo Go does
+not include the native map module, the apps then show a \textbf{static map
+image} with an ``Open in Google Maps'' button instead of the interactive map.
+
+\subsection{Continuous Integration and Security Scanning}
+\label{subsec:ci}
+
+The repository contains \textbf{GitHub Actions} workflows that run
+automatically on pushes and pull requests to the \texttt{main},
+\texttt{master} and \texttt{develop} branches (Table~\ref{tab:workflows}).
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{GitHub Actions workflows}
+  \label{tab:workflows}
+  \begin{tabularx}{\textwidth}{@{}p{4.4cm}L@{}}
+    \toprule
+    \textbf{Workflow} & \textbf{What it does} \\
+    \midrule
+    \texttt{ci.yml} --- CI/CD Pipeline & Builds the server, runs the unit tests with coverage, type-checks and lints both apps, exports the rider app for the web, and runs an \texttt{npm audit} security check on all three packages \\
+    \texttt{codeql.yml} --- CodeQL & Scans the code for security weaknesses \\
+    \texttt{security-scan.yml} --- Security Scan & Semgrep code scan, Trivy scan of dependencies and the Docker image, TruffleHog secret scan, and an OWASP ZAP baseline scan \\
+    \texttt{e2e.yml} --- E2E Tests & Prepared to start the server and run end-to-end and Playwright browser tests; the test files themselves are future work \\
+    \texttt{expo-preview.yml} --- Expo Preview & Builds a preview version of the app for each pull request \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Current Deployment Status}
+\label{subsec:deploy-status}
+
+At the time of writing, RidePool runs as a \textbf{development deployment}:
+the server runs on the development laptop in MVP mode, the database runs on
+the hosted Supabase project, and the rider and driver apps on Android phones
+connect to the server over the local Wi-Fi network. The Docker, Nginx and EAS
+configuration described above is ready for moving the server to a cloud host
+and publishing the apps, which is the next step before a public pilot.
+
+% ------------------------------------------------------------
+\section{System Setup and Environment}
+\label{sec:setup}
+
+\subsection{Development Environment}
+\label{subsec:dev-environment}
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Development environment used}
+  \label{tab:dev-environment}
+  \begin{tabularx}{\textwidth}{@{}p{3.4cm}L@{}}
+    \toprule
+    \textbf{Item} & \textbf{Details} \\
+    \midrule
+    Computer         & Laptop with Intel Core i3-1315U, 16 GB RAM \\
+    Operating system & Windows 11 Pro \\
+    Runtime          & Node.js 22 locally (Node.js 20 in Docker and CI), npm \\
+    Code editor      & Visual Studio Code \\
+    Version control  & Git, GitHub \\
+    Mobile tools     & Expo CLI, Expo Go, EAS CLI, Android phone for testing \\
+    Database tools   & Supabase dashboard and Supabase CLI \\
+    Browser          & Google Chrome (web version and debugging) \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Installing the Project}
+\label{subsec:install}
+
+Because there is no root workspace, each package is installed separately:
+
+\begin{verbatim}
+# 1. Get the code
+git clone https://github.com/Rai-sul/RidePool-MVP.git
+cd RidePool-MVP
+
+# 2. Server
+cd Server && npm ci && cd ..
+
+# 3. Rider app and driver app
+cd Client/CarPoolApp && npm ci && cd ../..
+cd Client/DriverApp  && npm ci && cd ../..
+
+# 4. Shared data model (optional)
+cd shared && npm ci && npm run build
+\end{verbatim}
+
+\subsection{Environment Configuration}
+\label{subsec:env-config}
+
+Settings and secret keys are kept in \texttt{.env} files that are
+\textbf{never committed} to Git. Each package has a \texttt{.env.example} file
+to copy from (Tables~\ref{tab:server-env} and~\ref{tab:app-env}).
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Main server environment variables}
+  \label{tab:server-env}
+  \begin{tabularx}{\textwidth}{@{}p{5.2cm}p{3.6cm}L@{}}
+    \toprule
+    \textbf{Variable} & \textbf{Example / default} & \textbf{Purpose} \\
+    \midrule
+    \texttt{SUPABASE\_URL}, \texttt{SUPABASE\_ANON\_KEY} & from Supabase dashboard & Connect to the database \\
+    \texttt{SUPABASE\_SERVICE\_ROLE\_KEY} & from Supabase dashboard & Server-only key; never put in an app \\
+    \texttt{GOOGLE\_MAPS\_API\_KEY} & from Google Cloud & Routes and Directions (server) \\
+    \texttt{PORT}, \texttt{NODE\_ENV} & \texttt{3000}, \texttt{development} & Server port and mode \\
+    \texttt{MVP\_MODE}, \texttt{SKIP\_REDIS} & \texttt{true} & Use the in-memory cache, no Redis \\
+    \texttt{REDIS\_URL} & \texttt{redis://localhost:6379} & Redis address (production only) \\
+    \texttt{H3\_RESOLUTION\_PICKUP} / \texttt{\_DESTINATION} / \texttt{\_DRIVER} & \texttt{9} / \texttt{7} / \texttt{8} & H3 cell sizes \\
+    \texttt{H3\_SEARCH\_RADIUS\_PICKUP} / \texttt{\_DESTINATION} & \texttt{6} / \texttt{2} & How many rings to search \\
+    \texttt{ADVANCE\_TIME\_UNIT} & \texttt{minutes} (\texttt{seconds} for testing) & Speed up advance-booking windows for QA \\
+    \texttt{ADVANCE\_MAX\_LEAD\_DAYS} & \texttt{7} & How far ahead a ride can be booked \\
+    \texttt{FCM\_SERVER\_KEY} & from Firebase & Push notifications (optional) \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{App environment variables}
+  \label{tab:app-env}
+  \begin{tabularx}{\textwidth}{@{}p{6.4cm}L@{}}
+    \toprule
+    \textbf{Variable} & \textbf{Purpose} \\
+    \midrule
+    \texttt{EXPO\_PUBLIC\_API\_URL} & Server address, for example \texttt{http://<laptop-IP>:3000/api} on the local network \\
+    \texttt{EXPO\_PUBLIC\_GOOGLE\_MAPS\_API\_KEY} & Maps key for the app (restricted to the app's bundle ID) \\
+    \texttt{EXPO\_PUBLIC\_SUPABASE\_URL}, \texttt{EXPO\_PUBLIC\_SUPABASE\_ANON\_KEY} & Supabase Realtime connection \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Database Setup}
+\label{subsec:db-setup}
+
+\begin{enumerate}
+  \item Create a new project in the \textbf{Supabase} dashboard and copy its
+        URL and keys into \texttt{Server/.env}.
+  \item Link the Supabase CLI to the project (\texttt{supabase link}).
+  \item Apply the 14 migration files in order:
+\begin{verbatim}
+cd Server
+npm run migrate        # runs: supabase db push
+\end{verbatim}
+  \item Check the result: the database integration test confirms that the core
+        tables, the atomic functions and PostGIS are all present.
+\begin{verbatim}
+npx vitest run tests/supabase-connection.test.ts
+\end{verbatim}
+\end{enumerate}
+
+\subsection{External Service Setup}
+\label{subsec:external-setup}
+
+\begin{enumerate}
+  \item \textbf{Google Cloud:} create an API key for the server and enable the
+        \textbf{Routes API} and \textbf{Directions API}. Create a second key
+        for the apps with the \textbf{Maps SDK for Android/iOS},
+        \textbf{Places}, \textbf{Geocoding} and \textbf{Static Maps} APIs,
+        restricted to the apps' bundle IDs.
+  \item \textbf{Firebase (optional):} create a project and set
+        \texttt{FCM\_SERVER\_KEY}. Without it, notifications are still saved
+        and shown inside the app but are not pushed to the phone.
+  \item \textbf{Expo / EAS:} log in with \texttt{eas login} to build
+        installable apps.
+\end{enumerate}
+
+\subsection{Running the System}
+\label{subsec:running}
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Commands to run and check the system}
+  \label{tab:run-commands}
+  \begin{tabularx}{\textwidth}{@{}p{5cm}L@{}}
+    \toprule
+    \textbf{Task} & \textbf{Command (run inside the package folder)} \\
+    \midrule
+    Start the server in development mode & \texttt{cd Server} $\rightarrow$ \texttt{npm run dev} \\
+    Build and start the compiled server & \texttt{npm run build} $\rightarrow$ \texttt{npm run start} \\
+    Start the rider app & \texttt{cd Client/CarPoolApp} $\rightarrow$ \texttt{npx expo start --clear} \\
+    Start the driver app & \texttt{cd Client/DriverApp} $\rightarrow$ \texttt{npx expo start --clear} \\
+    Open on a phone / web & Scan the QR code with Expo Go, or press \texttt{a} (Android) / \texttt{w} (web) \\
+    Run all server tests & \texttt{cd Server} $\rightarrow$ \texttt{npm test} \\
+    Type-check an app & \texttt{npx tsc --noEmit} \\
+    Test scheduled rides quickly & Set \texttt{ADVANCE\_TIME\_UNIT=seconds} in \texttt{Server/.env} and restart the server \\
+    Check the server is running & Open \texttt{http://localhost:3000/health/ready} \\
+    Run the MVP Docker deployment & \texttt{cd Server} $\rightarrow$ \texttt{docker compose -f docker-compose.mvp.yml up} \\
+    Run the production Docker deployment & \texttt{cd Server} $\rightarrow$ \texttt{docker compose up} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+When the server starts correctly, its log shows the port, the environment,
+whether MVP mode is on, and the advance-booking time unit (minutes, or seconds
+in test mode).
+
+\subsection{Device Permissions}
+\label{subsec:permissions}
+
+Both apps ask the user for the permissions they need to work
+(Table~\ref{tab:permissions}).
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{App permissions}
+  \label{tab:permissions}
+  \begin{tabularx}{\textwidth}{@{}p{5.4cm}L@{}}
+    \toprule
+    \textbf{Permission} & \textbf{Why it is needed} \\
+    \midrule
+    Location (while using the app) & Find the rider's pickup point; show the driver's position \\
+    Background location and location foreground service & Keep tracking the trip when the app is in the background \\
+    Notifications & Pool found, driver assigned, trip updates and chat messages \\
+    Internet and network state & Talk to the server and detect when the connection is lost \\
+    Vibrate, receive boot completed & Alerts for new pool requests; keep notifications working after the phone restarts \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+On iOS, each location permission is shown with a short message explaining why
+RidePool needs it (for example, ``to find nearby rides and drivers'').

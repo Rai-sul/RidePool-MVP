@@ -1,0 +1,1075 @@
+% ============================================================
+% Chapter 4 -- Project Analysis
+% ============================================================
+
+This chapter analyses how RidePool is built and how it works. It explains the
+system architecture, how the parts of the apps work together, how data moves
+through the system (with the project's UML and database diagrams), the user
+interface, and how the system was evaluated and tested.
+
+% ------------------------------------------------------------
+\section{System Architecture}
+\label{sec:architecture}
+
+RidePool follows a \textbf{client--server architecture} with four layers, shown
+in Figure~\ref{fig:architecture}:
+
+\begin{enumerate}
+  \item \textbf{Client layer} -- two mobile apps, CarPoolApp for riders and
+        DriverApp for drivers, built with React Native and Expo. A separate
+        \texttt{shared} package describes the common data model (rides, pools,
+        users, payments).
+  \item \textbf{Edge layer (optional)} -- an Nginx reverse proxy that spreads
+        requests across server instances in production. In MVP mode the apps
+        talk to a single server directly.
+  \item \textbf{Application layer} -- the RidePool server, built with Node.js,
+        Express and TypeScript. Each request passes through security
+        middleware, then through \textbf{Routes $\rightarrow$ Controllers
+        $\rightarrow$ Services}.
+  \item \textbf{Data and external services layer} -- Supabase (PostgreSQL
+        database, authentication and real-time updates), a cache (Redis or
+        in-memory), Google Maps for routes, Firebase Cloud Messaging for push
+        notifications, and a payment gateway (planned).
+\end{enumerate}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{architecture-diagram.png}
+  \caption{RidePool system architecture}
+  \label{fig:architecture}
+\end{figure}
+
+The apps send normal requests (search, join, pay) to the server over HTTPS as
+REST calls with a JSON Web Token (JWT). Live changes --- a new passenger
+joining, the driver's location, new chat messages --- are pushed to the apps
+directly by \textbf{Supabase Realtime}, with regular polling as a backup.
+Table~\ref{tab:layers} summarises the job of each layer.
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Responsibilities of each layer}
+  \label{tab:layers}
+  \begin{tabularx}{\textwidth}{@{}p{2.2cm}LL@{}}
+    \toprule
+    \textbf{Layer} & \textbf{Main parts} & \textbf{Responsibility} \\
+    \midrule
+    Client      & CarPoolApp, DriverApp, shared types & Show screens, collect input, show maps, keep session and trip state \\
+    Edge        & Nginx & Forward requests, balance load, handle TLS (production only) \\
+    Application & Middleware, routes, controllers, services & Check security, validate input, run business logic (matching, fares, wallet, penalties) \\
+    Data        & Supabase PostgreSQL, Auth, Realtime & Store data, log users in, run atomic functions, push live updates \\
+    External    & Cache, Google Maps, FCM, payment gateway & Speed up responses, calculate routes, send push notifications, take payments \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Sequence Diagram}
+\label{subsec:arch-sequence}
+
+A sequence diagram shows \textbf{which part of the system talks to which, and
+in what order}. Figure~\ref{fig:sequence} shows the complete life of a shared
+ride across the six main participants of the architecture: the \textbf{Rider}
+(CarPoolApp), the \textbf{RidePool API} (Express server), \textbf{Supabase}
+(PostgreSQL), the \textbf{Matching \& Fare} services, \textbf{Google Maps},
+and the \textbf{Driver} (DriverApp).
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=\textwidth,height=0.9\textheight,keepaspectratio]{sequence-diagram.png}
+  \caption{Sequence diagram of a complete shared ride}
+  \label{fig:sequence}
+\end{figure}
+
+From the architecture point of view, the diagram shows three important facts:
+
+\begin{itemize}
+  \item \textbf{The apps never talk to the database directly for actions.}
+        Every action (search, join, accept, pay) goes to the RidePool API
+        first, which checks it and then calls the database.
+  \item \textbf{Critical steps are done inside the database.} Joining a pool
+        (\texttt{atomic\_join\_pool}), accepting a pool
+        (\texttt{atomic\_accept\_pool}) and paying from the wallet
+        (\texttt{atomic\_wallet\_debit}) run as single atomic functions in
+        PostgreSQL, so two users can never take the same seat or the same
+        pool.
+  \item \textbf{During matching, Google Maps is called only by the server's
+        matching services}, and only once per search, which keeps the map cost
+        low.
+\end{itemize}
+
+The five phases of the diagram (search, join, dispatch, trip, settle) are
+explained step by step in Section~\ref{subsec:sequence}.
+
+\subsection{Modularity and Scalability}
+\label{subsec:modularity}
+
+\paragraph{Modularity.}
+RidePool is split into small parts that each do one job, as listed in
+Table~\ref{tab:modules}.
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Modules of the system}
+  \label{tab:modules}
+  \begin{tabularx}{\textwidth}{@{}p{3.2cm}LL@{}}
+    \toprule
+    \textbf{Module} & \textbf{What it contains} & \textbf{Why it is separate} \\
+    \midrule
+    \texttt{Server}             & Express API, services, database migrations & Business logic stays in one place for both apps \\
+    \texttt{Client/CarPoolApp}  & Rider screens, components, hooks, services & Rider features can change without touching the driver app \\
+    \texttt{Client/DriverApp}   & Driver screens, components, store, services & Driver features and GPS logic are kept apart \\
+    \texttt{shared}             & TypeScript types for rides, pools, users, payments & One written reference for the data model \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Inside the server, each feature (pools, rides, drivers, payments, wallet,
+ratings, messaging, advance booking, Priyo Sathi, promo codes) has its own
+\textbf{route file, controller and service}. A new feature can be added as a
+new set of files without changing the others. Inside the apps, each feature has
+its own \textbf{service file} (for example \texttt{pool.service.ts},
+\texttt{payment.service.ts}) that calls the server.
+
+\paragraph{Scalability.}
+The system is designed to grow step by step:
+
+\begin{itemize}
+  \item \textbf{Stateless API:} The server keeps no user session in memory;
+        every request carries its own JWT. Any server instance can answer any
+        request, so more instances can be added behind Nginx.
+  \item \textbf{Two cache modes:} In MVP mode the cache is kept in memory (no
+        Redis needed). In production a shared \textbf{Redis} cache is used so
+        all instances see the same cached routes and pools.
+  \item \textbf{Cheap matching:} The H3 hexagon grid~\cite{h3} turns ``find
+        nearby pools'' into a quick lookup of hexagon IDs, so matching stays
+        fast as the number of pools grows.
+  \item \textbf{Database does the locking:} Because seat and money operations
+        are atomic database functions, adding more server instances does not
+        create race conditions.
+  \item \textbf{Configurable settings:} Search radius, H3 resolutions,
+        advance-booking time windows and cache mode are all set through
+        environment variables, so they can be tuned without changing code.
+\end{itemize}
+
+\subsection{Challenges and Considerations}
+\label{subsec:arch-challenges}
+
+Table~\ref{tab:design-challenges} lists the main design challenges and how the
+architecture handles them.
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Design challenges and how they were handled}
+  \label{tab:design-challenges}
+  \begin{tabularx}{\textwidth}{@{}p{3.2cm}p{3.6cm}L@{}}
+    \toprule
+    \textbf{Challenge} & \textbf{Consideration} & \textbf{Design decision} \\
+    \midrule
+    Many riders joining the last seat at once & A car must never be overfilled & \texttt{atomic\_join\_pool} locks the pool row and checks capacity, pickup range, gender and duplicates in one step \\
+    Several drivers accepting the same pool & A pool must get exactly one driver & \texttt{atomic\_accept\_pool} uses \texttt{SKIP LOCKED} so only the first driver wins \\
+    Google Maps cost & Each call costs money & Only the top 10 matches are enriched; one route call per search is shared; results are cached; a geometric fallback is used if Maps fails \\
+    Fast matching across the city & Comparing every rider with every pool is slow & H3 indexing: pickup at resolution 9 ($\sim$0.35 km), destination at resolution 7 ($\sim$2.4 km), driver at resolution 8 \\
+    Live updates on mobile networks & Connections drop often in Dhaka & Supabase Realtime plus polling fallback (every 3 s when disconnected) \\
+    Trusting data from the phone & A modified app could send false data & Vehicle capacity and gender are always read from the server, never from the client \\
+    Scheduled rides & Must not break instant rides & An advance booking is a normal \texttt{rides} row with \texttt{booking\_type = 'ADVANCE'}; scheduled pools stay hidden until their pickup window opens \\
+    Security & Login and payment endpoints attract abuse & Rate limiters, input sanitization, Helmet security headers, JWT authentication and Row Level Security \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+% ------------------------------------------------------------
+\section{App Module Integration}
+\label{sec:app-integration}
+
+RidePool is not one program but several modules --- two mobile apps, a server,
+a database and outside services --- that must work together as one system.
+This section explains how the main modules are connected: through the API,
+through the shared pool lifecycle, through real-time updates, through maps and
+routing, through the wallet and payments, and through session and offline
+handling.
+
+\subsection{Client--Server API Integration}
+\label{subsec:api}
+
+The two apps talk to the server only through a \textbf{REST API} under the
+\texttt{/api} path. The API is divided into \textbf{16 modules} with about
+\textbf{114 endpoints} (Table~\ref{tab:api-modules}). Each module has its own
+route file, controller and service on the server, and a matching service file
+in the apps (for example \texttt{pool.service.ts} in CarPoolApp calls
+\texttt{/api/pools}).
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{API modules of the RidePool server}
+  \label{tab:api-modules}
+  \begin{tabularx}{\textwidth}{@{}p{3.6cm}cLp{2.4cm}@{}}
+    \toprule
+    \textbf{Module (path)} & \textbf{Endpoints} & \textbf{Main purpose} & \textbf{Used by} \\
+    \midrule
+    \texttt{/api/auth}             & 8  & Register, log in, reset and change password & Both apps \\
+    \texttt{/api/users}            & 11 & Profile, gender preference, device tokens, notifications, account deletion & Both apps \\
+    \texttt{/api/pools}            & 15 & Search, create, join and leave pools & Rider app \\
+    \texttt{/api/advance-bookings} & 5  & Book, edit, cancel and confirm scheduled rides & Rider app \\
+    \texttt{/api/rides}            & 4  & Fare estimate, ride request, history, cancellation & Rider app \\
+    \texttt{/api/driver}           & 17 & Go online, available pools, accept, pickup, drop-off, complete, earnings & Driver app \\
+    \texttt{/api/payments}         & 2  & Process a payment, payment history & Rider app \\
+    \texttt{/api/wallet}           & 7  & Balance, top-up, pay, withdraw, transactions & Both apps \\
+    \texttt{/api/priyo-sathi}      & 10 & Trusted companions, requests and ride invites & Rider app \\
+    \texttt{/api/ratings}          & 5  & Rate riders and drivers & Both apps \\
+    \texttt{/api/messages}         & 8  & In-pool chat conversations & Both apps \\
+    \texttt{/api/promos}           & 5  & Validate and apply promo codes & Rider app \\
+    \texttt{/api/saved-places}     & 5  & Home, office and other saved places & Rider app \\
+    \texttt{/api/offline}          & 6  & Offline data package, sync and conflict resolution & Both apps \\
+    \texttt{/api/analytics}        & 5  & Usage and search statistics & Admin / monitoring \\
+    \texttt{/api/navigation}       & 1  & Google Maps deep link for turn-by-turn navigation & Driver app \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Every request follows the same rules, which makes the modules easy to connect:
+
+\begin{itemize}
+  \item \textbf{Authentication:} Private endpoints need a \texttt{Bearer} JWT
+        in the request header. The \texttt{authenticate} middleware checks it
+        with Supabase Auth.
+  \item \textbf{Validation:} Controllers check the request body with
+        \textbf{Zod} schemas before any work is done.
+  \item \textbf{Same response format:} Every response has the same shape, so
+        the apps can handle all of them in one way:
+        \begin{itemize}
+          \item Success: \texttt{\{ success: true, data, message, timestamp \}}
+          \item Error: \texttt{\{ success: false, error: \{ code, message,
+                details \}, timestamp \}}
+        \end{itemize}
+  \item \textbf{Rate limits by module:} Stricter limits are applied to login,
+        pool search and payment/wallet routes (Chapter~3,
+        Table~\ref{tab:nonfunctional-req}).
+  \item \textbf{Common data model:} The server and both apps use the same
+        field names and status values, which are also written down in the
+        \texttt{shared} package (\texttt{@ridepool/shared-types}) as a
+        reference.
+\end{itemize}
+
+\subsection{Pool Lifecycle across Rider and Driver Apps}
+\label{subsec:pool-lifecycle}
+
+The \textbf{pool} is the object that joins the rider app and the driver app
+together. Both apps watch the same pool and react when its status changes. The
+same status values are used by the server, both apps and the database
+(Table~\ref{tab:pool-status}).
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Pool status lifecycle}
+  \label{tab:pool-status}
+  \begin{tabularx}{\textwidth}{@{}p{3.8cm}LL@{}}
+    \toprule
+    \textbf{Status} & \textbf{Meaning} & \textbf{Changed by} \\
+    \midrule
+    \texttt{SCHEDULED} & An advance pool is collecting bookings; it is hidden from instant riders & Advance booking service when a scheduled ride is assigned \\
+    \texttt{WAITING\_FOR\_RIDERS} & A new instant pool is open for other riders to join & Rider app creates a pool (\texttt{POST /api/pools/create}) \\
+    \texttt{WAITING\_FOR\_DRIVER} & The pool has enough riders (at least 2) and is shown to drivers & Search timer (at least 2 riders), \texttt{atomic\_join\_pool} when the pool becomes full, or advance dispatch after riders confirm \\
+    \texttt{READY\_TO\_START} & A driver has accepted and is going to the pickups & \texttt{atomic\_accept\_pool} when the driver accepts \\
+    \texttt{STARTED} & The trip is in progress & Driver app starts the ride \\
+    \texttt{COMPLETED} & All passengers are dropped off and the fare is settled & Driver app completes the ride \\
+    \texttt{CANCELLED} & Not enough riders joined in time, or the pool was cancelled & Search timer, advance scheduler, or rider/driver cancellation \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Two background timers keep this lifecycle moving without any user action:
+
+\begin{itemize}
+  \item \textbf{Search timer (instant pools):} A new pool gets a
+        \textbf{30-second} search window, plus a \textbf{10-second} extension
+        if it is still short of riders (40 seconds in total). If at least two
+        riders have joined, the pool moves to
+        \texttt{WAITING\_FOR\_DRIVER}; if not, it is cancelled and the rider is
+        told.
+  \item \textbf{Advance scheduler (scheduled pools):} Every \textbf{15
+        seconds} the scheduler checks scheduled pools. It opens the
+        confirmation window before pickup, removes riders who did not confirm,
+        and sends the pool to drivers once \textbf{two riders have confirmed}.
+        A pool is never sent out as a solo ride unless solo fallback is
+        switched on.
+\end{itemize}
+
+If a driver cancels after accepting, the pool goes back to
+\texttt{WAITING\_FOR\_DRIVER} so another driver can take it.
+
+\subsection{Real-Time Updates and Notifications}
+\label{subsec:realtime}
+
+When the pool changes in one app, the other app must see the change at once.
+RidePool uses three channels for this:
+
+\begin{enumerate}
+  \item \textbf{Supabase Realtime} (WebSocket) sends database changes directly
+        to the apps through the hooks \texttt{usePoolRealtime},
+        \texttt{useDriverLocationRealtime} and \texttt{useChatRealtime}.
+  \item \textbf{Polling fallback} asks the server for updates at a fixed
+        interval when the realtime connection is lost, which happens often on
+        mobile networks.
+  \item \textbf{Notifications} are saved in the \texttt{notifications} table
+        and, when configured, also sent as push notifications through Firebase
+        Cloud Messaging (FCM). A failed push never stops the main action.
+\end{enumerate}
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Live update channels}
+  \label{tab:live-intervals}
+  \begin{tabularx}{\textwidth}{@{}p{4cm}p{3.4cm}L@{}}
+    \toprule
+    \textbf{Data} & \textbf{Main channel} & \textbf{Backup} \\
+    \midrule
+    Pool status and passengers & Supabase Realtime & Polling every 3 s if disconnected; 30 s check while connected \\
+    Driver location            & Supabase Realtime & Driver app sends GPS every 5 s or 10 m of movement \\
+    Chat messages              & Supabase Realtime & Polling every 2 s \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Main notification types}
+  \label{tab:notification-types}
+  \begin{tabularx}{\textwidth}{@{}p{6.2cm}L@{}}
+    \toprule
+    \textbf{Type} & \textbf{When it is sent} \\
+    \midrule
+    \texttt{POOL\_MATCH} & A rider joins or a pool is matched \\
+    \texttt{POOL\_REQUEST} & A pool is offered to a driver \\
+    \texttt{DRIVER\_ASSIGNED} / \texttt{DRIVER\_UNASSIGNED} & A driver accepts or leaves the pool \\
+    \texttt{RIDE\_STARTED} / \texttt{RIDE\_COMPLETED} & The driver starts or completes the trip \\
+    \texttt{POOL\_MEMBER\_LEFT} / \texttt{POOL\_CANCELLED} & A rider leaves or the pool is cancelled \\
+    \texttt{PAYMENT\_RECEIVED} & A payment is recorded \\
+    \texttt{RATING\_REQUEST} & The trip has ended and ratings are requested \\
+    \texttt{MESSAGE} & A new chat message arrives \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Maps, Routing and Navigation Integration}
+\label{subsec:maps-integration}
+
+Location is at the centre of RidePool, and several location components work
+together (Table~\ref{tab:location-components}).
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Location and routing components}
+  \label{tab:location-components}
+  \begin{tabularx}{\textwidth}{@{}p{3.2cm}p{3.6cm}L@{}}
+    \toprule
+    \textbf{Component} & \textbf{Where} & \textbf{Job} \\
+    \midrule
+    H3 hexagon grid (\texttt{h3-js}) & Server (\texttt{h3.utils.ts}) & Turns every pickup (resolution 9), destination (resolution 7) and driver (resolution 8) into a hexagon ID for fast nearby search \\
+    Route overlap & Server (\texttt{routeOverlap.service.ts}) & Measures how much two riders' routes share, so riders going the same way are matched \\
+    Smart route & Server (\texttt{smartRoute.service.ts}) & Finds the fastest pickup and drop-off order for all passengers, respecting each passenger's detour limit \\
+    Google Maps Platform & Server (\texttt{googleMaps.service.ts}) & Provides road routes, distances, traffic-aware travel times and route geometry \\
+    Navigation deep link & Server $\rightarrow$ Driver app & Opens Google Maps turn-by-turn navigation for the driver's next stop \\
+    Map display & Both apps & \texttt{react-native-maps} on phones, Leaflet on the web, a static map as a last fallback \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+To keep cost low and the system reliable:
+
+\begin{itemize}
+  \item Route calculation for \textbf{matching, fares and pickup order is done
+        only by the server}, which keeps the main map cost under control. The
+        rider app calls Google Maps directly only for place search, address
+        lookup and drawing the route line on its own map.
+  \item The rider's route is fetched \textbf{once per search} and shared by all
+        matches, and only the \textbf{top 10} matches are enriched.
+  \item Routes are \textbf{cached}, and identical requests that arrive at the
+        same time are merged into one call.
+  \item If Google Maps fails, the server uses a \textbf{simple geometric
+        estimate} and does not pretend it has live traffic data.
+\end{itemize}
+
+\subsection{Wallet, Payment and Promo Integration}
+\label{subsec:payment-integration}
+
+Money moves through several modules, and it must never be lost or counted
+twice:
+
+\begin{enumerate}
+  \item \textbf{Fare module} (\texttt{fare.service.ts}) calculates the fare per
+        person after the pool discount and adds the Tk 10 platform fee.
+  \item \textbf{Promo module} (\texttt{promo.service.ts}) applies a percentage
+        or fixed discount, never more than the promo's maximum amount.
+  \item \textbf{Payment module} (\texttt{/api/payments/process}) records the
+        payment. The rider chooses \textbf{wallet} or \textbf{cash}; mobile
+        banking (bKash / SSLCommerz) is planned.
+  \item \textbf{Wallet module} (\texttt{/api/wallet}) handles balance, top-up
+        and payment. Every debit goes through the
+        \textbf{\texttt{atomic\_wallet\_debit}} database function, which
+        refuses a negative balance and writes a transaction record in the same
+        step.
+  \item \textbf{Driver earnings} are recorded in \texttt{driver\_earnings} when
+        the pool is completed, with the platform keeping a 20\% commission.
+\end{enumerate}
+
+Because steps 4 and 5 are done inside the database, a payment cannot be
+half-finished: either the wallet is debited \emph{and} the transaction is
+recorded, or nothing happens.
+
+\subsection{Session, Trip and Offline State}
+\label{subsec:state}
+
+The apps must keep working when they are closed, moved to the background or
+offline.
+
+\begin{itemize}
+  \item \textbf{Login session:} In CarPoolApp, \texttt{AuthContext} saves the
+        JWT and a copy of the user profile on the phone (AsyncStorage). When
+        the app opens, the saved profile is shown at once and then refreshed
+        from the server. The user is logged out \textbf{only} when the server
+        says the token is invalid, not on a network error. In DriverApp, the
+        Zustand store saves only the user, vehicle and login flag;
+        fast-changing data is always loaded fresh.
+  \item \textbf{Search choices across screens:} \texttt{GlobalContext} holds
+        the pickup, destination, ride type (regular or female-only) and
+        selected pool, so every booking screen reads the same values and the
+        rider never enters them twice.
+  \item \textbf{Active trip after a restart:} The active trip is saved on the
+        phone. When the app reopens, it is checked with the server: if the pool
+        is still active the trip screen is restored with fresh data; if it was
+        completed or cancelled the saved trip is deleted.
+  \item \textbf{Offline actions:} The \texttt{/api/offline} module gives the
+        app a data package to use offline and later \textbf{syncs} actions made
+        while offline, keeping them in their original order.
+\end{itemize}
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{State kept on the phone}
+  \label{tab:phone-state}
+  \begin{tabularx}{\textwidth}{@{}LlLL@{}}
+    \toprule
+    \textbf{State} & \textbf{App} & \textbf{Stored in} & \textbf{Restored how} \\
+    \midrule
+    JWT and user profile      & CarPoolApp & AsyncStorage & Shown at once, then refreshed from the server \\
+    User, vehicle, login flag & DriverApp  & Zustand persisted store & Loaded on start \\
+    Search choices            & CarPoolApp & \texttt{GlobalContext} (memory) & Shared by all booking screens \\
+    Active trip               & CarPoolApp & AsyncStorage & Checked with the server on start \\
+    Offline actions           & Both apps  & Offline queue & Synced through \texttt{/api/offline/sync} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+% ------------------------------------------------------------
+\section{Data Flow and Process Overview}
+\label{sec:data-flow}
+
+This section describes the processes and data of RidePool using six diagrams.
+Table~\ref{tab:diagram-guide} gives a short guide.
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Diagrams in this chapter}
+  \label{tab:diagram-guide}
+  \begin{tabularx}{\textwidth}{@{}p{3cm}p{3cm}Lc@{}}
+    \toprule
+    \textbf{Diagram} & \textbf{Type} & \textbf{What it shows} & \textbf{Figure} \\
+    \midrule
+    Activity diagram  & UML behaviour & The steps of a ride from request to rating, split by rider, system and driver & \ref{fig:activity} \\
+    Data flow diagram & Structured analysis & Main processes, data stores and how data moves between them & \ref{fig:dfd} \\
+    EER diagram       & Conceptual data model & Entities, attributes, relationships and specialisations & \ref{fig:eer} \\
+    Schema diagram    & Physical data model & All 30 database tables with their keys & \ref{fig:schema} \\
+    Sequence diagram  & UML interaction & Messages between apps, server, database and services over time & \ref{fig:sequence} \\
+    Use case diagram  & UML requirements & What riders and drivers can do with the system & \ref{fig:usecase} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Activity Diagram}
+\label{subsec:activity}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=\textwidth,height=0.9\textheight,keepaspectratio]{activity-diagram.png}
+  \caption{Activity diagram of a shared ride}
+  \label{fig:activity}
+\end{figure}
+
+Figure~\ref{fig:activity} is a swim-lane activity diagram with three lanes:
+\textbf{Rider}, \textbf{RidePool System} and \textbf{Driver}. It shows the full
+flow of one shared ride:
+
+\begin{enumerate}
+  \item \textbf{Request.} The rider enters pickup, destination and (for advance
+        booking) time. The system estimates the fare and route, then searches
+        for pools using the H3 hexagon ring.
+  \item \textbf{Match.} If a matching pool exists, the rider \textbf{joins} it;
+        if not, the system \textbf{creates a new pool}.
+  \item \textbf{Scheduling check.} If it is an advance booking, the pool is
+        held in the \texttt{SCHEDULED} state until its pickup window opens.
+  \item \textbf{Dispatch.} The system broadcasts the pool to nearby online
+        drivers. A driver reviews the route and accepts. If no driver accepts,
+        the system \textbf{extends the search window and re-broadcasts}.
+  \item \textbf{Trip.} After a driver accepts, the system assigns the driver
+        and opens the pickup window. The rider sees the driver, vehicle and
+        ETA, and the driver picks up and drops off each passenger, then
+        completes the ride.
+  \item \textbf{Settlement.} The system calculates and splits the fare. The
+        rider pays by wallet or cash, the wallet is debited and the driver's
+        earnings are credited.
+  \item \textbf{Rating.} The rider rates the driver and the driver rates the
+        riders, and the flow ends.
+\end{enumerate}
+
+The driver lane runs in parallel from the start: the driver goes online,
+shares their location and waits for offers.
+
+\subsection{Data Flow Diagram}
+\label{subsec:dfd}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=\textwidth,height=0.9\textheight,keepaspectratio]{dataflow-diagram.png}
+  \caption{Level-1 data flow diagram}
+  \label{fig:dfd}
+\end{figure}
+
+Figure~\ref{fig:dfd} is a level-1 data flow diagram (DFD). It has two main
+\textbf{external entities} (Rider and Driver), two \textbf{external systems}
+(Google Maps Platform and the payment gateway), five \textbf{processes} and
+five \textbf{data stores}, described in Table~\ref{tab:dfd}.
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Processes and data stores in the DFD}
+  \label{tab:dfd}
+  \begin{tabularx}{\textwidth}{@{}p{3cm}LLL@{}}
+    \toprule
+    \textbf{Process} & \textbf{Main input} & \textbf{Main output} & \textbf{Data store used} \\
+    \midrule
+    1.0 Ride Planning \& Pool Matching & Trip request (rider); route, distance, ETA (Google Maps) & Fare and pool offers & D1: \texttt{pools}, \texttt{pool\_members} (H3 index) \\
+    2.0 Dispatch \& Trip Execution & Join and location (rider); GPS and accept (driver) & Driver and ETA to rider; pool offer to driver & D2: \texttt{rides}, \texttt{driver\_sessions}, \texttt{messages}, \texttt{notifications} \\
+    3.0 Account \& Profile Management & Credentials (rider and driver); vehicle details & Session and profile & D3: \texttt{users}, \texttt{vehicles}, \texttt{saved\_places}, \texttt{priyo\_sathi}, \texttt{device\_tokens} \\
+    4.0 Rating \& Penalty & Ratings and comments; rating of rider & Penalty notice & D4: \texttt{ratings}, \texttt{user\_cancellations}, \texttt{cooldown\_periods} \\
+    5.0 Fare Settlement \& Wallet & Payment method; charge confirmation (gateway) & Fare split; earnings statement & D5: \texttt{wallets}, \texttt{wallet\_transactions}, \texttt{payments}, \texttt{driver\_earnings} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+The diagram makes clear that each process owns its own group of tables. This
+matches the modular design of the server, where each group of tables is handled
+by its own services.
+
+\subsection{EER Diagram}
+\label{subsec:eer}
+
+\begin{sidewaysfigure}
+  \centering
+  \includegraphics[width=\textheight]{eer-diagram.png}
+  \caption{Enhanced entity--relationship (EER) diagram}
+  \label{fig:eer}
+\end{sidewaysfigure}
+
+Figure~\ref{fig:eer} is the enhanced entity--relationship (EER) diagram. It
+shows the main entities and how they are related. Colours group the entities:
+\textbf{blue} for the rider side, \textbf{amber} for the driver side and
+\textbf{grey} for the shared pooling core.
+
+Key points of the model:
+
+\begin{itemize}
+  \item \textbf{USER} is the central entity. It is \textbf{specialised} into
+        \textbf{RIDER} and \textbf{DRIVER} using the \texttt{is\_driver}
+        attribute. The specialisation is \emph{overlapping} (\texttt{o}),
+        because one person can be both a rider and a driver.
+  \item \textbf{RIDE} is specialised into \textbf{INSTANT\_RIDE} and
+        \textbf{ADVANCE\_RIDE} using \texttt{booking\_type}. This
+        specialisation is \emph{disjoint} (\texttt{d}): a ride is either
+        instant or advance. Only an advance ride has a
+        \texttt{scheduled\_pickup\_at} time.
+  \item A \textbf{POOL} has many \textbf{POOL\_MEMBER} rows, and each member
+        links one rider and one ride to that pool. A pool stores its pickup H3
+        index (resolution 9), destination H3 index (resolution 7), gender
+        restriction and maximum passengers.
+  \item A \textbf{DRIVER} owns \textbf{VEHICLE}s (CAR or CNG), opens
+        \textbf{DRIVER\_SESSION}s when online, and receives
+        \textbf{DRIVER\_EARNING} records for completed pools.
+  \item A \textbf{RIDER} has one \textbf{WALLET} with many
+        \textbf{WALLET\_TRANSACTION}s, many \textbf{PAYMENT}s,
+        \textbf{SAVED\_PLACE}s and \textbf{PRIYO\_SATHI} companion links.
+  \item \textbf{RATING} connects a ride with the person who rates
+        (\texttt{rater\_id}) and the person rated (\texttt{rated\_id}), with a
+        score from 1 to 5.
+\end{itemize}
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Main relationships}
+  \label{tab:relationships}
+  \begin{tabularx}{\textwidth}{@{}p{5.2cm}cL@{}}
+    \toprule
+    \textbf{Relationship} & \textbf{Cardinality} & \textbf{Meaning} \\
+    \midrule
+    USER -- WALLET                       & 1 : 1 & Each user has one wallet \\
+    WALLET -- WALLET\_TRANSACTION        & 1 : N & Every balance change is recorded \\
+    POOL -- POOL\_MEMBER                 & 1 : N & A pool has up to 3 (CAR) or 2 (CNG) members \\
+    RIDE -- POOL\_MEMBER                 & 1 : 1 & Each ride appears in a pool at most once \\
+    DRIVER -- VEHICLE                    & 1 : N & A driver may register more than one vehicle \\
+    DRIVER -- POOL                       & 1 : N & A driver serves many pools over time, one at a time \\
+    RIDE -- PAYMENT                      & 1 : N & A ride can have one or more payment records \\
+    USER -- PRIYO\_SATHI                 & 1 : N & A user can add up to 5 trusted companions \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Schema Diagram}
+\label{subsec:schema}
+
+\begin{sidewaysfigure}
+  \centering
+  \includegraphics[width=\textheight]{schema-diagram.png}
+  \caption{Relational schema diagram (30 tables)}
+  \label{fig:schema}
+\end{sidewaysfigure}
+
+Figure~\ref{fig:schema} is the physical relational schema of the Supabase
+PostgreSQL database. It shows \textbf{all 30 tables} with their primary keys
+(PK) and foreign keys (FK). All primary keys are UUIDs, and a foreign key
+deletes its child rows (\texttt{ON DELETE CASCADE}) unless the diagram says
+otherwise (for example \texttt{set null}). The tables are grouped by the
+migration file that creates them, as shown in Table~\ref{tab:table-groups}.
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Table groups in the schema}
+  \label{tab:table-groups}
+  \begin{tabularx}{\textwidth}{@{}p{2.6cm}LL@{}}
+    \toprule
+    \textbf{Group} & \textbf{Tables} & \textbf{Purpose} \\
+    \midrule
+    Identity & \texttt{users}, \texttt{wallets}, \texttt{wallet\_transactions}, \texttt{saved\_places}, \texttt{priyo\_sathi}, \texttt{device\_tokens}, \texttt{notification\_preferences} & Users, their money and personal settings \\
+    Ride core & \texttt{vehicles}, \texttt{pools}, \texttt{rides}, \texttt{pool\_members}, \texttt{vehicle\_locations} & Pooling, rides and live vehicle positions \\
+    Money \& driver economics & \texttt{payments}, \texttt{promo\_codes}, \texttt{user\_promo\_usage}, \texttt{promise\_money\_transactions}, \texttt{driver\_sessions}, \texttt{driver\_earnings}, \texttt{driver\_daily\_stats} & Payments, promotions and driver income \\
+    Messaging & \texttt{conversations}, \texttt{conversation\_participants}, \texttt{messages}, \texttt{notifications} & In-app chat and notifications \\
+    Operations & \texttt{ratings}, \texttt{user\_cancellations}, \texttt{cooldown\_periods}, \texttt{audit\_logs}, \texttt{offline\_actions}, \texttt{sync\_logs}, \texttt{app\_metadata} & Ratings, penalties, auditing and offline sync \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+The \texttt{users} table is the most referenced: \textbf{28 of the 49 foreign
+keys} point to it, from 25 of the 30 tables. \texttt{rides} (7 references) and
+\texttt{pools} (5 references) come next. For this reason arrows are not drawn
+in the figure; each foreign key is written on the column that holds it instead.
+
+\subsection{Sequence Diagram}
+\label{subsec:sequence}
+
+The sequence diagram in Figure~\ref{fig:sequence}
+(Section~\ref{subsec:arch-sequence}) divides a shared ride into five phases.
+Each phase uses specific API endpoints and database functions, as shown in
+Table~\ref{tab:sequence-phases}.
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Phases of the sequence diagram}
+  \label{tab:sequence-phases}
+  \begin{tabularx}{\textwidth}{@{}p{2.3cm}p{5.4cm}L@{}}
+    \toprule
+    \textbf{Phase} & \textbf{Main messages} & \textbf{What happens} \\
+    \midrule
+    1. Search and match & \texttt{GET /api/pools/search} $\rightarrow$ \texttt{searchPools()} $\rightarrow$ Google Maps Directions $\rightarrow$ select pools by H3 ring $\rightarrow$ route-overlap scoring & The server finds nearby pools, scores them and returns a ranked list with the fare per person \\
+    2. Join a pool & \texttt{POST /api/pools/:poolId/join} $\rightarrow$ \texttt{atomic\_join\_pool} (or \texttt{POST /api/pools/create} if no pool is in range) & The rider is added to the pool with a row lock that checks capacity, pickup range, gender and duplicates \\
+    3. Dispatch to a driver & \texttt{POST /api/driver/go-online} $\rightarrow$ \texttt{GET /api/driver/available-pools} $\rightarrow$ \texttt{POST /api/driver/pools/:poolId/accept} $\rightarrow$ \texttt{atomic\_accept\_pool} & The driver sees nearby pools (H3 resolution 8) and accepts one; \texttt{SKIP LOCKED} prevents double assignment; the rider gets a push with driver, vehicle and ETA \\
+    4. Run the trip & \texttt{POST /api/driver/ride/start} $\rightarrow$ loop of \texttt{pickup/:passengerId} and \texttt{dropoff/:passengerId} $\rightarrow$ \texttt{ride/complete} & The driver picks up and drops off each passenger in route order; riders get status pushes \\
+    5. Settle and rate & \texttt{splitFare()} $\rightarrow$ \texttt{POST /api/payments/process} $\rightarrow$ \texttt{atomic\_wallet\_debit} $\rightarrow$ insert \texttt{driver\_earnings} $\rightarrow$ \texttt{POST /api/ratings} & The fare is split, the wallet is debited safely, the driver's earnings are recorded and both sides rate each other \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+The diagram also uses two UML frames: an \textbf{alt} frame (join an existing
+pool \emph{or} create a new one) and a \textbf{loop} frame (repeat pickup and
+drop-off for each passenger).
+
+\subsection{Use Case Diagram}
+\label{subsec:usecase}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{usecase-diagram.png}
+  \caption{Use case diagram}
+  \label{fig:usecase}
+\end{figure}
+
+Figure~\ref{fig:usecase} shows what each actor can do with RidePool. There are
+two \textbf{primary actors} --- \textbf{Rider} and \textbf{Driver} --- and two
+\textbf{external system actors} --- \textbf{Google Maps Platform} and the
+\textbf{Payment Gateway} (bKash / SSLCommerz). Table~\ref{tab:usecases} lists
+the use cases of each actor.
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Use cases by actor}
+  \label{tab:usecases}
+  \begin{tabularx}{\textwidth}{@{}p{3cm}L@{}}
+    \toprule
+    \textbf{Actor} & \textbf{Use cases} \\
+    \midrule
+    Rider             & Search \& Join Pool, Book Advance Ride, Set Female-Only Pool, Invite Priyo Sathi, Estimate Fare \& Route, Pay Fare, Top Up \& Use Wallet \\
+    Driver            & Go Online / Offline, Accept Pool Offer, Pick Up \& Drop Off, Complete Ride, View Earnings \\
+    Both              & Register / Log In, Track Trip \& Chat, Rate Trip \& Driver \\
+    System (internal) & Match Riders into a Pool, Calculate \& Split Fare \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+The dashed $\ll$include$\gg$ arrows show shared
+behaviour: \emph{Search \& Join Pool}, \emph{Book Advance Ride} and
+\emph{Accept Pool Offer} all include \textbf{Match Riders into a Pool}, and
+\emph{Estimate Fare \& Route} and \emph{Pay Fare} both include
+\textbf{Calculate \& Split Fare}. Google Maps supports the matching use case,
+and the payment gateway supports paying and wallet top-up.
+
+% ------------------------------------------------------------
+\section{User Interaction and Interface}
+\label{sec:ui}
+
+\subsection{Design Principles}
+
+The interface of both apps follows a few simple principles:
+
+\begin{itemize}
+  \item \textbf{Map first:} Most screens are built around a map, because riders
+        and drivers think in terms of places and routes.
+  \item \textbf{Few steps:} A rider can book a ride in a few taps --- choose a
+        destination, pick a pool, confirm.
+  \item \textbf{Clear information before commitment:} Fare, pickup distance,
+        number of passengers and estimated time are shown \emph{before} the
+        rider joins a pool.
+  \item \textbf{Consistent colours:} Blue marks rider actions, amber marks
+        driver actions, and a rose/pink colour marks female-only options,
+        matching the diagrams.
+  \item \textbf{Same design on every platform:} NativeWind (Tailwind CSS)
+        styles are shared, so the apps look the same on Android, iOS and web.
+\end{itemize}
+
+\subsection{Rider App (CarPoolApp) Screens}
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Main screens of the rider app}
+  \label{tab:rider-screens}
+  \begin{tabularx}{\textwidth}{@{}p{5.2cm}L@{}}
+    \toprule
+    \textbf{Screen} & \textbf{Purpose} \\
+    \midrule
+    Welcome / Login / Profile setup & Sign in or register and fill in name, phone and gender \\
+    Home map & Shows the rider's location; starting point for every search \\
+    Location and destination search & Search for places or pick a saved place \\
+    Available pools & List of matching pools with fare, pickup distance, passengers and ETA \\
+    Create ride & Start a new pool and choose CAR or CNG when no pool fits \\
+    Ride confirmation & Final check of pickup, destination, pool and fare before joining \\
+    Searching / driver matched & Waiting screen while a driver is found, then driver, vehicle and ETA \\
+    Trip progress & Live map with the driver's position and trip status \\
+    Chat & Chat with co-riders and the driver \\
+    Payment summary / rating & Fare breakdown, payment, then rating the driver and co-riders \\
+    Scheduled rides & Book and manage advance rides \\
+    Wallet / add money / transactions & Balance, top-up and history \\
+    Friends (Priyo Sathi) & Add trusted companions and invite them to rides \\
+    Saved places, gender preference, promo code & Personal settings used during booking \\
+    Notifications, trips, ratings, help \& support, settings & History, feedback and support \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Driver App (DriverApp) Screens}
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Main screens of the driver app}
+  \label{tab:driver-screens}
+  \begin{tabularx}{\textwidth}{@{}p{5.2cm}L@{}}
+    \toprule
+    \textbf{Screen} & \textbf{Purpose} \\
+    \midrule
+    Login / Register & Sign in or register with vehicle details \\
+    Home map & Go online or offline, see the current location and nearby demand \\
+    Pool request alert / pool card & New pool offers with passengers, route and fare \\
+    Pool details sheet & Full details of a pool before accepting \\
+    Active ride / trip progress & Navigate to each pickup and drop-off and update the trip \\
+    Passenger billing dialog & Fare to collect from each passenger at drop-off \\
+    Rating feedback dialog & Rate riders after the trip \\
+    Earnings & Today's earnings, number of rides and history \\
+    Search zone / priority location & Choose where to look for pools \\
+    Profile, settings, contact info, help & Account and support \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Navigation Structure}
+
+Both apps use \textbf{Expo Router}, where each file in the \texttt{app/} folder
+becomes a screen. The main areas are reached through a \textbf{bottom
+navigation bar}, and detail screens (such as ride confirmation or trip progress)
+open on top of them as a stack. This makes the back button behave as users
+expect on both Android and iOS. The typical rider journey is:
+
+\begin{center}
+  \small
+  Home $\rightarrow$ Destination search $\rightarrow$ Available pools
+  $\rightarrow$ Ride confirmation $\rightarrow$ Searching $\rightarrow$ Driver
+  matched $\rightarrow$ Trip progress $\rightarrow$ Payment summary
+  $\rightarrow$ Rating
+\end{center}
+
+\subsection{Feedback and Notifications}
+
+Users always know what is happening:
+
+\begin{itemize}
+  \item \textbf{Live status:} Trip screens update in real time as the driver
+        moves or a passenger is picked up.
+  \item \textbf{Push and in-app notifications:} Important events (pool found,
+        driver assigned, driver arriving, trip completed, penalty or cooldown)
+        are sent as push notifications and also stored in the Notifications
+        screen, so nothing is lost if a push fails.
+  \item \textbf{Clear errors:} If an action fails (for example, the pool became
+        full), the server returns a clear message that the app shows to the
+        user.
+  \item \textbf{Resume where you left off:} An active trip is restored
+        automatically when the app is reopened
+        (Section~\ref{subsec:state}).
+\end{itemize}
+
+\subsection{Cross-Platform Maps}
+
+Maps work differently on each platform, so RidePool chooses the map component
+at run time:
+
+\begin{itemize}
+  \item On \textbf{Android and iOS}, maps use \texttt{react-native-maps}
+        (Google Maps).
+  \item On the \textbf{web}, maps use \textbf{Leaflet} with
+        \texttt{react-leaflet} (the \texttt{WebMap} component).
+  \item If the native map library is not available (for example, in the Expo
+        Go test app), a \textbf{static map image} is shown instead, so the
+        screen still works.
+\end{itemize}
+
+All three are hidden behind one \texttt{MapView} component, so the rest of the
+app does not need to know which map is in use.
+
+% ------------------------------------------------------------
+\section{Evaluation and Testing}
+\label{sec:evaluation}
+
+This section explains how RidePool was tested and what the results show.
+Testing focused on the parts where a mistake would hurt users most: matching,
+fares, seats, money, scheduled rides and input validation.
+
+\subsection{Testing Strategy}
+\label{subsec:testing-strategy}
+
+RidePool was tested at several levels, from single functions up to the whole
+ride flow on real devices (Table~\ref{tab:testing-levels}).
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Testing levels and tools}
+  \label{tab:testing-levels}
+  \begin{tabularx}{\textwidth}{@{}p{2.6cm}p{2.4cm}Lp{3.4cm}@{}}
+    \toprule
+    \textbf{Level} & \textbf{Tool} & \textbf{What is tested} & \textbf{Where} \\
+    \midrule
+    Unit testing & Vitest 4 & Server services (matching, fares, penalties, advance booking, routing, cache, validation) with the database and Google Maps replaced by mocks & \texttt{Server/tests/unit/} (14 files) \\
+    Database integration testing & Vitest + Supabase & Connection, all core tables, atomic RPC functions and the PostGIS extension on the real database & \texttt{supabase-connection} \texttt{.test.ts} \\
+    Regression testing & Vitest & Bugs that were fixed stay fixed & \texttt{bugfixes.test.ts} \\
+    Static checking & TypeScript (\texttt{tsc --noEmit}), ESLint & Type errors and code-style problems in the server and apps & All packages \\
+    Manual end-to-end testing & Expo on Android phones and web & Full ride flow with the rider app and driver app running together & Both apps \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Two features of the code make testing easier:
+
+\begin{itemize}
+  \item \textbf{Mocks:} 8 of the unit-test files replace Supabase and outside
+        services with mocks, so tests are fast, repeatable and do not change
+        real data.
+  \item \textbf{Fast QA mode for scheduled rides:} Setting
+        \texttt{ADVANCE\_TIME\_UNIT=seconds} shrinks every advance-booking
+        window from minutes to seconds, so the full scheduled-ride lifecycle
+        (book $\rightarrow$ confirm $\rightarrow$ dispatch) can be tested in
+        under a minute instead of waiting for real time to pass.
+\end{itemize}
+
+\subsection{Unit Test Results}
+\label{subsec:unit-results}
+
+The server test suite has \textbf{15 test files with 173 tests}. All tests
+passed in about 8.7 seconds (Vitest, run on 23 September 2026), and the server
+type-check (\texttt{tsc --noEmit}) reported no errors
+(Table~\ref{tab:test-results}).
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Server test results}
+  \label{tab:test-results}
+  \begin{tabularx}{\textwidth}{@{}p{5.6cm}Lcc@{}}
+    \toprule
+    \textbf{Test file} & \textbf{Area tested} & \textbf{Tests} & \textbf{Result} \\
+    \midrule
+    \texttt{advanceBooking.service.test.ts}  & Advance booking windows, confirmation and pickup range & 19 & Passed \\
+    \texttt{smartRoute.service.test.ts}      & Pickup order, detour limits, caching and fallback & 18 & Passed \\
+    \texttt{validation.test.ts}              & Input validation schemas & 17 & Passed \\
+    \texttt{fare.service.test.ts}            & Fare, discounts, surcharge and driver earnings & 16 & Passed \\
+    \texttt{poolMatching.service.test.ts}    & Pool compatibility and scoring & 14 & Passed \\
+    \texttt{routeOverlap.service.test.ts}    & Route similarity for 2 and 3+ riders & 13 & Passed \\
+    \texttt{advanceDispatch.service.test.ts} & Dispatching scheduled pools & 13 & Passed \\
+    \texttt{memoryCache.service.test.ts}     & In-memory cache and expiry & 13 & Passed \\
+    \texttt{bugfixes.test.ts}                & Regression tests for fixed bugs & 12 & Passed \\
+    \texttt{lookupTime.service.test.ts}      & 30 + 10 second search timer & 8 & Passed \\
+    \texttt{cache.service.test.ts}           & Cache keys and status & 8 & Passed \\
+    \texttt{supabase-connection.test.ts}     & Database tables, atomic functions, PostGIS & 8 & Passed \\
+    \texttt{googleMaps.routes.test.ts}       & Google Maps request and response handling & 7 & Passed \\
+    \texttt{penalty.service.test.ts}         & Cancellation penalties and cooldown & 4 & Passed \\
+    \texttt{promo.service.test.ts}           & Promo discounts & 3 & Passed \\
+    \midrule
+    \textbf{Total} & & \textbf{173} & \textbf{All passed} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Functional Test Cases}
+\label{subsec:test-cases}
+
+Table~\ref{tab:test-cases} lists the most important functional test cases.
+Each one is taken from the automated test suite, so it can be run again at any
+time.
+
+\begin{table}[H]
+  \centering
+  \footnotesize
+  \caption{Functional test cases}
+  \label{tab:test-cases}
+  \begin{tabularx}{\textwidth}{@{}lp{2.2cm}LLc@{}}
+    \toprule
+    \textbf{ID} & \textbf{Feature} & \textbf{Test input / situation} & \textbf{Expected result} & \textbf{Result} \\
+    \midrule
+    TC-01 & Pool matching & Rider searches when a pool is already full & Full pool is not offered & Pass \\
+    TC-02 & Pool matching & Pool is female-only and rider's stored gender does not match & Pool is not offered & Pass \\
+    TC-03 & Pool matching & Rider wants a CAR but the pool is a CNG & Pool is not offered & Pass \\
+    TC-04 & Pool matching & Pool's destination is too far from the rider's & Pool is not offered & Pass \\
+    TC-05 & Pool scoring & Two pools with the same destination, one with a nearer pickup & Nearer pool gets the higher score & Pass \\
+    TC-06 & Route overlap & Two riders going in opposite directions & 0\% overlap & Pass \\
+    TC-07 & Route overlap & One rider's trip lies fully inside another's route & 100\% overlap & Pass \\
+    TC-08 & Fare & 2 and 3 passengers share a ride & 25\% and 35\% discount applied & Pass \\
+    TC-09 & Fare & Rider's final charge & Fare per person + Tk 10 platform fee & Pass \\
+    TC-10 & Driver earnings & Completed trip fare & Platform keeps 20\% commission & Pass \\
+    TC-11 & Vehicle capacity & Pool created for CNG and for CAR & Capped at 2 and 3 passengers & Pass \\
+    TC-12 & Penalty & Rider cancels within 30 seconds & Not counted as a deliberate cancellation & Pass \\
+    TC-13 & Advance booking & Pickup time in the past or beyond 7 days & Booking rejected & Pass \\
+    TC-14 & Advance booking & Only one rider confirms before the deadline & Pool is not dispatched as a solo ride & Pass \\
+    TC-15 & Advance booking & Some riders do not confirm & They are removed before dispatch & Pass \\
+    TC-16 & Routing & Google Maps fails & Fallback route used, without claiming live traffic & Pass \\
+    TC-17 & Search timer & New instant pool & 30-second search, then 10-second extension & Pass \\
+    TC-18 & Promo & Percentage promo larger than its limit & Discount capped at the maximum amount & Pass \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Security and Data Integrity Testing}
+\label{subsec:security-testing}
+
+Because RidePool handles people's location and money, security and data
+integrity were tested separately (Table~\ref{tab:security-checks}).
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Security and integrity checks}
+  \label{tab:security-checks}
+  \begin{tabularx}{\textwidth}{@{}LLp{3.8cm}@{}}
+    \toprule
+    \textbf{Check} & \textbf{How it was tested} & \textbf{Result} \\
+    \midrule
+    Invalid coordinates (latitude out of range) & Validation unit test & Rejected \\
+    Invalid vehicle type or invalid ID (UUID) & Validation unit test & Rejected \\
+    Impossible driver data (heading $>$ 360$^\circ$, speed $>$ 200) & Validation unit test & Rejected \\
+    Client tries to set \texttt{max\_passengers} & Validation unit test & Value ignored; capacity comes from the server \\
+    Client sends its own time for an advance pool & Advance booking unit test & Server time is used instead \\
+    Female-only pool with the wrong gender & Pool matching unit test & Rejected \\
+    Atomic database functions present & Database integration test (\texttt{atomic\_join\_pool}, \texttt{atomic\_wallet\_credit}) & Present and callable \\
+    Two riders taking the last seat / two drivers accepting one pool & Design review of \texttt{atomic\_join\_pool} (row lock) and \texttt{atomic\_accept\_pool} (\texttt{SKIP LOCKED}) & Prevented inside the database \\
+    Wallet going below zero & Design review of \texttt{atomic\_wallet\_debit} & Refused inside the database \\
+    Too many login, search or payment requests & Rate limiters configured in \texttt{app.ts} & Configured; extra requests get HTTP 429 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Performance Evaluation}
+\label{subsec:performance}
+
+The core matching steps were timed on a development laptop (Intel Core
+i3-1315U, 16 GB RAM, Node.js 22). Each step was repeated thousands of times and
+the average was taken (Table~\ref{tab:benchmarks}).
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Performance of matching components}
+  \label{tab:benchmarks}
+  \begin{tabularx}{\textwidth}{@{}Lcc@{}}
+    \toprule
+    \textbf{Operation} & \textbf{Repetitions} & \textbf{Average time per operation} \\
+    \midrule
+    Convert a location to an H3 cell (resolution 9) & 100,000 & 1.4 $\mu$s \\
+    Pickup ring search (resolution 9, 6 rings = 127 cells) & 10,000 & 28.1 $\mu$s \\
+    Route overlap between two routes (100 points each) & 1,000 & 21.8 $\mu$s \\
+    Fare calculation & 100,000 & 0.05 $\mu$s \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+The in-memory matching work is very fast: scoring 50 candidate pools takes
+only about $50 \times 21.8\,\mu\mathrm{s} \approx 1.1$ ms. The total time of a
+search is therefore decided mainly by \textbf{network calls} --- the database
+query and the single Google Maps request --- not by the matching algorithm.
+This supports the target of returning search results within about 3 seconds.
+
+\subsection{Limitations of Testing}
+\label{subsec:testing-limits}
+
+The testing has some limits that should be addressed in future work:
+
+\begin{itemize}
+  \item \textbf{App test suites:} The rider app's Jest tests do not currently
+        start because of a test-configuration problem, so the apps were tested
+        manually rather than automatically.
+  \item \textbf{No load testing:} The system was not tested with hundreds of
+        users at the same time. Concurrency safety relies on the atomic
+        database functions rather than on a load test.
+  \item \textbf{No formal user study:} The apps were not yet tested with a
+        group of real riders and drivers in Dhaka.
+  \item \textbf{Accessibility:} A colour check found that the light grey
+        (\texttt{\#9CA3AF}) and green (\texttt{\#10B981}) text colours are
+        below the WCAG 2.1 AA contrast level~\cite{wcag21}, and most icon
+        buttons do not yet have screen-reader labels.
+\end{itemize}

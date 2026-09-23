@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#374151"/>
+    </marker>
+    <marker id="arrb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563EB"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="900" fill="#FFFFFF"/>
+
+  <!-- ============ bands ============ -->
+  <rect x="20" y="20" width="1160" height="205" rx="8" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="1164" y="44" text-anchor="end" font-size="13" font-weight="700" fill="#6B7280" letter-spacing="1">CLIENT LAYER</text>
+  <rect x="20" y="255" width="1160" height="90" rx="8" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="1164" y="274" text-anchor="end" font-size="13" font-weight="700" fill="#6B7280" letter-spacing="1">EDGE LAYER (OPTIONAL)</text>
+  <rect x="20" y="375" width="1160" height="290" rx="8" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="1164" y="394" text-anchor="end" font-size="13" font-weight="700" fill="#6B7280" letter-spacing="1">APPLICATION LAYER</text>
+  <rect x="20" y="695" width="1160" height="185" rx="8" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="710" y="714" text-anchor="middle" font-size="13" font-weight="700" fill="#6B7280" letter-spacing="1">DATA &amp; SERVICES</text>
+
+  <!-- ============ client layer ============ -->
+  <rect x="60" y="70" width="360" height="130" rx="10" fill="#EFF6FF" stroke="#2563EB" stroke-width="1.6"/>
+  <text x="240" y="100" text-anchor="middle" font-size="18" font-weight="700" fill="#1E3A8A">CarPoolApp (Rider)</text>
+  <text x="240" y="126" text-anchor="middle" font-size="13" fill="#374151">Expo 54 · React Native 0.81 · Expo Router</text>
+  <text x="240" y="148" text-anchor="middle" font-size="13" fill="#374151">Zustand + React Context · NativeWind</text>
+  <text x="240" y="170" text-anchor="middle" font-size="13" fill="#374151">react-native-maps / Leaflet (web)</text>
+  <text x="240" y="190" text-anchor="middle" font-size="12" fill="#6B7280">Android · iOS · Web</text>
+
+  <rect x="470" y="95" width="260" height="80" rx="10" fill="#FFFFFF" stroke="#6B7280" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <text x="600" y="125" text-anchor="middle" font-size="15" font-weight="700" fill="#374151">shared</text>
+  <text x="600" y="146" text-anchor="middle" font-size="12" fill="#374151">@ridepool/shared-types</text>
+  <text x="600" y="164" text-anchor="middle" font-size="11" fill="#6B7280">common data model (reference)</text>
+
+  <rect x="780" y="70" width="360" height="130" rx="10" fill="#FFFBEB" stroke="#B45309" stroke-width="1.6"/>
+  <text x="960" y="100" text-anchor="middle" font-size="18" font-weight="700" fill="#78350F">DriverApp (Driver)</text>
+  <text x="960" y="126" text-anchor="middle" font-size="13" fill="#374151">Expo 54 · React Native 0.81 · Expo Router</text>
+  <text x="960" y="148" text-anchor="middle" font-size="13" fill="#374151">Zustand (persisted) · NativeWind</text>
+  <text x="960" y="170" text-anchor="middle" font-size="13" fill="#374151">Live GPS (every 5 s / 10 m)</text>
+  <text x="960" y="190" text-anchor="middle" font-size="12" fill="#6B7280">Android · iOS</text>
+
+  <!-- realtime path: Supabase -> both apps -->
+  <path d="M60,790 L38,790 L38,52 L960,52 L960,68" fill="none" stroke="#2563EB" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#arrb)"/>
+  <path d="M240,52 L240,68" fill="none" stroke="#2563EB" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#arrb)"/>
+  <rect x="330" y="42" width="520" height="20" fill="#F9FAFB"/>
+  <text x="590" y="57" text-anchor="middle" font-size="12.5" fill="#1D4ED8">Supabase Realtime (WebSocket): pool, chat &amp; location updates · polling fallback</text>
+
+  <!-- client -> edge -->
+  <line x1="240" y1="200" x2="240" y2="283" stroke="#374151" stroke-width="1.6" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <line x1="960" y1="200" x2="960" y2="283" stroke="#374151" stroke-width="1.6" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <text x="252" y="245" font-size="12.5" fill="#374151">HTTPS · REST (JSON) · Bearer JWT</text>
+  <text x="972" y="245" font-size="12.5" fill="#374151">HTTPS · REST (JSON) · Bearer JWT</text>
+
+  <!-- ============ edge layer ============ -->
+  <rect x="60" y="285" width="1080" height="45" rx="8" fill="#FFFFFF" stroke="#374151" stroke-width="1.2"/>
+  <text x="600" y="313" text-anchor="middle" font-size="15" fill="#111827"><tspan font-weight="700">Nginx</tspan> reverse proxy · load balancing across server instances · TLS</text>
+
+  <line x1="600" y1="330" x2="600" y2="403" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <!-- ============ application layer ============ -->
+  <rect x="60" y="405" width="1080" height="245" rx="10" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <text x="80" y="430" font-size="16" font-weight="700" fill="#111827">RidePool Server — Node.js 20 · Express 5 · TypeScript</text>
+
+  <text x="80" y="458" font-size="12" font-weight="700" fill="#6B7280">MIDDLEWARE</text>
+  <g font-size="12.5" fill="#374151" text-anchor="middle">
+    <rect x="80"  y="466" width="160" height="32" rx="6" fill="#F3F4F6" stroke="#D1D5DB"/><text x="160" y="487">Security headers (Helmet)</text>
+    <rect x="252" y="466" width="160" height="32" rx="6" fill="#F3F4F6" stroke="#D1D5DB"/><text x="332" y="487">CORS</text>
+    <rect x="424" y="466" width="160" height="32" rx="6" fill="#F3F4F6" stroke="#D1D5DB"/><text x="504" y="487">Input sanitizer</text>
+    <rect x="596" y="466" width="160" height="32" rx="6" fill="#F3F4F6" stroke="#D1D5DB"/><text x="676" y="487">Rate limiters</text>
+    <rect x="768" y="466" width="160" height="32" rx="6" fill="#F3F4F6" stroke="#D1D5DB"/><text x="848" y="487">Auth (JWT) · roles</text>
+    <rect x="940" y="466" width="180" height="32" rx="6" fill="#F3F4F6" stroke="#D1D5DB"/><text x="1030" y="487">Error handler · logging</text>
+  </g>
+
+  <g font-size="14" text-anchor="middle">
+    <rect x="80"  y="515" width="300" height="40" rx="8" fill="#EFF6FF" stroke="#2563EB"/><text x="230" y="540" fill="#1E3A8A"><tspan font-weight="700">Routes</tspan> — one file per domain</text>
+    <rect x="450" y="515" width="300" height="40" rx="8" fill="#EFF6FF" stroke="#2563EB"/><text x="600" y="540" fill="#1E3A8A"><tspan font-weight="700">Controllers</tspan> — validate (Zod), respond</text>
+    <rect x="820" y="515" width="300" height="40" rx="8" fill="#EFF6FF" stroke="#2563EB"/><text x="970" y="540" fill="#1E3A8A"><tspan font-weight="700">Services</tspan> — business logic</text>
+  </g>
+  <line x1="380" y1="535" x2="448" y2="535" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
+  <line x1="750" y1="535" x2="818" y2="535" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <text x="80" y="580" font-size="12" font-weight="700" fill="#6B7280">KEY SERVICES</text>
+  <g font-size="12" fill="#374151" text-anchor="middle">
+    <rect x="80"   y="588" width="108" height="44" rx="6" fill="#F3F4F6" stroke="#D1D5DB"/><text x="134"  y="608">Pool</text><text x="134" y="623">matching</text>
+    <rect x="196"  y="588" width="108" height="44" rx="6" fill="#F3F4F6" stroke="#D1D5DB"/><text x="250"  y="608">Route</text><text x="250" y="623">overlap</text>
+    <rect x="312"  y="588" width="108" height="44" rx="6" fill="#F3F4F6" stroke="#D1D5DB"/><text x="366"  y="608">Smart route</text><text x="366" y="623">(ETA)</text>
+    <rect x="428"  y="588" width="108" height="44" rx="6" fill="#F3F4F6" stroke="#D1D5DB"/><text x="482"  y="614">Fare</text>
+    <rect x="544"  y="588" width="108" height="44" rx="6" fill="#F3F4F6" stroke="#D1D5DB"/><text x="598"  y="608">Wallet ·</text><text x="598" y="623">payments</text>
+    <rect x="660"  y="588" width="108" height="44" rx="6" fill="#F3F4F6" stroke="#D1D5DB"/><text x="714"  y="614">Penalty</text>
+    <rect x="776"  y="588" width="108" height="44" rx="6" fill="#F3F4F6" stroke="#D1D5DB"/><text x="830"  y="608">Advance</text><text x="830" y="623">booking</text>
+    <rect x="892"  y="588" width="108" height="44" rx="6" fill="#F3F4F6" stroke="#D1D5DB"/><text x="946"  y="608">Notification</text><text x="946" y="623">· chat</text>
+    <rect x="1008" y="588" width="112" height="44" rx="6" fill="#F3F4F6" stroke="#D1D5DB"/><text x="1064" y="608">Unified</text><text x="1064" y="623">cache</text>
+  </g>
+
+  <!-- app -> data -->
+  <g stroke="#374151" stroke-width="1.6">
+    <line x1="160"  y1="650" x2="160"  y2="728" marker-start="url(#arr)" marker-end="url(#arr)"/>
+    <line x1="380"  y1="650" x2="380"  y2="728" marker-start="url(#arr)" marker-end="url(#arr)"/>
+    <line x1="600"  y1="650" x2="600"  y2="728" marker-start="url(#arr)" marker-end="url(#arr)"/>
+    <line x1="820"  y1="650" x2="820"  y2="728" marker-start="url(#arr)" marker-end="url(#arr)"/>
+    <line x1="1040" y1="650" x2="1040" y2="728" stroke-dasharray="6 4" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  </g>
+
+  <!-- ============ data & external ============ -->
+  <g text-anchor="middle">
+    <rect x="60" y="730" width="200" height="130" rx="10" fill="#ECFDF5" stroke="#047857" stroke-width="1.6"/>
+    <text x="160" y="757" font-size="16" font-weight="700" fill="#064E3B">Supabase</text>
+    <text x="160" y="780" font-size="12.5" fill="#374151">PostgreSQL + PostGIS</text>
+    <text x="160" y="800" font-size="12.5" fill="#374151">Auth · Realtime</text>
+    <text x="160" y="820" font-size="12.5" fill="#374151">Row Level Security</text>
+    <text x="160" y="840" font-size="12.5" fill="#374151">atomic_* functions</text>
+
+    <rect x="280" y="730" width="200" height="130" rx="10" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <text x="380" y="757" font-size="16" font-weight="700" fill="#111827">Cache</text>
+    <text x="380" y="785" font-size="12.5" fill="#374151">Redis (production)</text>
+    <text x="380" y="807" font-size="12.5" fill="#374151">In-memory (MVP mode)</text>
+    <text x="380" y="829" font-size="12.5" fill="#374151">routes · pools · lookups</text>
+
+    <rect x="500" y="730" width="200" height="130" rx="10" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <text x="600" y="757" font-size="16" font-weight="700" fill="#111827">Google Maps</text>
+    <text x="600" y="785" font-size="12.5" fill="#374151">Directions</text>
+    <text x="600" y="807" font-size="12.5" fill="#374151">Distance Matrix</text>
+    <text x="600" y="829" font-size="12.5" fill="#374151">geometric fallback</text>
+
+    <rect x="720" y="730" width="200" height="130" rx="10" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <text x="820" y="757" font-size="16" font-weight="700" fill="#111827">Firebase (FCM)</text>
+    <text x="820" y="785" font-size="12.5" fill="#374151">Push notifications</text>
+    <text x="820" y="807" font-size="12.5" fill="#374151">stored in-app when</text>
+    <text x="820" y="829" font-size="12.5" fill="#374151">push is unavailable</text>
+
+    <rect x="940" y="730" width="200" height="130" rx="10" fill="#FFFFFF" stroke="#9CA3AF" stroke-width="1.4" stroke-dasharray="6 4"/>
+    <text x="1040" y="757" font-size="16" font-weight="700" fill="#111827">Payment gateway</text>
+    <text x="1040" y="785" font-size="12.5" fill="#374151">bKash · SSLCommerz</text>
+    <text x="1040" y="807" font-size="12.5" fill="#6B7280">(integration planned;</text>
+    <text x="1040" y="829" font-size="12.5" fill="#6B7280">wallet + cash live)</text>
+  </g>
+</svg>
